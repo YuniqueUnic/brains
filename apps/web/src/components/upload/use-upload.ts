@@ -30,6 +30,16 @@ export interface UploadSummary {
   identical: number;
 }
 
+/** Extension-based media type for files the OS did not type. */
+function guessMediaType(name: string): string {
+  const ext = name.split(".").pop()?.toLowerCase() ?? "";
+  if (["md", "markdown", "txt"].includes(ext)) return "text/markdown";
+  if (ext === "json") return "application/json";
+  if (ext === "yaml" || ext === "yml") return "application/yaml";
+  if (ext === "toml") return "application/toml";
+  return "application/octet-stream";
+}
+
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const buffer = bytes.buffer.slice(
     bytes.byteOffset,
@@ -47,14 +57,19 @@ async function toIncoming(file: File, kind: "flat" | "tree"): Promise<IncomingFi
   // Folder uploads keep their relative path (strip the picked root folder
   // itself so "docs/…" lands at "docs/…", not "picked-root/docs/…").
   const path = relative && relative.includes("/") ? relative : name;
-  const mediaType = file.type || "application/octet-stream";
+  const mediaType = file.type || guessMediaType(name);
   const sha256 = await sha256Hex(new Uint8Array(await file.arrayBuffer()));
+  // Strict decode: a non-UTF-8 "text" file (UTF-16, legacy encodings) must
+  // land in the binary branch — a lenient decode would silently corrupt it
+  // into U+FFFD replacement characters.
   if (isTextMedia(mediaType) || /\.(md|txt|markdown|json|ya?ml|toml)$/i.test(name)) {
     try {
-      const text = await file.text();
-      return { path, name, text, bytes: null, mediaType: mediaType.startsWith("text/") ? mediaType : "text/markdown", sha256 };
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(
+        new Uint8Array(await file.arrayBuffer()),
+      );
+      return { path, name, text, bytes: null, mediaType, sha256 };
     } catch {
-      /* decode failed → treat as binary */
+      /* not valid UTF-8 → treat as binary */
     }
   }
   return { path, name, text: null, bytes: await file.arrayBuffer(), mediaType, sha256 };

@@ -10,6 +10,7 @@ import {
   type SessionInfo,
 } from "../api/client";
 import { TopBar, type UploadIntent } from "../components/shell/top-bar";
+import { SettingsDialog } from "../components/shell/settings-dialog";
 import { Sidebar, type WorkspaceMode } from "../components/shell/sidebar";
 import { FileTree, collectFolders, type TreeActions } from "../components/tree/file-tree";
 import { CommandPalette } from "../components/search/command-palette";
@@ -49,6 +50,8 @@ import { TriangleAlert, X, FolderInput } from "lucide-react";
  * mutations flow through the conditional-write API client.
  */
 
+type SidePanel = { type: "none" } | { type: "properties"; path: string | null };
+
 type DialogState =
   | null
   | { type: "new-document"; folder: string }
@@ -73,12 +76,16 @@ export default function Workspace({
   const [editor, setEditor] = useState<EditorState>({ kind: "empty" });
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [renaming, setRenaming] = useState<string | null>(null);
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
-  const [propertiesPath, setPropertiesPath] = useState<string | null>(null);
+  const [panel, setPanel] = useState<SidePanel>({ type: "none" });
+  const propertiesOpen = panel.type === "properties";
+  const propertiesPath = panel.type === "properties" ? panel.path : null;
+  const openProperties = (path: string | null) => setPanel({ type: "properties", path });
+  const closeProperties = () => setPanel({ type: "none" });
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchMode, setSearchMode] = useState<"literal" | "fts">("literal");
   const [dialog, setDialog] = useState<DialogState>(null);
   const [selecting, setSelecting] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [newFilePath, setNewFilePath] = useState("");
   const [moveDestination, setMoveDestination] = useState("");
   const [batchRunning, setBatchRunning] = useState(false);
@@ -130,6 +137,13 @@ export default function Workspace({
 
   useEffect(() => {
     void refreshFiles().catch(fail);
+    const clearDrag = () => setDragging(false);
+    window.addEventListener("dragend", clearDrag);
+    window.addEventListener("drop", clearDrag);
+    return () => {
+      window.removeEventListener("dragend", clearDrag);
+      window.removeEventListener("drop", clearDrag);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -194,21 +208,28 @@ export default function Workspace({
 
   // ---- Open / guard ------------------------------------------------------
 
+  const openRunRef = useRef(0);
   const openFile = async (path: string) => {
+    const runId = openRunRef.current + 1;
+    openRunRef.current = runId;
+    const stale = () => openRunRef.current !== runId;
     setEditor({ kind: "loading", path });
     try {
       // Text-only editor: refuse binary media instead of decoding bytes into
       // mojibake that a later save would corrupt (design §13.3).
       const meta = await api.readMeta(path);
+      if (stale()) return;
       if (!isTextMedia(meta.media_type)) {
         setBanner(t("bannerBinary", { path, mediaType: meta.media_type }));
         setEditor({ kind: "empty" });
         return;
       }
       const { text, etag } = await api.readText(path);
+      if (stale()) return;
       // The two calls are separate: if the file moved between them, reopen
       // once against the truth.
       const latest = await api.readMeta(path);
+      if (stale()) return;
       if (latest.revision !== etag) {
         if (!isTextMedia(latest.media_type)) {
           setBanner(t("bannerReplacedBinary", { path }));
@@ -221,6 +242,7 @@ export default function Workspace({
       }
       setEditor({ kind: "clean", path, text, baseText: text, baseRevision: etag });
     } catch (error) {
+      if (stale()) return;
       if (error instanceof ApiError && error.status === 410) {
         setBanner(t("bannerInTrash", { path }));
         setEditor({ kind: "empty" });
@@ -249,8 +271,21 @@ export default function Workspace({
 
   // ---- Tree actions ------------------------------------------------------
 
-  const entryRevision = (path: string) =>
-    liveFiles.find((entry) => entry.path === path)?.revision;
+  // The sidebar listing is refreshed on mutations made OUTSIDE the editor;
+  // an explicit editor save updates only the editor state, so for the open
+  // file its baseRevision is the freshest known revision.
+  const entryRevision = (path: string) => {
+    const current = editorRef.current;
+    if (
+      current.kind !== "empty" &&
+      current.kind !== "loading" &&
+      current.kind !== "conflict" &&
+      current.path === path
+    ) {
+      return current.baseRevision;
+    }
+    return liveFiles.find((entry) => entry.path === path)?.revision;
+  };
 
   const expandPrefix = (raw: string): string[] => {
     if (!raw.endsWith("/")) return [raw];
@@ -275,8 +310,11 @@ export default function Workspace({
           await api.move(from, to, revision);
           toast.success(t("renameDone", { from, to }));
           await refreshFiles();
-          if (editorRef.current.kind !== "empty" && editorRef.current.kind !== "loading" && editorRef.current.path === from) {
-            void openFile(to);
+          const current = editorRef.current;
+          if (current.kind !== "empty" && current.kind !== "loading" && current.path === from) {
+            // Dirty/saving buffers must not be silently reloaded from disk:
+            // same discard guard as opening another file.
+            requestOpen(to);
           }
         } catch (error) {
           fail(error);
@@ -333,30 +371,47 @@ export default function Workspace({
             const prefix = entry.path.endsWith("/") ? entry.path : `${entry.path}/`;
             const name = prefix.slice(0, -1).split("/").pop() ?? prefix;
             const destBase = into ? `${into}/${name}` : name;
+            const moves: { source: string; target: string }[] = [];
             for (const file of liveFiles.filter((one) => one.path.startsWith(prefix))) {
               const target = `${destBase}/${file.path.slice(prefix.length)}`;
+              if (target !== file.path) moves.push({ source: file.path, target });
+            }
+            for (const move of moves) {
+              const revision = entryRevision(move.source);
+              if (!revision) {
+                failed.push(move.source);
+                continue;
+              }
               try {
-                await api.move(file.path, target, file.revision);
+                const result = await api.move(move.source, move.target, revision);
+                if (result.error || result.partial) {
+                  failed.push(move.source);
+                  continue;
+                }
                 done += 1;
               } catch {
-                failed.push(file.path);
+                failed.push(move.source);
               }
             }
           } else {
             const name = entry.path.split("/").pop() ?? entry.path;
             const target = into ? `${into}/${name}` : name;
             if (target === entry.path) continue;
-            const revision = liveFiles.find((one) => one.path === entry.path)?.revision;
+            const revision = entryRevision(entry.path);
             if (!revision) {
               failed.push(entry.path);
               continue;
             }
             try {
-              await api.move(entry.path, target, revision);
+              const result = await api.move(entry.path, target, revision);
+              if (result.error || result.partial) {
+                failed.push(entry.path);
+                continue;
+              }
               done += 1;
               const current = editorRef.current;
               if (current.kind !== "empty" && current.kind !== "loading" && current.path === entry.path) {
-                void openFile(target);
+                requestOpen(target);
               }
             } catch {
               failed.push(entry.path);
@@ -364,7 +419,11 @@ export default function Workspace({
           }
         }
         setBatchRunning(false);
-        await refreshFiles();
+        try {
+          await refreshFiles();
+        } catch (error) {
+          fail(error);
+        }
         if (failed.length > 0) {
           toast.warning(
             t("batchPartial", {
@@ -378,10 +437,7 @@ export default function Workspace({
         }
       })();
     },
-    onProperties: (path) => {
-      setPropertiesPath(path);
-      setPropertiesOpen(true);
-    },
+    onProperties: (path) => openProperties(path),
     onMove: (targets) => {
       setMoveDestination("");
       setDialog({ type: "move", targets });
@@ -407,7 +463,11 @@ export default function Workspace({
     }
     setBatchRunning(false);
     setSelected(new Set());
-    await refreshFiles();
+    try {
+      await refreshFiles();
+    } catch (error) {
+      fail(error);
+    }
     if (editorRef.current.kind !== "empty" && editorRef.current.kind !== "loading" && paths.includes(editorRef.current.path)) {
       setEditor({ kind: "empty" });
     }
@@ -476,7 +536,11 @@ export default function Workspace({
       }
     }
     setRestoringAll(false);
-    await refreshFiles();
+    try {
+      await refreshFiles();
+    } catch (error) {
+      fail(error);
+    }
     if (failed.length > 0) {
       toast.warning(t("batchPartial", { done, failed: failed.length, detail: failed.slice(0, 3).join("、") }));
     } else {
@@ -490,7 +554,9 @@ export default function Workspace({
     const path = newFilePath.trim();
     if (!path) return;
     const current = editorRef.current;
-    if (current.kind === "dirty" || current.kind === "conflict" || current.kind === "error") {
+    // `saving` included: keystrokes buffered during the flight would be
+    // orphaned once the editor rebinds to the freshly created file.
+    if (current.kind === "dirty" || current.kind === "conflict" || current.kind === "error" || current.kind === "saving") {
       setBanner(t("blockedNewFile"));
       return;
     }
@@ -527,19 +593,43 @@ export default function Workspace({
     setBatchRunning(true);
     const failed: string[] = [];
     let done = 0;
+    let movedOpenPath: string | null = null;
+    let movedOpenTarget: string | null = null;
     for (const source of moveTargets) {
       try {
         const revision = entryRevision(source);
         if (!revision) throw new Error("missing revision");
         const name = source.includes("/") ? source.slice(source.lastIndexOf("/") + 1) : source;
-        await api.move(source, destination ? `${destination}/${name}` : name, revision);
+        const target = destination ? `${destination}/${name}` : name;
+        const result = await api.move(source, target, revision);
+        if (result.error || result.partial) {
+          failed.push(source);
+          continue;
+        }
         done += 1;
+        const current = editorRef.current;
+        if (
+          current.kind !== "empty" && current.kind !== "loading" &&
+          (current.path === source || (source.endsWith("/") && current.path.startsWith(source)))
+        ) {
+          movedOpenPath = current.path;
+          movedOpenTarget = source.endsWith("/")
+            ? `${target}/${current.path.slice(source.length)}`
+            : target;
+        }
       } catch {
         failed.push(source);
       }
     }
     setBatchRunning(false);
-    await refreshFiles();
+    try {
+      await refreshFiles();
+    } catch (error) {
+      fail(error);
+    }
+    if (movedOpenPath && movedOpenTarget) {
+      requestOpen(movedOpenTarget);
+    }
     if (failed.length > 0) {
       toast.warning(t("batchPartial", { done, failed: failed.length, detail: failed.slice(0, 3).join("、") }));
     } else {
@@ -551,12 +641,6 @@ export default function Workspace({
 
   const activeEditorPath =
     editor.kind === "empty" || editor.kind === "loading" ? null : editor.path;
-
-  useEffect(() => {
-    if (propertiesOpen && propertiesPath === null && activeEditorPath) {
-      setPropertiesPath(activeEditorPath);
-    }
-  }, [propertiesOpen, propertiesPath, activeEditorPath]);
 
   const restoreRevision = (path: string, revision: string, baseRevision: string) => {
     if (editorRef.current.kind !== "clean") {
@@ -586,16 +670,35 @@ export default function Workspace({
         setPaletteOpen((open) => !open);
       } else if (meta && event.key.toLowerCase() === "i") {
         event.preventDefault();
-        setPropertiesPath(activeEditorPath);
-        setPropertiesOpen((open) => !open);
+        setPanel(
+          propertiesOpen && propertiesPath === activeEditorPath
+            ? { type: "none" }
+            : { type: "properties", path: activeEditorPath },
+        );
+      } else if (meta && event.key.toLowerCase() === "n") {
+        event.preventDefault();
+        setNewFilePath("");
+        setDialog({ type: "new-document", folder: "" });
+      } else if (event.key === "Delete" && selected.size > 0) {
+        // Batch trash from the keyboard — but never while typing in the
+        // editor or a form field.
+        const target = event.target as HTMLElement | null;
+        const typing =
+          target?.isContentEditable ||
+          target?.tagName === "INPUT" ||
+          target?.tagName === "TEXTAREA";
+        if (!typing) {
+          event.preventDefault();
+          treeActions.onTrash([...selected]);
+        }
       } else if (event.key === "Escape") {
-        setPropertiesOpen(false);
+        setPanel({ type: "none" });
         setSelected(new Set());
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeEditorPath]);
+  }, [activeEditorPath, propertiesOpen, propertiesPath, selected, treeActions]);
 
   const toggleSidebar = () => {
     const panel = sidebarPanel.current;
@@ -615,17 +718,26 @@ export default function Workspace({
     <div
       className="flex h-full min-h-0 flex-col bg-background"
       onDragOver={(event) => {
+        // Only external file drags show the import overlay; the tree's own
+        // move-drag carries a custom payload and must not trigger it.
         if (mode !== "workspace") return;
+        if (!event.dataTransfer.types.includes("Files")) return;
         event.preventDefault();
         setDragging(true);
       }}
       onDragLeave={(event) => {
-        if (event.currentTarget === event.target) setDragging(false);
+        if (
+          !event.relatedTarget ||
+          !(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node)
+        ) {
+          setDragging(false);
+        }
       }}
       onDrop={(event) => {
-        if (mode !== "workspace") return;
-        event.preventDefault();
         setDragging(false);
+        if (mode !== "workspace") return;
+        if (!event.dataTransfer.types.includes("Files")) return;
+        event.preventDefault();
         void upload.begin(event.dataTransfer.items, "tree").then(runUpload);
       }}
     >
@@ -636,6 +748,7 @@ export default function Workspace({
         onOpenPalette={() => setPaletteOpen(true)}
         onNewDocument={() => treeActions.onNewDocumentIn("")}
         onUpload={openUploadIntent}
+        onOpenSettings={() => setSettingsOpen(true)}
         onLogout={onLogout}
       />
 
@@ -683,6 +796,7 @@ export default function Workspace({
                 state={editor}
                 onChange={setEditor}
                 onStateChange={setEditor}
+                onOpenProperties={() => openProperties(activeEditorPath)}
                 onAuthLost={() => {
                   setBanner(t("bannerAuthLost"));
                   onLogout();
@@ -712,6 +826,7 @@ export default function Workspace({
             <Separator className="w-px bg-border transition-colors hover:bg-primary/40 data-[state=dragging]:bg-primary/60" />
             <Panel defaultSize="24" minSize="16" maxSize="40">
               <PropertiesPanel
+                onOpenFile={requestOpen}
                 path={propertiesPath}
                 revision={
                   propertiesPath && propertiesPath === activeEditorPath
@@ -737,7 +852,7 @@ export default function Workspace({
                     })();
                   }
                 }}
-                onClose={() => setPropertiesOpen(false)}
+                onClose={closeProperties}
               />
             </Panel>
           </>
@@ -771,6 +886,8 @@ export default function Workspace({
           </div>
         </div>
       )}
+
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
 
       <CommandPalette
         open={paletteOpen}

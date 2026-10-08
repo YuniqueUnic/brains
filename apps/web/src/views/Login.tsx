@@ -1,4 +1,5 @@
-import { Brain, KeyRound, LoaderCircle } from "lucide-react";
+import { KeyRound, LoaderCircle } from "lucide-react";
+import { BrandMark } from "../components/brand";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { api, ApiError, type SessionInfo } from "../api/client";
@@ -43,8 +44,8 @@ export default function Login({
         onSubmit={submit}
       >
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
-          <span className="flex size-10 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
-            <Brain className="size-5 stroke-[1.5]" />
+          <span className="flex size-10 items-center justify-center rounded-[10px] bg-muted text-foreground">
+            <BrandMark className="size-6" />
           </span>
           <h1 className="text-[15px] font-semibold tracking-tight text-foreground">Brains</h1>
           <p className="text-xs text-muted-foreground">{t("subtitle")}</p>

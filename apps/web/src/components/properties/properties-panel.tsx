@@ -1,24 +1,103 @@
 import { ArchiveRestore, History, Link2, ListTree, X } from "lucide-react";
+import { Tooltip as TooltipPrimitive } from "@base-ui-components/react/tooltip";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api, type Entry, type RevisionDto } from "../../api/client";
+import DOMPurify from "dompurify";
+import { marked } from "marked";
+import { api, isTextMedia, type Entry, type RevisionDto } from "../../api/client";
 
 /*
- * Properties (DESIGN.md §43, #49): transient context, not a permanent third
- * column — opened with ⌘I / the context menu, closed with ×. General facts,
- * links, and reachable history; restore keeps the e2e locators intact.
+ * Properties (DESIGN.md §43, #49): transient context opened with ⌘I / the
+ * context menu / the editor toolbar button — never a permanent column.
+ * Backlinks are live: click to jump, hover for a rendered preview popover.
  */
+
+/** One-flight cache so repeated hovers don't refetch the same target. */
+const previewCache = new Map<string, Promise<{ kind: "text"; html: string } | { kind: "image"; url: string } | { kind: "binary" }>>();
+
+function previewFor(path: string): Promise<{ kind: "text"; html: string } | { kind: "image"; url: string } | { kind: "binary" }> {
+  let cached = previewCache.get(path);
+  if (!cached) {
+    cached = (async () => {
+      const meta = await api.readMeta(path);
+      if (meta.media_type?.startsWith("image/")) {
+        const { bytes } = await api.readRaw(path);
+        const blob = new Blob([bytes as unknown as BlobPart], { type: meta.media_type });
+        return { kind: "image", url: URL.createObjectURL(blob) } as const;
+      }
+      if (isTextMedia(meta.media_type)) {
+        const { text } = await api.readText(path);
+        const html = DOMPurify.sanitize(marked.parse(text, { async: false }) as string);
+        return { kind: "text", html } as const;
+      }
+      return { kind: "binary" } as const;
+    })();
+    previewCache.set(path, cached);
+  }
+  return cached;
+}
+
+function BacklinkItem({ source, onOpenFile }: { source: string; onOpenFile: (path: string) => void }) {
+  const { t } = useTranslation("info");
+  const [preview, setPreview] = useState<Awaited<ReturnType<typeof previewFor>> | null>(null);
+  return (
+    <li>
+      <TooltipPrimitive.Root>
+        <TooltipPrimitive.Trigger
+          render={
+            <button
+              type="button"
+              onClick={() => onOpenFile(source)}
+              className="block w-full cursor-pointer truncate rounded-md px-1.5 py-1 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
+              title={t("openHint")}
+            >
+              {source}
+            </button>
+          }
+          onMouseEnter={() => {
+            void previewFor(source).then(
+              (result) => setPreview(result),
+              () => setPreview({ kind: "binary" }),
+            );
+          }}
+        />
+        <TooltipPrimitive.Portal>
+          <TooltipPrimitive.Positioner side="left" sideOffset={10} align="start">
+            <TooltipPrimitive.Popup className="z-50 max-h-[320px] w-[min(360px,80vw)] overflow-hidden rounded-[10px] border bg-card shadow-overlay">
+              <div className="flex h-auto max-h-[320px] items-start justify-center overflow-auto">
+                {preview === null ? (
+                  <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewLoading")}</p>
+                ) : preview.kind === "image" ? (
+                  <img src={preview.url} alt={source} className="max-h-[320px] w-auto object-contain" />
+                ) : preview.kind === "text" ? (
+                  <div
+                    className="markdown-preview w-full !py-4 text-[13px]"
+                    dangerouslySetInnerHTML={{ __html: preview.html }}
+                  />
+                ) : (
+                  <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewUnavailable")}</p>
+                )}
+              </div>
+            </TooltipPrimitive.Popup>
+          </TooltipPrimitive.Positioner>
+        </TooltipPrimitive.Portal>
+      </TooltipPrimitive.Root>
+    </li>
+  );
+}
 
 export function PropertiesPanel({
   path,
   revision,
   onRestore,
   onClose,
+  onOpenFile,
 }: {
   path: string | null;
   revision: string | null;
   onRestore: (revision: string) => void;
   onClose: () => void;
+  onOpenFile: (path: string) => void;
 }) {
   const { t } = useTranslation("info");
   const [meta, setMeta] = useState<Entry | null>(null);
@@ -62,6 +141,7 @@ export function PropertiesPanel({
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
         <h2 className="flex-1 text-[13px] font-semibold">{t("properties")}</h2>
+        <kbd aria-hidden>⌘I</kbd>
         <button
           aria-label={t("close")}
           onClick={onClose}
@@ -117,13 +197,7 @@ export function PropertiesPanel({
             {links.backlinks.length > 0 && (
               <ul className="mt-1 space-y-0.5">
                 {links.backlinks.map((source) => (
-                  <li
-                    key={source}
-                    className="truncate font-mono text-[11px] text-muted-foreground"
-                    title={source}
-                  >
-                    {source}
-                  </li>
+                  <BacklinkItem key={source} source={source} onOpenFile={onOpenFile} />
                 ))}
               </ul>
             )}

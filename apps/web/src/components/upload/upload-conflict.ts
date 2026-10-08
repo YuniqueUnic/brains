@@ -44,16 +44,27 @@ export interface UploadPlan {
   directCount: number;
 }
 
-/** Initial plan: free → direct; same content → identical; else → rename. */
+/** Initial plan: free → direct; same content → identical; else → rename.
+ * Two files in one batch claiming the same path also collide: the second is
+ * auto-renamed (finalize reserves the first claim, so `-1` lands free). */
 export function buildUploadPlan(incoming: IncomingFile[], existing: ExistingEntry[]): UploadPlan {
   const byPath = new Map(existing.map((entry) => [entry.path, entry]));
+  const claimed = new Set<string>();
   const rows = incoming.map((file): UploadRow => {
     const hit = byPath.get(file.path);
-    if (!hit) return { incoming: file, action: "direct" };
-    if (hit.sha256 && hit.sha256 === file.sha256) {
-      return { incoming: file, action: "identical", existing: hit };
+    if (hit) {
+      if (hit.sha256 && hit.sha256 === file.sha256) {
+        claimed.add(file.path);
+        return { incoming: file, action: "identical", existing: hit };
+      }
+      claimed.add(file.path);
+      return { incoming: file, action: "rename", existing: hit };
     }
-    return { incoming: file, action: "rename", existing: hit };
+    if (claimed.has(file.path)) {
+      return { incoming: file, action: "rename" };
+    }
+    claimed.add(file.path);
+    return { incoming: file, action: "direct" };
   });
   return finalize(rows, existing);
 }

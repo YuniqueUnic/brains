@@ -1,5 +1,7 @@
 # Brains
 
+<p align="left"><img src="apps/web/public/favicon.svg" width="40" alt="Brains logo" /></p>
+
 **面向人类、可迁移的长期知识库——进来的是普通文件，出去的也是普通文件，且每一版都留着。**
 
 [English](README.md) · [架构文档](docs/architecture.md) · [运行手册](docs/runbook.md) · [验证记录](docs/verification.md)

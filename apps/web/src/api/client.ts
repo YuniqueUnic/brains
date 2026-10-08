@@ -1,3 +1,5 @@
+import { demoApi } from "./demo";
+
 /**
  * HTTP transport for the web app (design §22.4): one module owns URLs,
  * conditional headers, CSRF and error parsing. Every mutation carries an
@@ -149,7 +151,7 @@ export function isTextMedia(mediaType?: string): boolean {
   );
 }
 
-export const api = {
+const httpApi = {
   async createSession(token: string): Promise<SessionInfo> {
     const session = await request<SessionInfo>("/session", {
       method: "POST",
@@ -366,6 +368,17 @@ async function errorFrom(response: Response): Promise<ApiError> {
     detail.current_revision,
   );
 }
+
+/**
+ * The app talks to this one object. When built for the GitHub Pages demo
+ * (VITE_DEMO_MODE=1) it is the in-memory backend with identical wire
+ * semantics; otherwise it is the real HTTP client.
+ */
+const DEMO =
+  (import.meta.env?.VITE_DEMO_MODE as string | undefined) === "1" ||
+  window.location.hostname.endsWith(".github.io");
+
+export const api: typeof httpApi = DEMO ? (demoApi as typeof httpApi) : httpApi;
 
 async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", buffer);

@@ -42,15 +42,21 @@ await page.locator(".file-path", { hasText: "rust-ci-cache.md" }).first().click(
 await page.waitForFunction(() =>
   document.querySelector('[data-testid="editor-status"]')?.textContent === "已保存",
 );
-// Let the info panel's history/links settle for the shot.
-await page.waitForTimeout(600);
+// Properties is an on-demand context panel (⌘I); open it for the shot.
+await page.keyboard.press("ControlOrMeta+i");
+await page.waitForTimeout(700);
 await page.screenshot({ path: `${OUT}/02-workspace.png` });
+await page.keyboard.press("Escape");
+await page.waitForTimeout(200);
 
-// 3. Search results.
+// 3. ⌘K command palette with full-text results.
+await page.getByTestId("palette-trigger").click();
 await page.getByTestId("search-box").fill("缓存策略");
 await page.keyboard.press("Enter");
-await page.waitForSelector('[data-testid="search-results"] ul li');
+await page.waitForSelector('[data-testid="search-results"] [data-testid="search-hit"]');
+await page.waitForTimeout(300);
 await page.screenshot({ path: `${OUT}/03-search.png` });
+await page.keyboard.press("Escape");
 
 // 4. Conflict view on a clean page (no search overlay): a rival client
 //    advances HEAD behind the editor's back.

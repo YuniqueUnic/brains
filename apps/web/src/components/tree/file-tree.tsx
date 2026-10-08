@@ -159,12 +159,20 @@ export function FileTree({
     });
   };
 
-  const toggleSelect = (path: string) => {
-    onSelectionChange(
-      selected.has(path)
-        ? new Set([...selected].filter((entry) => entry !== path))
-        : new Set([...selected, path]),
-    );
+  // Batch selection covers folder rows too: toggling a folder selects
+  // (or deselects) every live file beneath it, so the checkboxes and the
+  // delete-confirm count reflect real targets.
+  const toggleSelect = (path: string, isFolder: boolean) => {
+    const group = isFolder
+      ? [path, ...allPaths.filter((one) => one.startsWith(`${path}/`))]
+      : [path];
+    const allSelected = group.every((one) => selected.has(one));
+    const next = new Set(selected);
+    for (const one of group) {
+      if (allSelected) next.delete(one);
+      else next.add(one);
+    }
+    onSelectionChange(next);
   };
 
   // Plain mouse clicks land on our row div (Base UI's context-menu trigger
@@ -174,7 +182,7 @@ export function FileTree({
   const rowClick = (path: string, isFolder: boolean) => (event: React.MouseEvent) => {
     if (selecting) {
       event.preventDefault();
-      toggleSelect(path);
+      toggleSelect(path, isFolder);
       return;
     }
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -227,7 +235,7 @@ export function FileTree({
             id={node.path}
             textValue={node.name}
             onAction={() => {
-              if (selecting) toggleSelect(node.path);
+              if (selecting) toggleSelect(node.path, true);
               else toggleFolder(node.path);
             }}
           >
@@ -267,8 +275,9 @@ export function FileTree({
                     <span className="min-w-0 flex-1 truncate">{node.name}</span>
                     {selecting && (
                       <RowCheckbox
+                        label={t("selectOne", { path: node.path })}
                         checked={selected.has(node.path)}
-                        onToggle={() => toggleSelect(node.path)}
+                        onToggle={() => toggleSelect(node.path, true)}
                       />
                     )}
                     <RowMenu actions={actions} path={node.path} isFolder />
@@ -295,7 +304,7 @@ export function FileTree({
           id={entry.path}
           textValue={entry.path}
           onAction={() => {
-            if (selecting) toggleSelect(entry.path);
+            if (selecting) toggleSelect(entry.path, false);
             else if (!isRenaming) actions.onOpen(entry.path);
           }}
         >
@@ -338,8 +347,9 @@ export function FileTree({
                   )}
                   {selecting && (
                     <RowCheckbox
+                      label={t("selectOne", { path: entry.path })}
                       checked={selected.has(entry.path)}
-                      onToggle={() => toggleSelect(entry.path)}
+                      onToggle={() => toggleSelect(entry.path, false)}
                     />
                   )}
                   <RowMenu actions={actions} path={entry.path} />
@@ -531,10 +541,19 @@ function FolderChevron({
   );
 }
 
-function RowCheckbox({ checked, onToggle }: { checked: boolean; onToggle: () => void }) {
+function RowCheckbox({
+  label,
+  checked,
+  onToggle,
+}: {
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+}) {
   return (
     <input
       type="checkbox"
+      aria-label={label}
       className="size-3.5 shrink-0 accent-[var(--primary)]"
       checked={checked}
       onClick={(event) => event.stopPropagation()}
@@ -665,10 +684,6 @@ function FolderMenuItems({ actions, path }: { actions: TreeActions; path: string
         {t("menuNewFolder")}
       </Menu.Item>
       <Menu.Separator className="mx-2 my-1 h-px bg-border" />
-      <Menu.Item className={menuItemClass()} onClick={() => actions.onStartRename(path)}>
-        {t("menuRename")}
-        <MenuShortcut>F2</MenuShortcut>
-      </Menu.Item>
       <Menu.Item className={menuItemClass()} onClick={() => actions.onMove([`${path}/`])}>
         <CornerDownRight className="size-4 stroke-[1.5] text-muted-foreground" />
         {t("menuMove")}

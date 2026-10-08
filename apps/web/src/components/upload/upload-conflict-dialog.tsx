@@ -86,7 +86,7 @@ export function UploadConflictDialog({
             {t("conflictHint")}
           </p>
         </div>
-        <Button size="icon" aria-label={t("cancelUpload")} onClick={onCancel}>
+        <Button size="icon" aria-label={t("cancelUpload")} onClick={onCancel} disabled={running}>
           <X className="size-4 stroke-[1.5]" />
         </Button>
       </div>

@@ -1,5 +1,7 @@
 # Brains
 
+<p align="left"><img src="apps/web/public/favicon.svg" width="40" alt="Brains logo" /></p>
+
 **A human-readable, migration-safe knowledge store — plain files in, plain files out, every revision kept.**
 
 [中文文档](README.zh.md) · [Architecture](docs/architecture.md) · [Runbook](docs/runbook.md) · [Verification log](docs/verification.md)

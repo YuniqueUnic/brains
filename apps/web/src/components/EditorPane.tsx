@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compartment, EditorState as CodeMirrorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
@@ -23,11 +23,18 @@ import { MergeView, unifiedMergeView } from "@codemirror/merge";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { createFindPanel, type FindPanelLabels } from "./editor/find-panel";
+import { Toggle } from "@base-ui-components/react/toggle";
+import { ToggleGroup } from "@base-ui-components/react/toggle-group";
+import { Switch } from "@base-ui-components/react/switch";
+import { Slider } from "@base-ui-components/react/slider";
+import { Popover } from "@base-ui-components/react/popover";
+import { Settings2, RotateCcw } from "lucide-react";
 import {
   CopyPlus,
   Eye,
   FileDiff,
   GitMerge,
+  Info,
   MoreHorizontal,
   Redo2,
   Save,
@@ -40,10 +47,20 @@ import {
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
+import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { SaveIndicator, type SaveTone } from "./SaveIndicator";
 import { Tooltip } from "./ui/tooltip";
 import { menuItemClass, menuPopupClass } from "./ui/menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
+import { Input } from "./ui/input";
 import { cn } from "../lib/utils";
 
 /*
@@ -86,6 +103,37 @@ export type EditorState =
 
 function freshEditorState(path: string, text: string, baseRevision: string): EditorState {
   return { kind: "clean", path, text, baseText: text, baseRevision };
+}
+
+/* Editor preferences (fonts are independent of the UI font): persisted,
+ * applied through compartments so the view never rebuilds. */
+export interface EditorSettings {
+  lineNumbers: boolean;
+  wrap: boolean;
+  font: "sans" | "serif" | "mono";
+  /** Percent, 100 = the 15px document base. */
+  scale: number;
+}
+
+const EDITOR_DEFAULTS: EditorSettings = { lineNumbers: false, wrap: true, font: "sans", scale: 100 };
+const EDITOR_KEY = "brains-editor";
+
+function loadEditorSettings(): EditorSettings {
+  try {
+    const raw = localStorage.getItem(EDITOR_KEY);
+    if (raw) return { ...EDITOR_DEFAULTS, ...(JSON.parse(raw) as Partial<EditorSettings>) };
+  } catch {
+    /* ignore malformed state */
+  }
+  return EDITOR_DEFAULTS;
+}
+
+function saveEditorSettings(settings: EditorSettings) {
+  try {
+    localStorage.setItem(EDITOR_KEY, JSON.stringify(settings));
+  } catch {
+    /* best-effort */
+  }
 }
 
 /* Markdown highlighting (DESIGN.md §31): near-monochrome, quiet accents. */
@@ -150,6 +198,7 @@ export default function EditorPane({
   onAuthLost,
   onTrashCurrent,
   canTrash,
+  onOpenProperties,
 }: {
   state: EditorState;
   onChange: (next: EditorState) => void;
@@ -159,6 +208,8 @@ export default function EditorPane({
   /** Ask the workspace to trash the open file (confirm dialog lives there). */
   onTrashCurrent?: () => void;
   canTrash?: boolean;
+  /** Open the properties panel for the active document (toolbar button). */
+  onOpenProperties?: () => void;
 }) {
   const { t } = useTranslation("editor");
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -169,8 +220,19 @@ export default function EditorPane({
   const [viewMode, setViewMode] = useState<"source" | "preview">("source");
   const [undoPossible, setUndoPossible] = useState(false);
   const [redoPossible, setRedoPossible] = useState(false);
+  const [settings, setSettings] = useState<EditorSettings>(loadEditorSettings);
+  const updateSettings = (patch: Partial<EditorSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      saveEditorSettings(next);
+      return next;
+    });
+  };
   // Swap the inline diff extension without rebuilding the editor.
   const diffCompartment = useRef(new Compartment());
+  const lineNumComp = useRef(new Compartment());
+  const wrapComp = useRef(new Compartment());
+  const sizeComp = useRef(new Compartment());
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -199,6 +261,7 @@ export default function EditorPane({
       setUndoPossible((prev) => (prev === canUndo ? prev : canUndo));
       setRedoPossible((prev) => (prev === canRedo ? prev : canRedo));
     };
+    const initialSettings = loadEditorSettings();
     const view = new EditorView({
       parent: hostRef.current,
       state: CodeMirrorState.create({
@@ -208,6 +271,13 @@ export default function EditorPane({
           // The inline diff extension is swapped in/out via this compartment;
           // the doc listener above runs in every state (saves buffer typing).
           diffCompartment.current.of([]),
+          lineNumComp.current.of(initialSettings.lineNumbers ? lineNumbers() : []),
+          wrapComp.current.of(initialSettings.wrap ? EditorView.lineWrapping : []),
+          sizeComp.current.of(
+            EditorView.theme({
+              "&": { fontSize: `${Math.round(15 * initialSettings.scale) / 100}px` },
+            }),
+          ),
         ],
       }),
     });
@@ -288,6 +358,22 @@ export default function EditorPane({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state]);
+
+  // Apply preference changes through compartments: no view rebuild, no
+  // buffer churn.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: [
+        lineNumComp.current.reconfigure(settings.lineNumbers ? lineNumbers() : []),
+        wrapComp.current.reconfigure(settings.wrap ? EditorView.lineWrapping : []),
+        sizeComp.current.reconfigure(
+          EditorView.theme({ "&": { fontSize: `${Math.round(15 * settings.scale) / 100}px` } }),
+        ),
+      ],
+    });
+  }, [settings.lineNumbers, settings.wrap, settings.scale]);
 
   const save = useCallback(async () => {
     const current = stateRef.current;
@@ -392,16 +478,29 @@ export default function EditorPane({
     return () => window.removeEventListener("keydown", handler);
   }, [save]);
 
-  const createSave = async () => {
+  const [saveAsOpen, setSaveAsOpen] = useState(false);
+  const [saveAsPath, setSaveAsPath] = useState("");
+  const openSaveAs = () => {
     const current = stateRef.current;
     if (current.kind !== "clean" && current.kind !== "dirty") return;
-    const path = window.prompt(t("saveAsPrompt"), current.path);
+    setSaveAsPath(current.path);
+    setSaveAsOpen(true);
+  };
+  const commitSaveAs = async () => {
+    const current = stateRef.current;
+    const path = saveAsPath.trim();
+    if (current.kind !== "clean" && current.kind !== "dirty") return;
     if (!path) return;
     try {
       const result = await api.saveText(path, current.text, { mode: "create" });
+      setSaveAsOpen(false);
       onStateChange(freshEditorState(result.path, current.text, result.revision));
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : String(error));
+      if (error instanceof ApiError && error.status === 401) {
+        onAuthLost?.();
+        return;
+      }
+      toast.error(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -458,16 +557,37 @@ export default function EditorPane({
         />
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-0.5">
-            <div className="mr-1 flex items-center gap-0.5 rounded-[7px] border p-0.5">
-              <ModeChip active={viewMode === "source"} onClick={() => setViewMode("source")}>
+            <ToggleGroup
+              value={[viewMode]}
+              onValueChange={(groupValue) =>
+                setViewMode((groupValue[groupValue.length - 1] ?? "source") as "source" | "preview")
+              }
+              className="mr-1 flex items-center gap-0.5 rounded-[7px] border p-0.5"
+            >
+              <Toggle
+                value="source"
+                aria-label={t("modeSource")}
+                className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
+              >
                 <SquarePen className="size-3.5 stroke-[1.5]" />
                 {t("modeSource")}
-              </ModeChip>
-              <ModeChip active={viewMode === "preview"} onClick={() => setViewMode("preview")}>
+              </Toggle>
+              <Toggle
+                value="preview"
+                aria-label={t("modePreview")}
+                className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
+              >
                 <Eye className="size-3.5 stroke-[1.5]" />
                 {t("modePreview")}
-              </ModeChip>
-            </div>
+              </Toggle>
+            </ToggleGroup>
+            {onOpenProperties && (
+              <Tooltip content={`${t("properties")}（⌘I）`}>
+                <Button size="icon" aria-label={t("properties")} onClick={onOpenProperties}>
+                  <Info />
+                </Button>
+              </Tooltip>
+            )}
             {viewMode === "source" && (
               <>
             <Tooltip content={t("undoTooltip")}>
@@ -492,7 +612,7 @@ export default function EditorPane({
             </Tooltip>
             <span className="mx-1 h-4 w-px bg-border" />
             <Tooltip content={t("searchTooltip")}>
-              <Button size="icon" onClick={openFind}>
+              <Button size="icon" aria-label={t("searchTooltip")} onClick={openFind}>
                 <Search />
               </Button>
             </Tooltip>
@@ -531,7 +651,7 @@ export default function EditorPane({
                 <Menu.Positioner sideOffset={4} align="end">
                   <Menu.Popup className={menuPopupClass}>
                     {state.kind === "clean" || state.kind === "dirty" ? (
-                      <Menu.Item className={menuItemClass()} onClick={() => void createSave()}>
+                      <Menu.Item className={menuItemClass()} onClick={openSaveAs}>
                         <CopyPlus className="size-4 stroke-[1.5] text-muted-foreground" />
                         {t("saveAs")}
                       </Menu.Item>
@@ -550,12 +670,20 @@ export default function EditorPane({
                 </Menu.Positioner>
               </Menu.Portal>
             </Menu.Root>
+            <EditorSettingsPopover settings={settings} onChange={updateSettings} />
           </div>
         )}
       </div>
 
-      <div className="relative min-h-0 flex-1">
-        {inConflict && <ConflictView state={state} stateRef={stateRef} onChange={onChange} />}
+      <div className="relative min-h-0 flex-1" data-editor-font={settings.font}>
+        {inConflict && (
+          <ConflictView
+            state={state}
+            stateRef={stateRef}
+            onChange={onChange}
+            onAuthLost={onAuthLost}
+          />
+        )}
         <div
           className={`absolute inset-0 overflow-auto${inConflict || viewMode === "preview" ? " invisible" : ""}`}
           data-testid="codemirror-host"
@@ -570,7 +698,7 @@ export default function EditorPane({
         )}
         {state.kind === "empty" && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Sparkles className="size-6 stroke-[1.25] opacity-50" />
+            <Sparkles className="size-5 stroke-[1.25] opacity-50" />
             <div className="text-center">
               <p className="text-[13px] text-foreground/80">{t("emptyTitle")}</p>
               <p className="mt-1 text-xs">{t("emptyState")}</p>
@@ -579,7 +707,7 @@ export default function EditorPane({
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-between border-t px-3 py-1 text-[11px] text-faint">
+      <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-[11px] text-faint">
         <span className="font-mono">
           {t("stats", {
             chars: stats.chars,
@@ -587,13 +715,199 @@ export default function EditorPane({
             lines: stats.lines,
           })}
         </span>
+        <span className="flex-1" />
+        {inConflict || state.kind === "empty" ? null : (
+          <div className="flex items-center gap-2">
+            <Slider.Root
+              value={settings.scale}
+              onValueChange={(value) => updateSettings({ scale: typeof value === "number" ? value : (value[0] ?? settings.scale) })}
+              min={80}
+              max={160}
+              step={5}
+              aria-label={t("scaleLabel")}
+              className="flex h-4 w-24 items-center"
+            >
+              <Slider.Control className="flex h-4 w-full items-center rounded">
+                <Slider.Track className="h-1 w-full rounded-full bg-muted">
+                  <Slider.Indicator className="rounded-full bg-primary/60" />
+                </Slider.Track>
+                <Slider.Thumb className="size-3 cursor-pointer rounded-full border border-border bg-card shadow-menu" />
+              </Slider.Control>
+            </Slider.Root>
+            <button
+              type="button"
+              aria-label={t("scaleReset")}
+              title={t("scaleReset")}
+              className="cursor-pointer rounded p-0.5 hover:bg-muted hover:text-foreground"
+              onClick={() => updateSettings({ scale: 100 })}
+            >
+              <RotateCcw className="size-3.5 stroke-[1.5]" />
+            </button>
+            <ToggleGroup
+              value={[settings.wrap ? "wrap" : "overflow"]}
+              onValueChange={(groupValue) =>
+                updateSettings({ wrap: (groupValue[groupValue.length - 1] ?? "wrap") === "wrap" })
+              }
+              className="flex items-center gap-0.5 rounded-md border p-0.5"
+            >
+              <Toggle
+                value="wrap"
+                aria-label={t("wrapLabel")}
+                className="cursor-pointer rounded px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
+              >
+                {t("wrapLabel")}
+              </Toggle>
+              <Toggle
+                value="overflow"
+                aria-label={t("overflowLabel")}
+                className="cursor-pointer rounded px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
+              >
+                {t("overflowLabel")}
+              </Toggle>
+            </ToggleGroup>
+          </div>
+        )}
         <span className="font-mono">
           {inConflict || state.kind === "empty" || state.kind === "loading"
             ? null
             : t("revLabel", { revision: state.baseRevision.slice(0, 8) })}
         </span>
       </div>
+
+      <Dialog open={saveAsOpen} onOpenChange={setSaveAsOpen}>
+        <DialogContent data-testid="save-as-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("saveAs")}</DialogTitle>
+            <DialogDescription>{t("saveAsPrompt")}</DialogDescription>
+          </DialogHeader>
+          <div className="pt-4">
+            <Input
+              data-testid="save-as-path"
+              value={saveAsPath}
+              onChange={(event) => setSaveAsPath(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void commitSaveAs();
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSaveAsOpen(false)}>
+              {t("close")}
+            </Button>
+            <Button variant="default" data-testid="save-as-confirm" onClick={() => void commitSaveAs()}>
+              {t("save")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+/**
+ * Editor preferences popover (line numbers, wrap, font family, scale).
+ * The editor font is independent of the UI font.
+ */
+function EditorSettingsPopover({
+  settings,
+  onChange,
+}: {
+  settings: EditorSettings;
+  onChange: (patch: Partial<EditorSettings>) => void;
+}) {
+  const { t } = useTranslation("editor");
+  return (
+    <Popover.Root>
+      <Popover.Trigger
+        render={<Button size="icon" aria-label={t("settingsLabel")} data-testid="editor-settings" />}
+      >
+        <Settings2 />
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Positioner align="end" sideOffset={6}>
+          <Popover.Popup className="z-50 w-[248px] rounded-[10px] border bg-card p-3 text-[12.5px] shadow-menu overlay-in">
+            <div className="flex items-center justify-between py-1.5">
+              <span>{t("lineNumbersLabel")}</span>
+              <Switch.Root
+                checked={settings.lineNumbers}
+                onCheckedChange={(checked) => onChange({ lineNumbers: checked === true })}
+                className="relative h-5 w-8 cursor-pointer rounded-full bg-muted transition-colors data-[checked]:bg-primary"
+              >
+                <Switch.Thumb className="absolute left-0.5 top-0.5 size-4 rounded-full bg-card shadow transition-transform data-[checked]:translate-x-3" />
+              </Switch.Root>
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span>{t("wrapLabel")}</span>
+              <Switch.Root
+                checked={settings.wrap}
+                onCheckedChange={(checked) => onChange({ wrap: checked === true })}
+                className="relative h-5 w-8 cursor-pointer rounded-full bg-muted transition-colors data-[checked]:bg-primary"
+              >
+                <Switch.Thumb className="absolute left-0.5 top-0.5 size-4 rounded-full bg-card shadow transition-transform data-[checked]:translate-x-3" />
+              </Switch.Root>
+            </div>
+            <div className="flex items-center justify-between py-1.5">
+              <span>{t("fontLabel")}</span>
+              <ToggleGroup
+                value={[settings.font]}
+                onValueChange={(groupValue) =>
+                  onChange({ font: (groupValue[groupValue.length - 1] ?? "sans") as EditorSettings["font"] })
+                }
+                className="flex items-center gap-0.5 rounded-md border p-0.5"
+              >
+                {(
+                  [
+                    ["sans", t("fontSans")],
+                    ["serif", t("fontSerif")],
+                    ["mono", t("fontMono")],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Toggle
+                    key={value}
+                    value={value}
+                    aria-label={label}
+                    className="cursor-pointer rounded px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
+                  >
+                    {label}
+                  </Toggle>
+                ))}
+              </ToggleGroup>
+            </div>
+            <div className="flex items-center gap-2 py-1.5">
+              <span className="shrink-0">{t("scaleLabel")}</span>
+              <Slider.Root
+                value={settings.scale}
+                onValueChange={(value) =>
+                  onChange({ scale: typeof value === "number" ? value : (value[0] ?? settings.scale) })
+                }
+                min={80}
+                max={160}
+                step={5}
+                aria-label={t("scaleLabel")}
+                className="flex h-4 flex-1 items-center"
+              >
+                <Slider.Control className="flex h-4 w-full items-center rounded">
+                  <Slider.Track className="h-1 w-full rounded-full bg-muted">
+                    <Slider.Indicator className="rounded-full bg-primary/60" />
+                  </Slider.Track>
+                  <Slider.Thumb className="size-3 cursor-pointer rounded-full border border-border bg-card shadow-menu" />
+                </Slider.Control>
+              </Slider.Root>
+              <span className="w-10 shrink-0 text-right font-mono text-[11px]">{settings.scale}%</span>
+              <button
+                type="button"
+                aria-label={t("scaleReset")}
+                className="cursor-pointer rounded p-0.5 hover:bg-muted hover:text-foreground"
+                onClick={() => onChange({ scale: 100 })}
+              >
+                <RotateCcw className="size-3.5 stroke-[1.5]" />
+              </button>
+            </div>
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
@@ -610,10 +924,12 @@ function ConflictView({
   state,
   stateRef,
   onChange,
+  onAuthLost,
 }: {
   state: Extract<EditorState, { kind: "conflict" }>;
   stateRef: React.RefObject<EditorState>;
   onChange: (next: EditorState) => void;
+  onAuthLost?: () => void;
 }) {
   const { t } = useTranslation("editor");
   const [mode, setMode] = useState<ConflictMode>("split");
@@ -698,6 +1014,10 @@ function ConflictView({
       onChange(freshEditorState(state.path, localText, result.revision));
     } catch (error) {
       if (!stillMine()) return;
+      if (error instanceof ApiError && error.status === 401) {
+        onAuthLost?.();
+        return;
+      }
       if (error instanceof ApiError && error.status === 412) {
         const nextRevision = error.currentRevision ?? state.remoteRevision;
         let remoteText = state.remoteText;

@@ -7,7 +7,7 @@ import {
   equals,
 } from "@serenity-js/assertions";
 import { Duration } from "@serenity-js/core";
-import { Click, Text } from "@serenity-js/web";
+import { Click, Press, Text } from "@serenity-js/web";
 
 import { CreateNote, RewriteNote, SignIn } from "../screenplay/tasks/Authoring";
 import { OpenNote, ToggleTrash } from "../screenplay/tasks/Navigation";
@@ -55,6 +55,8 @@ describe("trash and restore", () => {
       CreateNote(path, "第一版内容"),
       RewriteNote("第二版内容"),
       Ensure.eventually(EditorStatus(), SAVED).timeoutAfter(Duration.ofSeconds(10)),
+      // History lives in the on-demand properties panel (⌘I, design §43).
+      Press.the("ControlOrMeta+i").in(EditorArea.content()),
     );
 
     // History renders newest-first and refreshes after each save: once

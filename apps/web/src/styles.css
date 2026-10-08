@@ -210,6 +210,15 @@
 .cm-activeLine {
   background: color-mix(in srgb, var(--muted) 50%, transparent);
 }
+/* Editor font families are an editor preference, independent of the UI font. */
+[data-editor-font="serif"] .cm-scroller {
+  font-family: Georgia, "Iowan Old Style", "Songti SC", serif;
+}
+[data-editor-font="mono"] .cm-scroller {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+
 /* Inline code + fenced code in markdown documents (class-based highlight). */
 .cm-md-code {
   font-family: var(--font-mono);

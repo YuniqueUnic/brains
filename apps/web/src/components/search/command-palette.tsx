@@ -127,7 +127,7 @@ export function CommandPalette({
         aria-label={t("paletteOpen")}
         className="top-[18%] w-[min(640px,94vw)] translate-y-0 overflow-hidden p-0"
       >
-        <Command label={t("paletteOpen")} className="flex flex-col">
+        <Command shouldFilter={false} label={t("paletteOpen")} className="flex flex-col">
           <div className="flex items-center gap-2 border-b px-4">
             <Search className="size-4 shrink-0 stroke-[1.5] text-faint" />
             <Command.Input
