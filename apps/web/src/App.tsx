@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, ApiError, type SessionInfo } from "./api/client";
+import { TooltipProvider } from "./components/ui/tooltip";
 import Login from "./views/Login";
 import Workspace from "./views/Workspace";
 
@@ -19,14 +20,16 @@ export default function App() {
   }, []);
 
   if (state.kind === "checking") {
-    return <div className="center">连接中…</div>;
+    return <div className="flex h-full items-center justify-center text-muted-foreground">连接中…</div>;
   }
   if (state.kind === "anonymous") {
     return (
-      <Login
-        error={state.error}
-        onLogin={(session) => setState({ kind: "ready", session })}
-      />
+      <TooltipProvider>
+        <Login
+          error={state.error}
+          onLogin={(session) => setState({ kind: "ready", session })}
+        />
+      </TooltipProvider>
     );
   }
 
@@ -42,5 +45,9 @@ export default function App() {
     setState({ kind: "anonymous" });
   };
 
-  return <Workspace session={state.session} onLogout={logout} />;
+  return (
+    <TooltipProvider>
+      <Workspace session={state.session} onLogout={logout} />
+    </TooltipProvider>
+  );
 }

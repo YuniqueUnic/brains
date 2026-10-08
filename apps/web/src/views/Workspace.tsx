@@ -1,4 +1,21 @@
+import {
+  ArchiveRestore,
+  Brain,
+  FileText,
+  FolderOpen,
+  LoaderCircle,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Search,
+  Trash2,
+  TriangleAlert,
+  Upload,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import {
   api,
   ApiError,
@@ -9,10 +26,34 @@ import {
 } from "../api/client";
 import EditorPane, { type EditorState } from "../components/EditorPane";
 import InfoPanel from "../components/InfoPanel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  alertActionClass,
+  alertCancelClass,
+} from "../components/ui/alert-dialog";
+import { Button } from "../components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import { Input } from "../components/ui/input";
+import { Tooltip } from "../components/ui/tooltip";
+import { cn } from "../lib/utils";
 
 /**
- * Main workspace: sidebar (search + file tree + trash), editor, info panel.
- * Layout mirrors design §13.1 without dragging in a router.
+ * Main workspace (design §13.1) in the workbench shell shape: one header row,
+ * then a three-column resizable grid — file list, editor, info panel. Each
+ * column is its own card; the canvas stays quiet behind them.
  */
 export default function Workspace({
   session,
@@ -30,12 +71,14 @@ export default function Workspace({
   const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
   const [searchIncomplete, setSearchIncomplete] = useState(false);
   const [searchBuilding, setSearchBuilding] = useState(false);
+  const [searching, setSearching] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [showNewFile, setShowNewFile] = useState(false);
   const [newFilePath, setNewFilePath] = useState("");
   const [showTrashConfirm, setShowTrashConfirm] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // Opening another file with unsaved/conflicting text in the editor requires
-  // an explicit discard — the confirm bar reuses the trash pattern.
+  // an explicit discard — the confirm dialog reuses the trash pattern.
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
   const editorRef = useRef(editor);
   editorRef.current = editor;
@@ -152,10 +195,11 @@ export default function Workspace({
   };
 
   const trashCurrent = async () => {
-    if (editor.kind !== "clean" && editor.kind !== "dirty") return;
+    const current = editorRef.current;
+    if (current.kind !== "clean" && current.kind !== "dirty") return;
     setShowTrashConfirm(false);
     try {
-      await api.trash(editor.path, editor.baseRevision);
+      await api.trash(current.path, current.baseRevision);
       setEditor({ kind: "empty" });
       await refreshFiles();
     } catch (error) {
@@ -182,6 +226,7 @@ export default function Workspace({
 
   const runSearch = async () => {
     if (!searchQuery.trim()) return;
+    setSearching(true);
     try {
       const page = await api.search({ q: searchQuery, mode: searchMode });
       let items = page.items;
@@ -200,6 +245,8 @@ export default function Workspace({
       setSearchBuilding(page.index_state === "building");
     } catch (error) {
       fail(error);
+    } finally {
+      setSearching(false);
     }
   };
 
@@ -234,174 +281,238 @@ export default function Workspace({
     }
   };
 
+  const canTrash = editor.kind === "clean" || editor.kind === "dirty";
+
   return (
-    <div className="workspace">
-      <header className="topbar">
-        <span className="brand">BrainStore</span>
-        <input
-          className="search-box"
-          data-testid="search-box"
-          placeholder="全库搜索（Enter 执行）"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void runSearch();
-          }}
-        />
-        <div className="mode-toggle" role="group">
-          <button
-            data-testid="mode-literal"
-            className={searchMode === "literal" ? "active" : ""}
-            onClick={() => setSearchMode("literal")}
+    <div className="flex h-full min-h-0 flex-col gap-2 bg-background p-2">
+      <header className="flex h-12 shrink-0 items-center gap-2 rounded-lg border bg-card px-2.5 shadow-card">
+        <span className="flex items-center gap-1.5 pl-1 pr-1 text-sm font-semibold">
+          <Brain className="size-4 text-primary" />
+          BrainStore
+        </span>
+        <Tooltip content={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-pressed={sidebarCollapsed}
+            onClick={() => setSidebarCollapsed((v) => !v)}
           >
-            字面
-          </button>
-          <button
-            data-testid="mode-fts"
-            className={searchMode === "fts" ? "active" : ""}
-            onClick={() => setSearchMode("fts")}
-          >
-            FTS
-          </button>
+            {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
+          </Button>
+        </Tooltip>
+
+        <div className="relative ml-1 w-full max-w-md">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            data-testid="search-box"
+            placeholder="全库搜索（Enter 执行）"
+            className="pr-16 pl-8"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void runSearch();
+            }}
+          />
+          <div className="absolute right-1 top-1/2 flex -translate-y-1/2" role="group">
+            <ModeButton
+              active={searchMode === "literal"}
+              testid="mode-literal"
+              onClick={() => setSearchMode("literal")}
+            >
+              字面
+            </ModeButton>
+            <ModeButton
+              active={searchMode === "fts"}
+              testid="mode-fts"
+              onClick={() => setSearchMode("fts")}
+            >
+              FTS
+            </ModeButton>
+          </div>
         </div>
-        <div className="topbar-actions">
-          <button
-            data-testid="new-file"
-            onClick={() => setShowNewFile((value) => !value)}
-          >
+
+        <div className="ml-auto flex items-center gap-1.5">
+          <Button data-testid="new-file" onClick={() => setShowNewFile(true)}>
+            <Plus />
             新建
-          </button>
-          <label className="upload-button">
-            上传
-            <input
-              type="file"
-              data-testid="upload-input"
-              hidden
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void uploadAttachment(file);
-                e.target.value = "";
-              }}
-            />
+          </Button>
+          <label>
+            <Button variant="outline" className="cursor-pointer">
+              <Upload />
+              上传
+              <input
+                type="file"
+                data-testid="upload-input"
+                hidden
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadAttachment(file);
+                  e.target.value = "";
+                }}
+              />
+            </Button>
           </label>
-          <button
+          <Button
+            variant={showTrash ? "secondary" : "outline"}
+            aria-pressed={showTrash}
             data-testid="toggle-trash"
             onClick={() => setShowTrash((value) => !value)}
           >
+            {showTrash ? <ArchiveRestore /> : <Trash2 />}
             {showTrash ? "退出回收站" : "回收站"}
-          </button>
-          <span className="muted">{session.actor}</span>
-          <button data-testid="logout" onClick={onLogout}>
+          </Button>
+          <span className="ml-1 rounded-full bg-muted px-2 py-1 text-[10.5px] text-muted-foreground">
+            {session.actor}
+          </span>
+          <Button variant="ghost" data-testid="logout" onClick={onLogout}>
+            <LogOut />
             退出
-          </button>
+          </Button>
         </div>
       </header>
 
       {banner && (
-        <div className="banner" data-testid="banner">
-          {banner}
-          <button onClick={() => setBanner(null)}>×</button>
-        </div>
-      )}
-
-      {showNewFile && (
-        <div className="inline-dialog" data-testid="new-file-dialog">
-          <input
-            data-testid="new-file-path"
-            placeholder="新文件路径，例如 inbox/idea.md"
-            value={newFilePath}
-            onChange={(e) => setNewFilePath(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void newFile();
-            }}
-            autoFocus
-          />
-          <button data-testid="new-file-confirm" onClick={() => void newFile()}>
-            创建
-          </button>
-          <button onClick={() => setShowNewFile(false)}>取消</button>
-        </div>
-      )}
-
-      {showTrashConfirm && (
-        <div className="banner" data-testid="trash-confirm">
-          <span>移入回收站？未保存的修改会一并丢弃（无法恢复）；历史版本保留，可随时恢复。</span>
-          <button data-testid="trash-confirm-yes" onClick={() => void trashCurrent()}>
-            确认
-          </button>
-          <button onClick={() => setShowTrashConfirm(false)}>取消</button>
-        </div>
-      )}
-
-      {pendingOpen && (
-        <div className="banner" data-testid="open-confirm">
-          <span>当前有未保存修改或未解决的冲突，放弃并打开 {pendingOpen}？</span>
-          <button
-            data-testid="open-confirm-yes"
-            onClick={() => {
-              const path = pendingOpen;
-              setPendingOpen(null);
-              void openFile(path);
-            }}
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-40 flex justify-center px-4">
+          <div
+            className="pointer-events-auto flex max-w-xl items-start gap-2 rounded-lg border bg-card px-3 py-2 text-xs shadow-lg"
+            data-testid="banner"
+            role="status"
           >
-            放弃并打开
-          </button>
-          <button onClick={() => setPendingOpen(null)}>取消</button>
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
+            <span className="min-w-0 flex-1 leading-relaxed">{banner}</span>
+            <button
+              onClick={() => setBanner(null)}
+              aria-label="关闭提示"
+              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
         </div>
       )}
 
-      <div className="columns">
-        <nav className="sidebar" data-testid="file-list">
-          {files.length === 0 && <p className="muted">没有文件</p>}
-          {filesTruncated && (
-            <p className="muted" data-testid="files-truncated">
-              （列表未翻完，可用搜索定位其余文件）
-            </p>
-          )}
-          <ul>
-            {files.map((file) => (
-              <li key={file.path}>
-                <button
-                  className="file-item"
-                  onClick={() => requestOpen(file.path)}
-                >
-                  <span className="file-path">{file.path}</span>
-                  {file.state === "trashed" && (
-                    <button
-                      className="restore-button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void restoreFromTrash(file.path);
-                      }}
-                    >
-                      恢复
-                    </button>
+      <PanelGroup direction="horizontal" className="min-h-0 flex-1 gap-2">
+        <Panel
+          defaultSize={24}
+          minSize={16}
+          maxSize={45}
+          className={cn(sidebarCollapsed && "hidden")}
+        >
+          <div className="flex h-full min-h-0 flex-col gap-2">
+            {searchResults && (
+              <div
+                className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card shadow-card"
+                data-testid="search-results"
+              >
+                <div className="flex items-center gap-2 border-b px-3 py-2">
+                  <Search className="size-3.5 shrink-0 text-muted-foreground" />
+                  <h3 className="min-w-0 flex-1 truncate text-xs font-semibold">
+                    搜索“{searchQuery}” — {searchResults.length} 个命中
+                    {searchIncomplete && (
+                      <span className="font-normal text-destructive">（未翻完全库）</span>
+                    )}
+                    {searchBuilding && (
+                      <span className="font-normal text-muted-foreground">
+                        （索引建库中，结果可能不全）
+                      </span>
+                    )}
+                  </h3>
+                  {searching && (
+                    <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
                   )}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </nav>
+                  <button
+                    aria-label="关闭搜索结果"
+                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onClick={() => setSearchResults(null)}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+                <ul className="min-h-0 flex-1 overflow-auto p-1.5">
+                  {searchResults.map((hit) => (
+                    <li key={hit.path + hit.indexed_revision} className="rounded-md p-1 hover:bg-muted/70">
+                      <button
+                        className="w-full truncate text-left font-mono text-xs hover:text-primary"
+                        onClick={() => requestOpen(hit.path)}
+                        title={hit.path}
+                      >
+                        {hit.path}
+                      </button>
+                      <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                        {hit.snippet.slice(0, 160)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-        {searchResults && (
-          <div className="search-results" data-testid="search-results">
-            <h3>
-              搜索“{searchQuery}” — {searchResults.length} 个命中
-              {searchIncomplete && <span className="error">（未翻完全库）</span>}
-              {searchBuilding && <span className="muted">（索引建库中，结果可能不全）</span>}
-            </h3>
-            <ul>
-              {searchResults.map((hit) => (
-                <li key={hit.path + hit.indexed_revision}>
-                  <button onClick={() => requestOpen(hit.path)}>{hit.path}</button>
-                  <p className="muted">{hit.snippet.slice(0, 160)}</p>
-                </li>
-              ))}
-            </ul>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card shadow-card">
+              <div className="flex items-center gap-2 border-b px-3 py-2">
+                <h2 className="flex-1 text-xs font-semibold">
+                  {showTrash ? "回收站" : "文件"}
+                  <span className="ml-1.5 font-normal text-muted-foreground">
+                    {files.length}
+                  </span>
+                </h2>
+                {filesTruncated && (
+                  <span
+                    className="text-[10.5px] text-muted-foreground"
+                    data-testid="files-truncated"
+                  >
+                    列表未翻完
+                  </span>
+                )}
+              </div>
+              <div className="min-h-0 flex-1 overflow-auto p-1.5" data-testid="file-list">
+                {files.length === 0 && (
+                  <div className="flex flex-col items-center gap-2 px-3 py-8 text-muted-foreground">
+                    <FolderOpen className="size-5 opacity-60" />
+                    <p className="text-xs">没有文件</p>
+                  </div>
+                )}
+                <ul className="space-y-0.5">
+                  {files.map((file) => (
+                    <li key={file.path} className="group relative">
+                      <button
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-primary/9 focus-visible:bg-primary/13 focus-visible:outline-2 focus-visible:outline-ring"
+                        onClick={() => requestOpen(file.path)}
+                        title={file.path}
+                      >
+                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                        <span className="file-path min-w-0 flex-1 truncate font-mono text-xs">
+                          {file.path}
+                        </span>
+                        {file.state === "trashed" && (
+                          <span className="shrink-0 rounded-full bg-warning/12 px-1.5 py-0.5 text-[9.5px] text-warning">
+                            已删除
+                          </span>
+                        )}
+                      </button>
+                      {file.state === "trashed" && (
+                        <button
+                          className="restore-button absolute bottom-1/2 right-1.5 translate-y-1/2 rounded-md bg-card/95 p-1 text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100"
+                          aria-label={`恢复 ${file.path}`}
+                          title="恢复到文件列表"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void restoreFromTrash(file.path);
+                          }}
+                        >
+                          <ArchiveRestore className="size-3.5" />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
-        )}
+        </Panel>
 
-        <main className="main">
+        {!sidebarCollapsed && <ResizeHandle />}
+
+        <Panel minSize={35}>
           <EditorPane
             state={editor}
             onChange={setEditor}
@@ -410,50 +521,154 @@ export default function Workspace({
               setBanner("登录已过期，请重新登录。");
               onLogout();
             }}
+            canTrash={canTrash}
+            onTrashCurrent={() => setShowTrashConfirm(true)}
           />
-          {editor.kind === "clean" || editor.kind === "dirty" ? (
-            <button
-              className="danger"
-              data-testid="trash-current"
-              onClick={() => setShowTrashConfirm(true)}
+        </Panel>
+
+        <ResizeHandle />
+
+        <Panel defaultSize={22} minSize={15} maxSize={40}>
+          <InfoPanel
+            path={infoPath(editor)}
+            revision={infoRevision(editor)}
+            onRestore={(revision) => {
+              // Restoring replaces the buffer: only a clean editor may lose it
+              // silently; dirty/conflict editors must resolve first.
+              if (editor.kind !== "clean") {
+                setBanner("有未保存修改：请先保存（或放弃修改）后再恢复历史版本。");
+                return;
+              }
+              void (async () => {
+                try {
+                  const result = await api.restore(editor.path, revision, editor.baseRevision);
+                  const { text, etag } = await api.readText(editor.path);
+                  void result;
+                  setEditor({
+                    kind: "clean",
+                    path: editor.path,
+                    text,
+                    baseText: text,
+                    baseRevision: etag,
+                  });
+                  setBanner(`已恢复。`);
+                  await refreshFiles();
+                } catch (error) {
+                  fail(error);
+                }
+              })();
+            }}
+          />
+        </Panel>
+      </PanelGroup>
+
+      <Dialog open={showNewFile} onOpenChange={setShowNewFile}>
+        <DialogContent data-testid="new-file-dialog">
+          <DialogHeader>
+            <DialogTitle>新建文件</DialogTitle>
+            <DialogDescription>vault 内相对路径，例如 inbox/idea.md</DialogDescription>
+          </DialogHeader>
+          <div className="px-5 pt-4">
+            <Input
+              data-testid="new-file-path"
+              placeholder="inbox/idea.md"
+              value={newFilePath}
+              onChange={(e) => setNewFilePath(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void newFile();
+              }}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNewFile(false)}>
+              取消
+            </Button>
+            <Button data-testid="new-file-confirm" onClick={() => void newFile()}>
+              创建
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showTrashConfirm} onOpenChange={setShowTrashConfirm}>
+        <AlertDialogContent data-testid="trash-confirm">
+          <AlertDialogTitle>移入回收站？</AlertDialogTitle>
+          <AlertDialogDescription>
+            未保存的修改会一并丢弃（无法恢复）；历史版本保留，可随时恢复。
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel className={alertCancelClass()}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="trash-confirm-yes"
+              className={alertActionClass("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
+              onClick={() => void trashCurrent()}
             >
               移入回收站
-            </button>
-          ) : null}
-        </main>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-        <InfoPanel
-          path={infoPath(editor)}
-          revision={infoRevision(editor)}
-          onRestore={(revision) => {
-            // Restoring replaces the buffer: only a clean editor may lose it
-            // silently; dirty/conflict editors must resolve first.
-            if (editor.kind !== "clean") {
-              setBanner("有未保存修改：请先保存（或放弃修改）后再恢复历史版本。");
-              return;
-            }
-            void (async () => {
-              try {
-                const result = await api.restore(editor.path, revision, editor.baseRevision);
-                const { text, etag } = await api.readText(editor.path);
-                void result;
-                setEditor({
-                  kind: "clean",
-                  path: editor.path,
-                  text,
-                  baseText: text,
-                  baseRevision: etag,
-                });
-                setBanner(`已恢复。`);
-                await refreshFiles();
-              } catch (error) {
-                fail(error);
-              }
-            })();
-          }}
-        />
-      </div>
+      <AlertDialog open={pendingOpen !== null} onOpenChange={(open) => !open && setPendingOpen(null)}>
+        <AlertDialogContent data-testid="open-confirm">
+          <AlertDialogTitle>放弃未保存的修改？</AlertDialogTitle>
+          <AlertDialogDescription>
+            当前有未保存修改或未解决的冲突，放弃并打开 {pendingOpen}？
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel className={alertCancelClass()}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="open-confirm-yes"
+              className={alertActionClass("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
+              onClick={() => {
+                const path = pendingOpen;
+                setPendingOpen(null);
+                if (path) void openFile(path);
+              }}
+            >
+              放弃并打开
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  );
+}
+
+function ModeButton({
+  active,
+  testid,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  testid: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      data-testid={testid}
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded-md px-2 py-1 text-[10.5px] font-medium transition-colors",
+        active
+          ? "bg-primary/12 text-primary ring-1 ring-primary/30"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ResizeHandle() {
+  return (
+    <PanelResizeHandle className="group relative w-2">
+      <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/40 group-data-[resize-handle-state=drag]:bg-primary/60" />
+    </PanelResizeHandle>
   );
 }
 

@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef } from "react";
 import { EditorState as CodeMirrorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { CopyPlus, GitMerge, Save, Trash2 } from "lucide-react";
 import { api, ApiError } from "../api/client";
+import { Button } from "./ui/button";
+import { SaveIndicator, type SaveTone } from "./SaveIndicator";
+import { Tooltip } from "./ui/tooltip";
 
 /**
  * Editor state machine (design §13.2):
@@ -49,12 +53,17 @@ export default function EditorPane({
   onChange,
   onStateChange,
   onAuthLost,
+  onTrashCurrent,
+  canTrash,
 }: {
   state: EditorState;
   onChange: (next: EditorState) => void;
   onStateChange: (next: EditorState) => void;
   /** Session expired mid-edit: the workspace logs out and shows a banner. */
   onAuthLost?: () => void;
+  /** Ask the workspace to trash the open file (confirm dialog lives there). */
+  onTrashCurrent?: () => void;
+  canTrash?: boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -228,7 +237,7 @@ export default function EditorPane({
         stateRef.current = failed;
       }
     }
-  }, [onStateChange]);
+  }, [onStateChange, onAuthLost]);
 
   // Ctrl+S saves; P0 keeps saving explicit (design §13.2).
   useEffect(() => {
@@ -259,48 +268,106 @@ export default function EditorPane({
   // conflict, which renders its panel as a sibling and hides (never unmounts)
   // the editor. Unmounting would orphan the one EditorView created on mount
   // and leave a dead editor after conflict resolution.
-  const statusLabel = statusText(state);
   const inConflict = state.kind === "conflict";
+  const buffer = currentDoc(state);
+  const stats = {
+    chars: buffer.length,
+    words: buffer.split(/\s+/).filter(Boolean).length,
+    lines: buffer === "" ? 1 : buffer.split("\n").length,
+  };
 
   return (
-    <div className="editor-pane" data-testid="editor-pane">
-      <div className="editor-toolbar">
-        <span className="editor-path" data-testid="editor-path">
+    <div
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card shadow-card"
+      data-testid="editor-pane"
+    >
+      <div className="flex min-h-[50px] items-center gap-2 border-b bg-card px-3 py-1.5">
+        <span
+          className="min-w-0 flex-1 truncate font-mono text-[13px] font-semibold text-foreground"
+          data-testid="editor-path"
+          title={state.kind === "empty" ? undefined : state.path}
+        >
           {state.kind === "empty" ? "" : state.path}
         </span>
-        <span
-          className={`editor-status status-${state.kind}`}
-          data-testid="editor-status"
-        >
-          {statusLabel}
-        </span>
-        <div className="editor-actions">
-          {inConflict || state.kind === "empty" ? null : (
-            <>
-              <button
+        <SaveIndicator
+          tone={statusTone(state)}
+          label={statusText(state)}
+          busy={state.kind === "saving" || state.kind === "loading"}
+          title={state.kind === "error" ? state.message : undefined}
+        />
+        {inConflict || state.kind === "empty" ? null : (
+          <div className="flex items-center gap-1">
+            <Tooltip content="保存（⌘S）">
+              <Button
                 data-testid="save-button"
+                size="sm"
                 disabled={state.kind !== "dirty" && state.kind !== "error"}
                 onClick={() => void save()}
               >
+                {state.kind === "dirty" || state.kind === "error" ? (
+                  <Save className="size-3.5" />
+                ) : null}
                 保存
-              </button>
-              {state.kind === "clean" || state.kind === "dirty" ? (
-                <button onClick={() => void createSave()}>另存为…</button>
-              ) : null}
-            </>
-          )}
-        </div>
+              </Button>
+            </Tooltip>
+            {state.kind === "clean" || state.kind === "dirty" ? (
+              <Tooltip content="另存为新文件">
+                <Button variant="ghost" size="icon" onClick={() => void createSave()}>
+                  <CopyPlus />
+                </Button>
+              </Tooltip>
+            ) : null}
+            {canTrash ? (
+              <Tooltip content="移入回收站">
+                <Button
+                  variant="dangerGhost"
+                  size="icon"
+                  data-testid="trash-current"
+                  onClick={onTrashCurrent}
+                >
+                  <Trash2 />
+                </Button>
+              </Tooltip>
+            ) : null}
+          </div>
+        )}
       </div>
-      <div className="editor-body">
+
+      <div className="relative min-h-0 flex-1">
         {inConflict && <ConflictView state={state} stateRef={stateRef} onChange={onChange} />}
         <div
-          className={`codemirror-host${inConflict ? " host-hidden" : ""}`}
+          className={`absolute inset-0 overflow-auto py-2${inConflict ? " invisible" : ""}`}
           data-testid="codemirror-host"
           ref={hostRef}
         />
         {state.kind === "empty" && (
-          <div className="editor-empty muted">从左侧选择或新建一个文件</div>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              className="size-8 opacity-60"
+            >
+              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21z" />
+              <path d="M4 5.5v13" />
+              <path d="M9 8h7M9 11.5h5" strokeLinecap="round" />
+            </svg>
+            <p className="text-xs">从左侧选择或新建一个文件</p>
+          </div>
         )}
+      </div>
+
+      <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
+        <span className="font-mono">
+          {stats.chars} 字符 · {stats.words} 词 · {stats.lines} 行
+        </span>
+        <span className="font-mono">
+          {inConflict || state.kind === "empty" || state.kind === "loading"
+            ? null
+            : `rev ${state.baseRevision.slice(0, 8)}`}
+        </span>
       </div>
     </div>
   );
@@ -371,44 +438,93 @@ function ConflictView({
   const remoteUsable = state.remoteRevision !== "(unknown)";
 
   return (
-    <div className="conflict-view" data-testid="conflict-view">
-      <p className="error">
-        保存期间文件已被其他客户端修改（当前远端版本 {state.remoteRevision.slice(0, 8)}…）。
-        请比较下方三个版本后选择操作；不会自动覆盖。
-      </p>
-      {state.notice && <p className="error">{state.notice}</p>}
-      <div className="conflict-columns">
-        <div>
-          <h3>基线（你的起点）</h3>
-          <textarea readOnly value={state.baseText} />
+    <div
+      className="absolute inset-0 z-10 flex flex-col gap-3 overflow-auto border-b p-3"
+      data-testid="conflict-view"
+      style={{
+        borderColor: "color-mix(in srgb, var(--warning) 30%, var(--border))",
+        backgroundColor: "color-mix(in srgb, var(--warning) 6%, var(--card))",
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <GitMerge className="mt-0.5 size-4 shrink-0" style={{ color: "var(--warning)" }} />
+        <div className="min-w-0 flex-1">
+          <p className="text-[12.5px] font-semibold">版本冲突 — 保存期间文件已被其他客户端修改</p>
+          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+            当前远端版本 {state.remoteRevision.slice(0, 8)}…。请比较三个版本后选择操作；不会自动覆盖。
+          </p>
         </div>
-        <div>
-          <h3>本地（你的修改）</h3>
+      </div>
+      {state.notice && (
+        <p
+          className="rounded-md px-2.5 py-1.5 text-xs"
+          role="alert"
+          style={{
+            backgroundColor: "color-mix(in srgb, var(--destructive) 8%, transparent)",
+            color: "color-mix(in srgb, var(--destructive) 80%, var(--foreground))",
+          }}
+        >
+          {state.notice}
+        </p>
+      )}
+      <div className="grid min-h-0 flex-1 grid-cols-3 gap-2">
+        <ConflictColumn label="基线（你的起点）" value={state.baseText} />
+        <div className="flex min-h-0 flex-col gap-1">
+          <span className="text-[11px] font-medium text-muted-foreground">本地（你的修改，可编辑）</span>
           <textarea
+            className="min-h-0 flex-1 resize-none rounded-md border bg-card p-2 font-mono text-xs focus-visible:border-primary focus-visible:outline-none"
             value={state.localText}
             onChange={(e) => onChange({ ...state, localText: e.target.value })}
           />
         </div>
-        <div>
-          <h3>远端（当前版本）</h3>
-          <textarea readOnly value={state.remoteText} />
-        </div>
+        <ConflictColumn label="远端（当前版本）" value={state.remoteText} />
       </div>
-      <div className="conflict-actions">
-        <button data-testid="conflict-keep-local" onClick={() => void saveWithRemoteBase()}>
+      <div className="flex items-center justify-end gap-2">
+        <Button data-testid="conflict-keep-local" onClick={() => void saveWithRemoteBase()}>
           以本地内容保存（基于远端当前版本）
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="outline"
           data-testid="conflict-take-remote"
           onClick={takeRemote}
           disabled={!remoteUsable}
           title={remoteUsable ? undefined : "远端内容暂不可读取，不能采用"}
         >
           放弃本地，采用远端
-        </button>
+        </Button>
       </div>
     </div>
   );
+}
+
+function ConflictColumn({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-h-0 flex-col gap-1">
+      <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
+      <textarea
+        readOnly
+        className="min-h-0 flex-1 resize-none rounded-md border bg-card p-2 font-mono text-xs"
+        value={value}
+      />
+    </div>
+  );
+}
+
+/** Traffic-light tone for the save capsule; labels stay the e2e contract. */
+function statusTone(state: EditorState): SaveTone {
+  switch (state.kind) {
+    case "empty":
+    case "loading":
+      return "neutral";
+    case "clean":
+      return "saved";
+    case "saving":
+    case "dirty":
+      return "pending";
+    case "conflict":
+    case "error":
+      return "error";
+  }
 }
 
 function statusText(state: EditorState): string {

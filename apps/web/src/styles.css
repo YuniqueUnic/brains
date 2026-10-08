@@ -1,356 +1,170 @@
-/* BrainStore web — quiet, text-first UI. No emoji per project UI rules. */
+@import "tailwindcss";
 
+/*
+ * Design tokens — semantic shadcn model, palette follows the syzygy workbench
+ * (cool gray-blue surfaces, one brand blue, green/amber/red states).
+ * Radius base 10px; type scale follows the 13/12/11px house sizes.
+ */
 :root {
-  --bg: #ffffff;
-  --fg: #1c1e21;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --accent: #2563eb;
-  --danger: #b91c1c;
-  --panel: #f9fafb;
+  --background: hsl(220 22% 97%);
+  --foreground: hsl(222 24% 14%);
+  --card: hsl(220 24% 99%);
+  --muted: hsl(220 18% 93%);
+  --muted-foreground: hsl(220 12% 44%);
+  --border: hsl(220 16% 86%);
+  --input: hsl(220 16% 86%);
+  --primary: hsl(212 72% 46%);
+  --primary-foreground: hsl(0 0% 100%);
+  --secondary: hsl(220 18% 93%);
+  --secondary-foreground: hsl(222 24% 14%);
+  --accent: hsl(220 18% 91%);
+  --accent-foreground: hsl(222 24% 14%);
+  --destructive: hsl(0 84% 60%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --success: hsl(142 71% 36%);
+  --warning: hsl(32 95% 44%);
+  --ring: hsl(212 72% 46%);
+  --radius: 0.625rem;
+  --shadow-card: 0 1px 2px hsl(222 24% 14% / 0.05);
 }
 
-* {
-  box-sizing: border-box;
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: hsl(222 18% 10%);
+    --foreground: hsl(216 24% 94%);
+    --card: hsl(222 16% 14%);
+    --muted: hsl(222 14% 20%);
+    --muted-foreground: hsl(220 12% 68%);
+    --border: hsl(222 12% 28%);
+    --input: hsl(222 12% 28%);
+    --primary: hsl(212 88% 68%);
+    --primary-foreground: hsl(222 22% 12%);
+    --secondary: hsl(222 14% 20%);
+    --secondary-foreground: hsl(216 24% 94%);
+    --accent: hsl(222 14% 22%);
+    --accent-foreground: hsl(216 24% 94%);
+    --destructive: hsl(0 72% 56%);
+    --destructive-foreground: hsl(0 0% 100%);
+    --success: hsl(142 60% 56%);
+    --warning: hsl(38 92% 58%);
+    --ring: hsl(212 88% 68%);
+    --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.28);
+  }
 }
 
-body {
-  margin: 0;
-  font-family: -apple-system, "PingFang SC", "Noto Sans SC", "Segoe UI", sans-serif;
-  color: var(--fg);
-  background: var(--bg);
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --shadow-card: var(--shadow-card);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-button {
-  font: inherit;
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
-  cursor: pointer;
-}
-button:hover:not(:disabled) {
-  border-color: var(--accent);
-}
-button:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-button.danger {
-  color: var(--danger);
-}
-
-input,
-select,
-textarea {
-  font: inherit;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.center {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-}
-
-.login-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 320px;
-  padding: 32px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-}
-.login-card h1 {
-  margin: 0;
-  font-size: 22px;
-}
-.login-card input {
-  padding: 8px;
+/* Quiet chrome: content leads, the shell stays out of the way. */
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+    font-size: 13px;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--muted-foreground) 36%, transparent) transparent;
+  }
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    border-radius: calc(var(--radius) * 0.4);
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--muted) 70%, transparent);
+    padding: 0 0.375rem;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+  }
 }
 
-.muted {
-  color: var(--muted);
+/* CodeMirror hosts the markdown buffer; align it with the token system. */
+.cm-editor {
+  background: transparent;
+  font-size: 13.5px;
 }
-.error {
-  color: var(--danger);
+.cm-editor.cm-focused {
+  outline: none;
 }
-
-.workspace {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
+.cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 1.7;
 }
-
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
+.cm-content {
+  caret-color: var(--primary);
 }
-.brand {
-  font-weight: 600;
+.cm-cursor,
+.cm-dropCursor {
+  border-left-color: var(--primary);
 }
-.search-box {
-  flex: 1;
-  max-width: 480px;
-}
-.topbar-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.banner {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 16px;
-  background: #fffbeb;
-  border-bottom: 1px solid var(--border);
-}
-
-.columns {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 240px 1fr 280px;
-  min-height: 0;
-}
-
-.sidebar {
-  border-right: 1px solid var(--border);
-  overflow: auto;
-  padding: 8px;
-}
-.sidebar ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.file-item {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  text-align: left;
+.cm-gutters {
+  background: transparent;
   border: none;
-  background: none;
-  padding: 4px 6px;
-  border-radius: 4px;
+  color: var(--muted-foreground);
 }
-.file-item:hover {
-  background: var(--panel);
+.cm-selectionBackground,
+.cm-editor ::selection {
+  background: color-mix(in srgb, var(--primary) 18%, transparent) !important;
 }
-.file-path {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.restore-button {
-  border: none;
-  color: var(--accent);
-  padding: 0 4px;
+.cm-activeLine {
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
 }
 
-.search-results {
-  position: absolute;
-  top: 52px;
-  left: 240px;
-  right: 280px;
-  max-height: 50vh;
-  overflow: auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 16px;
-  z-index: 10;
+/* Save-indicator pulse while a write is in flight (1.2s, gentle halo). */
+@keyframes save-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--warning) 22%, transparent);
+    opacity: 1;
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--warning) 40%, transparent);
+    opacity: 0.6;
+  }
 }
-.search-results ul {
-  list-style: none;
-  padding: 0;
+.save-pulse {
+  animation: save-pulse 1.2s ease-in-out infinite;
 }
-
-.main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 8px 16px;
-}
-
-.editor-pane {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-.editor-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 8px;
-}
-.editor-path {
-  font-weight: 500;
-}
-.editor-status.status-dirty,
-.editor-status.status-saving {
-  color: var(--accent);
-}
-.editor-status.status-conflict,
-.editor-status.status-error {
-  color: var(--danger);
-}
-.editor-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-}
-.upload-button {
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-}
-.codemirror-host {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-}
-.codemirror-host .cm-editor {
-  height: 100%;
-}
-/* Conflict keeps the host in the DOM (the EditorView attaches once) but out
-   of sight until the human resolves the panel above it. */
-.codemirror-host.host-hidden {
-  display: none;
-}
-.editor-empty {
-  display: grid;
-  place-items: center;
-  flex: 1;
-}
-
-.conflict-view {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
-.conflict-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px;
-  flex: 1;
-  min-height: 0;
-}
-.conflict-columns textarea {
-  width: 100%;
-  height: 100%;
-  min-height: 240px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 13px;
-  white-space: pre;
-}
-.conflict-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.info-panel {
-  border-left: 1px solid var(--border);
-  padding: 12px;
-  overflow: auto;
-  font-size: 13px;
-}
-.info-panel h3 {
-  margin: 8px 0 4px;
-  font-size: 13px;
-}
-.info-panel dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 12px;
-  margin: 0;
-}
-.info-panel dt {
-  color: var(--muted);
-}
-.info-panel dd {
-  margin: 0;
-}
-.history-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.history-list li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 0;
-  border-bottom: 1px dashed var(--border);
-}
-.history-list button {
-  margin-left: auto;
-  font-size: 12px;
-  padding: 1px 6px;
-}
-.backlinks {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  color: var(--muted);
-}
-
-.inline-dialog {
-  display: flex;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
-}
-.inline-dialog input {
-  flex: 1;
-  max-width: 480px;
-}
-
-.editor-body {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-.editor-body .editor-empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  pointer-events: none;
-}
-
-.mode-toggle {
-  display: flex;
-  gap: 0;
-}
-.mode-toggle button {
-  border-radius: 0;
-  border-right-width: 0;
-}
-.mode-toggle button:first-child {
-  border-radius: 6px 0 0 6px;
-}
-.mode-toggle button:last-child {
-  border-radius: 0 6px 6px 0;
-  border-right-width: 1px;
-}
-.mode-toggle button.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
+@media (prefers-reduced-motion: reduce) {
+  .save-pulse {
+    animation: none;
+  }
 }

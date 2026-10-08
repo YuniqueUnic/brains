@@ -1,5 +1,8 @@
+import { Brain, KeyRound, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { api, ApiError, type SessionInfo } from "../api/client";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 
 export default function Login({
   onLogin,
@@ -30,23 +33,49 @@ export default function Login({
   };
 
   return (
-    <div className="center">
-      <form className="login-card" onSubmit={submit}>
-        <h1>BrainStore</h1>
-        <p className="muted">使用访问令牌登录本机知识库</p>
-        <input
-          data-testid="token-input"
-          type="password"
-          placeholder="访问令牌"
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-          autoFocus
-        />
-        <button data-testid="login-button" type="submit" disabled={busy || !token.trim()}>
+    <div className="flex h-full items-center justify-center bg-background p-6">
+      <form
+        className="w-[22rem] rounded-2xl border border-border/80 bg-card/95 p-6 shadow-card"
+        onSubmit={submit}
+      >
+        <div className="mb-5 flex flex-col items-center gap-2 text-center">
+          <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
+            <Brain className="size-6" />
+          </span>
+          <h1 className="text-base font-semibold text-foreground">BrainStore</h1>
+          <p className="text-xs text-muted-foreground">使用访问令牌登录本机知识库</p>
+        </div>
+        <div className="relative">
+          <KeyRound className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            data-testid="token-input"
+            type="password"
+            placeholder="访问令牌"
+            className="h-9 pl-8"
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            autoFocus
+          />
+        </div>
+        <Button
+          data-testid="login-button"
+          type="submit"
+          className="mt-3 h-9 w-full text-sm"
+          disabled={busy || !token.trim()}
+        >
+          {busy && <LoaderCircle className="size-3.5 animate-spin" />}
           {busy ? "登录中…" : "登录"}
-        </button>
+        </Button>
         {message && (
-          <p className="error" data-testid="login-error">
+          <p
+            className="mt-3 rounded-md px-2.5 py-1.5 text-center text-xs"
+            data-testid="login-error"
+            role="alert"
+            style={{
+              backgroundColor: "color-mix(in srgb, var(--destructive) 8%, transparent)",
+              color: "color-mix(in srgb, var(--destructive) 80%, var(--foreground))",
+            }}
+          >
             {message}
           </p>
         )}

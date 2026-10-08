@@ -38,7 +38,7 @@ await page.screenshot({ path: `${OUT}/01-login.png` });
 await page.getByTestId("token-input").fill(TOKEN);
 await page.getByTestId("login-button").click();
 await page.getByTestId("file-list").waitFor();
-await page.locator(".file-item", { hasText: "rust-ci-cache.md" }).first().click();
+await page.locator(".file-path", { hasText: "rust-ci-cache.md" }).first().click();
 await page.waitForFunction(() =>
   document.querySelector('[data-testid="editor-status"]')?.textContent === "已保存",
 );
@@ -73,7 +73,7 @@ const RIVAL = {
 };
 await page.reload();
 await page.getByTestId("file-list").waitFor();
-await page.locator(".file-item", { hasText: "rust-ci-cache.md" }).first().click();
+await page.locator(".file-path", { hasText: "rust-ci-cache.md" }).first().click();
 await page.waitForFunction(() =>
   document.querySelector('[data-testid="editor-status"]')?.textContent === "已保存",
 );
@@ -84,7 +84,7 @@ await RIVAL.put("notes/rust-ci-cache.md", "同事已推送的远端版本：CI �
 await page.locator(".cm-content").press("ControlOrMeta+s");
 await page.waitForSelector('[data-testid="conflict-view"]');
 const columns = await page.evaluate(() =>
-  [...document.querySelectorAll(".conflict-view textarea")].map((t) => t.value.length),
+  [...document.querySelectorAll('[data-testid="conflict-view"] textarea')].map((t) => t.value.length),
 );
 if (columns[1] === 0 || columns[2] === 0) {
   throw new Error(`conflict columns unexpectedly empty: ${columns}`);
