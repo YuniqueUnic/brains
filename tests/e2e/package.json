@@ -1,0 +1,22 @@
+{
+  "name": "brainstore-e2e",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@serenity-js/assertions": "^3.31.0",
+    "@serenity-js/core": "^3.31.0",
+    "@serenity-js/playwright": "^3.48.0",
+    "@serenity-js/playwright-test": "^3.31.0",
+    "@serenity-js/rest": "^3.31.0",
+    "@serenity-js/web": "^3.48.0",
+    "@types/node": "^26.6.4",
+    "playwright": "^1.52.0",
+    "typescript": "~6.0.3"
+  }
+}

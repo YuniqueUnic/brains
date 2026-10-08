@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  # getrandom needs its wasm backend selected at compile time (rand 0.9 chain,
+  # used by the Worker target only).
+  WASM_RUSTFLAGS: --cfg getrandom_backend="wasm_js"
+
+jobs:
+  rust:
+    name: Rust (fmt · clippy · test · wasm check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy (workspace, all targets/features, warnings denied)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Tests (workspace, all features)
+        run: cargo test --workspace --all-features
+      - name: Worker wasm check
+        run: cargo check -p brainstore-worker --target wasm32-unknown-unknown
+        env:
+          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+
+  web:
+    name: Web build + typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build web app
+        run: pnpm --dir apps/web build
+      - name: Typecheck e2e suite
+        run: pnpm --dir tests/e2e exec tsc --noEmit
+
+  e2e:
+    name: Browser E2E (screenplay, real server)
+    runs-on: ubuntu-latest
+    needs: [rust, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build server + web
+        run: |
+          cargo build -p brainstore-server
+          pnpm --dir apps/web build
+      - name: Install Playwright browser
+        run: pnpm --dir tests/e2e exec playwright install --with-deps chromium
+      - name: Run screenplay E2E
+        working-directory: tests/e2e
+        env:
+          BRAIN_SERVER_BIN: ${{ github.workspace }}/target/debug/brainstore-server
+          BRAIN_WEB_DIST: ${{ github.workspace }}/apps/web/dist
+        run: pnpm exec playwright test
+      - name: Upload failure context
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures
+          path: tests/e2e/test-results
+          retention-days: 7
+
+  worker-smoke:
+    name: Cloudflare local smoke (workerd + R2/D1)
+    runs-on: ubuntu-latest
+    needs: [rust, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install worker-build
+        run: cargo install worker-build --locked
+      - run: pnpm install --frozen-lockfile
+      - name: Build web + worker wasm
+        run: |
+          pnpm --dir apps/web build
+          cd apps/worker
+          worker-build --release
+        env:
+          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+      - name: Apply local D1 migrations
+        working-directory: apps/worker
+        run: pnpm exec wrangler d1 migrations apply BRAIN_INDEX --local
+      - name: Start workerd and run business smoke
+        working-directory: apps/worker
+        run: |
+          nohup pnpm exec wrangler dev --port 8799 > /tmp/wrangler-dev.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf -o /dev/null http://127.0.0.1:8799/healthz && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8799/healthz
+          bash tests/worker-smoke.sh
+      - name: Worker dev log (on failure)
+        if: failure()
+        run: tail -50 /tmp/wrangler-dev.log
+
+  worker-e2e:
+    name: Browser E2E against the Worker (workerd)
+    runs-on: ubuntu-latest
+    needs: [rust, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install worker-build
+        run: cargo install worker-build --locked
+      - run: pnpm install --frozen-lockfile
+      - name: Build web + worker wasm
+        run: |
+          pnpm --dir apps/web build
+          cd apps/worker
+          worker-build --release
+        env:
+          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+      - name: Apply local D1 migrations
+        working-directory: apps/worker
+        run: pnpm exec wrangler d1 migrations apply BRAIN_INDEX --local
+      - name: Start workerd
+        working-directory: apps/worker
+        run: |
+          nohup pnpm exec wrangler dev --port 8799 > /tmp/wrangler-dev.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -sf -o /dev/null http://127.0.0.1:8799/healthz && break
+            sleep 2
+          done
+          curl -sf http://127.0.0.1:8799/healthz
+      - name: Run screenplay E2E against the Worker
+        working-directory: tests/e2e
+        env:
+          BRAIN_BASE_URL: http://127.0.0.1:8799
+          BRAIN_E2E_TOKEN: brain-dev-token-0000000000000000
+        run: pnpm exec playwright test
+      - name: Upload failure context
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-worker-failures
+          path: tests/e2e/test-results
+          retention-days: 7
+      - name: Worker dev log (on failure)
+        if: failure()
+        run: tail -50 /tmp/wrangler-dev.log

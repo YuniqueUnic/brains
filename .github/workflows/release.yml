@@ -1,0 +1,142 @@
+name: Release
+
+# One-click release: push a tag `v*` (or dispatch with a version) and this
+# workflow builds every artifact and publishes a GitHub release.
+#   git tag v0.1.0 && git push origin v0.1.0
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. v0.1.0); tag is created for you"
+        required: true
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  WASM_RUSTFLAGS: --cfg getrandom_backend="wasm_js"
+
+jobs:
+  cli-server:
+    name: brainstore-cli + brainstore-server (${{ matrix.id }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: macos-arm64
+            os: macos-14
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - id: macos-x64
+            os: macos-13
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - id: linux-x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            archive: tar.gz
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install musl toolchain
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Build (release)
+        run: cargo build --release -p brainstore-server -p brainstore-cli --target ${{ matrix.target }}
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DIR="brainstore-${VERSION}-${{ matrix.id }}"
+          mkdir -p "$DIR"
+          cp "target/${{ matrix.target }}/release/brainstore-server" \
+             "target/${{ matrix.target }}/release/brainstore-cli" "$DIR/"
+          cp README.md docs/runbook.md "$DIR/" 2>/dev/null || cp README.md "$DIR/"
+          tar czf "$DIR.tar.gz" "$DIR"
+          shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brainstore-${{ matrix.id }}
+          path: |
+            brainstore-*.tar.gz
+            brainstore-*.tar.gz.sha256
+          retention-days: 7
+
+  web-worker:
+    name: web dist + worker bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build web
+        run: pnpm --dir apps/web build
+      - name: Build worker wasm
+        working-directory: apps/worker
+        run: |
+          cargo install worker-build --locked
+          worker-build --release
+        env:
+          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+      - name: Package web dist
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          tar czf "brainstore-web-${VERSION}.tar.gz" -C apps/web dist
+          shasum -a 256 "brainstore-web-${VERSION}.tar.gz" > "brainstore-web-${VERSION}.tar.gz.sha256"
+      - name: Package worker bundle
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          DIR="brainstore-worker-${VERSION}"
+          mkdir -p "$DIR"
+          cp -r apps/worker/build "$DIR/build"
+          cp apps/worker/wrangler.toml "$DIR/"
+          cp -r migrations "$DIR/migrations"
+          tar czf "$DIR.tar.gz" "$DIR"
+          shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brainstore-web-worker
+          path: |
+            brainstore-web-*.tar.gz*
+            brainstore-worker-*.tar.gz*
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub release
+    runs-on: ubuntu-latest
+    needs: [cli-server, web-worker]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create tag when dispatched
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "${{ inputs.version }}" "${{ github.sha }}"
+          git push origin "${{ inputs.version }}"
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Publish
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "BrainStore ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            artifacts/*/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

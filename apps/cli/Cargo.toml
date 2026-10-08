@@ -1,0 +1,25 @@
+[package]
+name = "brainstore-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+brainstore-api-types.workspace = true
+brainstore-client.workspace = true
+brainstore-domain.workspace = true
+clap.workspace = true
+hex.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+brainstore-server = { path = "../server" }
+predicates = "3.1.4"
+tempfile = "3.27.0"
+tokio.workspace = true

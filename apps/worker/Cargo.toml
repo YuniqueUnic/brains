@@ -1,0 +1,28 @@
+[package]
+name = "brainstore-worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["json", "query", "macros"] }
+base64.workspace = true
+brainstore-adapter-d1.workspace = true
+brainstore-adapter-r2.workspace = true
+brainstore-api-http.workspace = true
+brainstore-api-types.workspace = true
+brainstore-application.workspace = true
+brainstore-domain.workspace = true
+hex.workspace = true
+hmac.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tower.workspace = true
+sha2.workspace = true
+worker = { version = "=0.8.7", features = ["axum", "http", "d1"] }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

@@ -1,0 +1,23 @@
+[package]
+name = "brainstore-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+axum.workspace = true
+brainstore-adapter-fs.workspace = true
+brainstore-adapter-sqlite.workspace = true
+brainstore-api-http = { workspace = true, features = ["local"] }
+brainstore-application.workspace = true
+brainstore-domain.workspace = true
+clap.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+reqwest = { workspace = true, features = ["json"] }
+serde_json.workspace = true
+tempfile = "3.27.0"

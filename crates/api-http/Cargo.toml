@@ -1,0 +1,30 @@
+[package]
+name = "brainstore-api-http"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["local"]
+# The SPA fallback serves the web dist from disk — native runtime only;
+# the Worker answers /api/* only and leaves static files to Static Assets.
+local = ["dep:tower-http"]
+
+[dependencies]
+axum = { version = "0.8", default-features = false, features = ["json", "query", "macros"] }
+base64.workspace = true
+brainstore-api-types.workspace = true
+brainstore-application.workspace = true
+brainstore-domain.workspace = true
+brainstore-ports.workspace = true
+hex.workspace = true
+hmac.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+time.workspace = true
+tower-http = { workspace = true, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
