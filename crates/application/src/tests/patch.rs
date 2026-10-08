@@ -2,7 +2,7 @@
 //! aborts the whole operation with HEAD untouched; dry-run writes nothing.
 
 use crate::{Precondition, patch::PatchEdit, patch::PatchInput};
-use brainstore_domain::{DomainError, HexId, VaultPath};
+use brains_domain::{DomainError, HexId, VaultPath};
 
 use super::support::{TestVault, open_vault, owner_principal, put_text};
 

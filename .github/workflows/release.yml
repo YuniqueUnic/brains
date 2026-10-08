@@ -20,7 +20,7 @@ env:
 
 jobs:
   cli-server:
-    name: brainstore-cli + brainstore-server (${{ matrix.id }})
+    name: bsx + brains-server (${{ matrix.id }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -50,23 +50,23 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Build (release)
-        run: cargo build --release -p brainstore-server -p brainstore-cli --target ${{ matrix.target }}
+        run: cargo build --release -p brains-server -p brains-cli --target ${{ matrix.target }}
       - name: Package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          DIR="brainstore-${VERSION}-${{ matrix.id }}"
+          DIR="brains-${VERSION}-${{ matrix.id }}"
           mkdir -p "$DIR"
-          cp "target/${{ matrix.target }}/release/brainstore-server" \
+          cp "target/${{ matrix.target }}/release/brains-server" \
              "target/${{ matrix.target }}/release/brainstore-cli" "$DIR/"
           cp README.md docs/runbook.md "$DIR/" 2>/dev/null || cp README.md "$DIR/"
           tar czf "$DIR.tar.gz" "$DIR"
           shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: brainstore-${{ matrix.id }}
+          name: brains-${{ matrix.id }}
           path: |
-            brainstore-*.tar.gz
-            brainstore-*.tar.gz.sha256
+            brains-*.tar.gz
+            brains-*.tar.gz.sha256
           retention-days: 7
 
   web-worker:
@@ -96,12 +96,12 @@ jobs:
       - name: Package web dist
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          tar czf "brainstore-web-${VERSION}.tar.gz" -C apps/web dist
-          shasum -a 256 "brainstore-web-${VERSION}.tar.gz" > "brainstore-web-${VERSION}.tar.gz.sha256"
+          tar czf "brains-web-${VERSION}.tar.gz" -C apps/web dist
+          shasum -a 256 "brains-web-${VERSION}.tar.gz" > "brains-web-${VERSION}.tar.gz.sha256"
       - name: Package worker bundle
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          DIR="brainstore-worker-${VERSION}"
+          DIR="brains-worker-${VERSION}"
           mkdir -p "$DIR"
           cp -r apps/worker/build "$DIR/build"
           cp apps/worker/wrangler.toml "$DIR/"
@@ -110,10 +110,10 @@ jobs:
           shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: brainstore-web-worker
+          name: brains-web-worker
           path: |
-            brainstore-web-*.tar.gz*
-            brainstore-worker-*.tar.gz*
+            brains-web-*.tar.gz*
+            brains-worker-*.tar.gz*
           retention-days: 7
 
   publish:
@@ -135,7 +135,7 @@ jobs:
       - name: Publish
         run: |
           gh release create "${GITHUB_REF_NAME}" \
-            --title "BrainStore ${GITHUB_REF_NAME}" \
+            --title "Brains ${GITHUB_REF_NAME}" \
             --generate-notes \
             artifacts/*/*
         env:

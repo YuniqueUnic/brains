@@ -1,12 +1,12 @@
-# BrainStore — AI Integration Guide
+# Brains — AI Integration Guide
 
 > Machine-first reference: everything an AI agent needs to read, write and
-> deploy against a BrainStore instance. Human-oriented docs live in
+> deploy against a Brains instance. Human-oriented docs live in
 > [README.md](../README.md) and [docs/runbook.md](runbook.md).
 
-## What BrainStore is (one paragraph)
+## What Brains is (one paragraph)
 
-BrainStore is a versioned document store with plain-file semantics: every save
+Brains is a versioned document store with plain-file semantics: every save
 writes an immutable blob + revision, then atomically moves a per-path HEAD
 pointer with a compare-and-swap. Two writers on the same base → exactly one
 `200`, the loser gets `412` with the current revision. Deletes are tombstones;
@@ -90,14 +90,14 @@ tampered cursor), `UNAUTHENTICATED` (401), `FORBIDDEN` (403, scope gap),
 
 ## Deployment (see runbook for the full checklist)
 
-- Local: `brainstore-server --data-dir DIR --token T --web-dist apps/web/dist`
+- Local: `brains-server --data-dir DIR --token T --web-dist apps/web/dist`
   — first boot seeds four template notes (README, usage guide, AI guide,
   inbox) into an empty vault.
 - Cloud (Cloudflare Workers + R2 + D1): `git tag v*` publishes binaries and
   the worker bundle (GitHub Release); the `Deploy` workflow ships the worker
   when repo secrets `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` are set.
   Push template content into a fresh cloud vault with:
-  `brainstore-cli --profile <cloud> seed`.
+  `bsx --profile <cloud> seed`.
 
 ## Where this file lives in the vault
 

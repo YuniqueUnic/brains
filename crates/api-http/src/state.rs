@@ -3,25 +3,25 @@
 
 use std::sync::Arc;
 
-use brainstore_application::Vault;
+use brains_application::Vault;
 
 use crate::auth::Security;
 
 /// Compact bound aliases for handler signatures.
-pub trait Head: brainstore_ports::HeadStore + Send + Sync + 'static {}
-impl<T: brainstore_ports::HeadStore + Send + Sync + 'static> Head for T {}
-pub trait Rev: brainstore_ports::RevisionStore + Send + Sync + 'static {}
-impl<T: brainstore_ports::RevisionStore + Send + Sync + 'static> Rev for T {}
-pub trait Blob: brainstore_ports::BlobStore + Send + Sync + 'static {}
-impl<T: brainstore_ports::BlobStore + Send + Sync + 'static> Blob for T {}
-pub trait Idx: brainstore_ports::IndexStore + Send + Sync + 'static {}
-impl<T: brainstore_ports::IndexStore + Send + Sync + 'static> Idx for T {}
+pub trait Head: brains_ports::HeadStore + Send + Sync + 'static {}
+impl<T: brains_ports::HeadStore + Send + Sync + 'static> Head for T {}
+pub trait Rev: brains_ports::RevisionStore + Send + Sync + 'static {}
+impl<T: brains_ports::RevisionStore + Send + Sync + 'static> Rev for T {}
+pub trait Blob: brains_ports::BlobStore + Send + Sync + 'static {}
+impl<T: brains_ports::BlobStore + Send + Sync + 'static> Blob for T {}
+pub trait Idx: brains_ports::IndexStore + Send + Sync + 'static {}
+impl<T: brains_ports::IndexStore + Send + Sync + 'static> Idx for T {}
 
 pub struct AppState<H, R, B, I> {
     pub vault: Vault<H, R, B, I>,
     pub security: Arc<dyn Security>,
-    pub limits: brainstore_domain::Limits,
-    pub capabilities: brainstore_domain::Capabilities,
+    pub limits: brains_domain::Limits,
+    pub capabilities: brains_domain::Capabilities,
     /// Allowed origins for cookie flows; empty means same-origin only.
     pub allowed_origins: Vec<String>,
     /// Local profile serves the SPA from disk; the Worker uses Static Assets.

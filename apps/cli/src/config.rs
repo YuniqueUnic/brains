@@ -1,5 +1,5 @@
-//! Profile storage for the CLI (design §12): `~/.brainstore/config.json`
-//! keeps per-profile URL + token. `BRAIN_URL` / `BRAIN_TOKEN` override the
+//! Profile storage for the CLI (design §12): `~/.brains/config.json`
+//! keeps per-profile URL + token. `BRAINS_URL` / `BRAINS_TOKEN` override the
 //! active profile so scripts and CI stay explicit.
 
 use serde::{Deserialize, Serialize};
@@ -24,7 +24,7 @@ impl Config {
             return PathBuf::from(path);
         }
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        PathBuf::from(home).join(".brainstore").join("config.json")
+        PathBuf::from(home).join(".brains").join("config.json")
     }
 
     pub fn load() -> Self {
@@ -70,8 +70,8 @@ impl Config {
 
     /// Resolve URL/token: env overrides, then the active profile.
     pub fn resolve(&self, profile: Option<&str>) -> Result<(String, String), String> {
-        let env_url = std::env::var("BRAIN_URL").ok();
-        let env_token = std::env::var("BRAIN_TOKEN").ok();
+        let env_url = std::env::var("BRAINS_URL").ok();
+        let env_token = std::env::var("BRAINS_TOKEN").ok();
         let name = profile
             .map(str::to_owned)
             .or_else(|| self.active.clone())
@@ -86,7 +86,7 @@ impl Config {
                     return Ok((url, token));
                 }
                 Err(format!(
-                    "no profile `{name}`; run `brain profile add {name} --url <URL>` or set BRAIN_URL/BRAIN_TOKEN"
+                    "no profile `{name}`; run `brain profile add {name} --url <URL>` or set BRAINS_URL/BRAINS_TOKEN"
                 ))
             }
         }

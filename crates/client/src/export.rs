@@ -6,7 +6,7 @@
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use brainstore_domain::path::check_portable_segment;
+use brains_domain::path::check_portable_segment;
 
 use crate::{BrainClient, ClientError, ClientResult, urlencode};
 
@@ -71,7 +71,7 @@ pub fn export_working_tree(
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| "vault".into()),
-        brainstore_domain::HexId::generate()
+        brains_domain::HexId::generate()
     ));
     std::fs::create_dir_all(&staging).map_err(io_err)?;
     // Any failure below leaves no staging litter behind.
@@ -112,7 +112,7 @@ fn export_into_staging(
     started_at: String,
 ) -> ClientResult<Manifest> {
     // Phase 1: enumerate the authoritative listing to the end.
-    let mut listed: Vec<brainstore_api_types::Entry> = Vec::new();
+    let mut listed: Vec<brains_api_types::Entry> = Vec::new();
     let mut cursor: Option<String> = None;
     loop {
         let mut query = String::from("source=store&include_deleted=true&limit=100");
@@ -171,7 +171,7 @@ fn export_into_staging(
     }
 
     let manifest = Manifest {
-        format: "brainstore-working-tree",
+        format: "brains-working-tree",
         format_version: 1,
         vault: vault.to_owned(),
         consistency: "per_file",

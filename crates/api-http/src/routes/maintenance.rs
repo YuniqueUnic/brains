@@ -5,8 +5,8 @@ use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 
-use brainstore_api_types::{ReindexFailure, ReindexPage, ReindexRequest};
-use brainstore_domain::DomainError;
+use brains_api_types::{ReindexFailure, ReindexPage, ReindexRequest};
+use brains_domain::DomainError;
 
 use crate::auth::{AuthSource, guard_cookie_mutation};
 use crate::error::{ApiError, ApiResult};

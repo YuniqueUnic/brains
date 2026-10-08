@@ -1,12 +1,12 @@
 [package]
-name = "brainstore-adapter-fs"
+name = "brains-adapter-fs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-brainstore-domain.workspace = true
-brainstore-ports.workspace = true
+brains-domain.workspace = true
+brains-ports.workspace = true
 fs2.workspace = true
 hex.workspace = true
 rand.workspace = true

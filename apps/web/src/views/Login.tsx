@@ -46,7 +46,7 @@ export default function Login({
           <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
             <Brain className="size-6" />
           </span>
-          <h1 className="text-base font-semibold text-foreground">BrainStore</h1>
+          <h1 className="text-base font-semibold text-foreground">Brains</h1>
           <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="relative">

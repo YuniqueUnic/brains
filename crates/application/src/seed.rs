@@ -3,7 +3,7 @@
 //! double as living documentation — including the conventions an AI agent
 //! needs to operate the vault safely (§15.2 scopes, §8.2 CAS etiquette).
 
-use brainstore_domain::{HexId, Principal, Scope, VaultPath};
+use brains_domain::{HexId, Principal, Scope, VaultPath};
 
 use crate::commit::CommitInput;
 use crate::{Precondition, Vault};
@@ -15,17 +15,17 @@ pub fn template_notes() -> &'static [(&'static str, &'static str)] {
         (
             "README.md",
             r##"---
-title: BrainStore
+title: Brains
 tags: [meta]
 ---
 
-# BrainStore
+# Brains
 
 **可读、可版本化、可恢复的知识库 —— 纯文件进、纯文件出，每个修订都被保留。**
 
 这是一个刚初始化的空库，里面已经放好了几篇入门文档：
 
-- [docs/brainstore-guide.md](docs/brainstore-guide.md) —— 日常使用规则（路径、保存/冲突、回收站、搜索、备份）
+- [docs/brains-guide.md](docs/brains-guide.md) —— 日常使用规则（路径、保存/冲突、回收站、搜索、备份）
 - [docs/ai-guide.md](docs/ai-guide.md) —— AI 协作守则（给 AI agent 的操作约定）
 - [inbox/README.md](inbox/README.md) —— 收件箱用法
 
@@ -34,25 +34,25 @@ tags: [meta]
 ```bash
 # Web 界面：直接用浏览器打开本服务地址，粘贴 token 登录
 # CLI：
-brainstore-cli ls ""
-echo "# 第一条笔记" | brainstore-cli put notes/first.md
-brainstore-cli search 缓存
+bsx ls ""
+echo "# 第一条笔记" | bsx put notes/first.md
+bsx search 缓存
 ```
 
 ## 备份
 
 磁盘上的目录就是备份本身：`vaults/{vault}/heads|revisions|blobs`。
-复制这个目录即得完整原始备份；索引（SQLite/D1）只是可随时删除重建的投影（`brainstore-cli reindex`）。
+复制这个目录即得完整原始备份；索引（SQLite/D1）只是可随时删除重建的投影（`bsx reindex`）。
 "##,
         ),
         (
-            "docs/brainstore-guide.md",
+            "docs/brains-guide.md",
             r##"---
-title: BrainStore 使用规则
+title: Brains 使用规则
 tags: [meta, guide]
 ---
 
-# BrainStore 使用规则
+# Brains 使用规则
 
 ## 路径与文件
 
@@ -75,7 +75,7 @@ tags: [meta, guide]
 
 - **字面**模式：大小写敏感的 UTF-8 子串匹配，永不漏报（结果标注是否翻完全库）。
 - **FTS** 模式：英文按词元、中文按字的显式分词搜索，速度快但依赖索引。
-- 索引只是投影：删掉索引文件后 `brainstore-cli reindex` 即可完整重建。
+- 索引只是投影：删掉索引文件后 `bsx reindex` 即可完整重建。
 
 ## 备份与恢复
 
@@ -150,12 +150,12 @@ tags: [meta, inbox]
 /// Returns the number of notes written (0 = vault not empty, nothing done).
 pub async fn seed_if_empty<H, R, B, I>(
     vault: &Vault<H, R, B, I>,
-) -> brainstore_domain::DomainResult<usize>
+) -> brains_domain::DomainResult<usize>
 where
-    H: brainstore_ports::HeadStore + Send + Sync,
-    R: brainstore_ports::RevisionStore + Send + Sync,
-    B: brainstore_ports::BlobStore + Send + Sync,
-    I: brainstore_ports::IndexStore + Send + Sync,
+    H: brains_ports::HeadStore + Send + Sync,
+    R: brains_ports::RevisionStore + Send + Sync,
+    B: brains_ports::BlobStore + Send + Sync,
+    I: brains_ports::IndexStore + Send + Sync,
 {
     // The raw store listing includes tombstones: any head at all means the
     // vault has been used before and must not be touched.

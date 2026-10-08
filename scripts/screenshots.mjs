@@ -1,11 +1,11 @@
 /**
  * Regenerate the README screenshots against a running local server.
- * Usage: BRAIN_URL=http://127.0.0.1:8801 node scripts/screenshots.mjs
+ * Usage: BRAINS_URL=http://127.0.0.1:8801 node scripts/screenshots.mjs
  * (run from tests/e2e/ so @playwright/test resolves, e.g.
  *  `cd tests/e2e && node ../../scripts/screenshots.mjs`)
  *
  * Seed the demo server (fresh data dir) before running:
- *   brainstore-server --data-dir /tmp/readme-demo --port 8801 \
+ *   brains-server --data-dir /tmp/readme-demo --port 8801 \
  *     --token readme-demo-token-0000000000000000 --web-dist apps/web/dist
  *   put notes/rust-ci-cache.md     (frontmatter + sccache/mold + [[benchmark-notes]] link)
  *   put notes/benchmark-notes.md   ([[rust-ci-cache]] backlink + table)
@@ -17,8 +17,8 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const BASE = process.env.BRAIN_URL ?? "http://127.0.0.1:8801";
-const TOKEN = process.env.BRAIN_TOKEN ?? "readme-demo-token-0000000000000000";
+const BASE = process.env.BRAINS_URL ?? "http://127.0.0.1:8801";
+const TOKEN = process.env.BRAINS_TOKEN ?? "readme-demo-token-0000000000000000";
 // Output next to the repo's docs/, independent of the invocation cwd.
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "docs", "screenshots");
 mkdirSync(OUT, { recursive: true });

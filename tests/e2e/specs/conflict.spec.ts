@@ -14,7 +14,7 @@ import { Navigate } from "@serenity-js/web";
 import { Enter, Press } from "@serenity-js/web";
 import { EditorArea } from "../screenplay/screens/EditorArea";
 import { ConflictViewText, EditorStatus } from "../screenplay/questions/Views";
-import { CallBrainStoreApi } from "../screenplay/abilities/CallBrainStoreApi";
+import { CallBrainsApi } from "../screenplay/abilities/CallBrainsApi";
 import { Instance } from "../screenplay/support/Instance";
 
 const SAVED = equals("已保存");
@@ -29,8 +29,8 @@ describe("conflict handling", () => {
   it("shows the conflict view and keeps the local text after an explicit choice", async ({
     actor,
   }) => {
-    actor.whoCan(CallBrainStoreApi.using(Instance.baseUrl, Instance.token));
-    const api = CallBrainStoreApi.as(actor);
+    actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
+    const api = CallBrainsApi.as(actor);
     const path = `e2e/conflict/duel-${Date.now()}.md`;
     await actor.attemptsTo(
       SignIn(),
@@ -67,7 +67,7 @@ describe("conflict handling", () => {
   it("re-conflicts instead of overwriting when the remote moves again", async ({
     actor,
   }) => {
-    actor.whoCan(CallBrainStoreApi.using(Instance.baseUrl, Instance.token));
+    actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
     const path = `e2e/conflict/racing-${Date.now()}.md`;
     await actor.attemptsTo(
       SignIn(),
@@ -89,7 +89,7 @@ describe("conflict handling", () => {
 
     // …and keep-local must surface the renewed conflict, not overwrite.
     await actor.attemptsTo(KeepLocalVersion());
-    const api = CallBrainStoreApi.as(actor);
+    const api = CallBrainsApi.as(actor);
     const latest = await api.getText(`file?path=${encodeURIComponent(path)}`);
     await actor.attemptsTo(
       Ensure.eventually(ConflictViewText(), includes(latest.revision.slice(0, 8)))
@@ -100,7 +100,7 @@ describe("conflict handling", () => {
 });
 
 async function expectServerBody(
-  api: CallBrainStoreApi,
+  api: CallBrainsApi,
   path: string,
   expected: string,
 ): Promise<void> {

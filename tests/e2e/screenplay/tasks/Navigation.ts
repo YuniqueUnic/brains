@@ -1,7 +1,7 @@
 import { Click, Enter, Press, Select } from "@serenity-js/web";
 import { Interaction, Task } from "@serenity-js/core";
 
-import { CallBrainStoreApi } from "../abilities/CallBrainStoreApi";
+import { CallBrainsApi } from "../abilities/CallBrainsApi";
 import { Workbench } from "../screens/Workbench";
 
 /** Click a file in the sidebar. */
@@ -20,7 +20,7 @@ export const SearchFor = (query: string, mode: "literal" | "fts" = "literal") =>
 export const AnotherClientRewrites = (path: string, body: string) =>
   Task.where(`#actor's rival client rewrites ${path}`,
     Interaction.where(`#actor's rival client PUTs ${path}`, async (actor) => {
-      const api = CallBrainStoreApi.as(actor);
+      const api = CallBrainsApi.as(actor);
       const current = await api.getText(`file?path=${encodeURIComponent(path)}`);
       const response = await api.updateText(path, body, current.revision);
       if (response.status !== 200) {
@@ -36,7 +36,7 @@ export const AnotherClientRewrites = (path: string, body: string) =>
 export const SeedNoteViaApi = (path: string, body: string) =>
   Task.where(`#actor seeds ${path} via the API`,
     Interaction.where(`#actor seeds ${path}`, async (actor) => {
-      const api = CallBrainStoreApi.as(actor);
+      const api = CallBrainsApi.as(actor);
       const response = await api.createText(path, body);
       if (response.status !== 201) {
         throw new Error(`seed failed: HTTP ${response.status}`);

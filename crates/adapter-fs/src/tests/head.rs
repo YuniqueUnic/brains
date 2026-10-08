@@ -1,6 +1,6 @@
 use crate::FsHeadStore;
-use brainstore_domain::{Head, HeadState, HexId, VaultPath};
-use brainstore_ports::{CasOutcome, ExpectedHead, HeadStore};
+use brains_domain::{Head, HeadState, HexId, VaultPath};
+use brains_ports::{CasOutcome, ExpectedHead, HeadStore};
 
 use super::temp_store;
 

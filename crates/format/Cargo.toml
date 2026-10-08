@@ -1,11 +1,11 @@
 [package]
-name = "brainstore-format"
+name = "brains-format"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-brainstore-domain.workspace = true
+brains-domain.workspace = true
 pulldown-cmark.workspace = true
 serde.workspace = true
 serde_json.workspace = true

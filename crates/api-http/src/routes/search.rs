@@ -5,9 +5,9 @@ use axum::http::StatusCode;
 use axum::response::Response;
 use std::collections::HashMap;
 
-use brainstore_api_types::{LinkItem, LinkPage, SearchHit, SearchPage};
-use brainstore_application::search::{SearchMode, SearchQuery};
-use brainstore_domain::DomainError;
+use brains_api_types::{LinkItem, LinkPage, SearchHit, SearchPage};
+use brains_application::search::{SearchMode, SearchQuery};
+use brains_domain::DomainError;
 
 use crate::auth::AuthSource;
 use crate::error::{ApiError, ApiResult};

@@ -1,6 +1,6 @@
 use crate::FsRevisionStore;
-use brainstore_domain::{ContentRef, HexId, Revision, RevisionAction, VaultPath};
-use brainstore_ports::RevisionStore;
+use brains_domain::{ContentRef, HexId, Revision, RevisionAction, VaultPath};
+use brains_ports::RevisionStore;
 
 use super::temp_store;
 

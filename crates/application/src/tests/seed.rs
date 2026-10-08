@@ -5,7 +5,7 @@ use super::support::{open_vault, owner_principal};
 use crate::Precondition;
 use crate::commit::CommitInput;
 use crate::seed::{seed_if_empty, template_notes};
-use brainstore_domain::{HexId, Limits, VaultPath};
+use brains_domain::{HexId, Limits, VaultPath};
 
 #[test]
 fn template_paths_are_valid_and_content_is_within_limits() {

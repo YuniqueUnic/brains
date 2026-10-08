@@ -1,12 +1,12 @@
 [package]
-name = "brainstore-ports"
+name = "brains-ports"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-brainstore-domain.workspace = true
-brainstore-format.workspace = true
+brains-domain.workspace = true
+brains-format.workspace = true
 bytes.workspace = true
 futures.workspace = true
 serde.workspace = true

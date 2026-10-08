@@ -9,7 +9,7 @@ import {
 import { Text } from "@serenity-js/web";
 import { Duration } from "@serenity-js/core";
 
-import { CallBrainStoreApi } from "../screenplay/abilities/CallBrainStoreApi";
+import { CallBrainsApi } from "../screenplay/abilities/CallBrainsApi";
 import { Instance } from "../screenplay/support/Instance";
 import { SignIn } from "../screenplay/tasks/Authoring";
 import { OpenNote, SearchFor, SeedNoteViaApi } from "../screenplay/tasks/Navigation";
@@ -25,7 +25,7 @@ import { Navigate } from "@serenity-js/web";
  */
 describe("search", () => {
   it("finds Chinese substrings across notes and opens the hit", async ({ actor }) => {
-    actor.whoCan(CallBrainStoreApi.using(Instance.baseUrl, Instance.token));
+    actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
     const stamp = Date.now();
     const marker = `缓存标记${stamp}`;
     await actor.attemptsTo(
@@ -58,7 +58,7 @@ describe("search", () => {
   });
 
   it("matches English tokens in FTS mode", async ({ actor }) => {
-    actor.whoCan(CallBrainStoreApi.using(Instance.baseUrl, Instance.token));
+    actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
     const stamp = Date.now();
     await actor.attemptsTo(
       SignIn(),

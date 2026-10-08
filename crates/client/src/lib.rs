@@ -4,12 +4,12 @@
 
 pub mod export;
 
-use brainstore_api_types::{
+use brains_api_types::{
     DiffResult, Entry, FilePage, HistoryPage, LinkPage, MutationResult, PatchBody, PatchDryRun,
     ReindexPage, RestoreBody, SearchPage, Session, TransferBody, TransferResult,
 };
-use brainstore_domain::Capabilities;
-use brainstore_domain::DomainError;
+use brains_domain::Capabilities;
+use brains_domain::DomainError;
 
 #[derive(Debug)]
 pub struct ClientError {
@@ -270,7 +270,7 @@ impl BrainClient {
         &self,
         path: &str,
         revision: &str,
-    ) -> ClientResult<brainstore_api_types::RevisionDto> {
+    ) -> ClientResult<brains_api_types::RevisionDto> {
         let query = format!("path={}&revision={revision}&format=meta", urlencode(path));
         let response = self.send(self.http.get(self.url("/api/v1/revision", &query)))?;
         self.expect_json(response)

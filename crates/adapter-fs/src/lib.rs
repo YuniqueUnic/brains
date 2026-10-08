@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 
-use brainstore_domain::{DomainError, DomainResult};
+use brains_domain::{DomainError, DomainResult};
 
 pub use blob::FsBlobStore;
 pub use head::FsHeadStore;
@@ -62,7 +62,7 @@ impl FsStore {
         };
         let format = read_json_file(&store.vault_dir.join("format.json"))
             .map_err(|e| DomainError::StorageUnavailable(format!("store open failed: {e}")))?;
-        let ok = format.get("format").and_then(|v| v.as_str()) == Some("brainstore")
+        let ok = format.get("format").and_then(|v| v.as_str()) == Some("brains")
             && format.get("format_version").and_then(|v| v.as_i64()) == Some(1)
             && format.get("vault").and_then(|v| v.as_str()) == Some(vault);
         if !ok {
@@ -90,7 +90,7 @@ impl FsStore {
                 .map_err(|e| DomainError::StorageUnavailable(format!("{}: {e}", dir.display())))?;
         }
         let format = serde_json::json!({
-            "format": "brainstore",
+            "format": "brains",
             "format_version": 1,
             "vault": vault,
         });
@@ -137,11 +137,11 @@ impl FsStore {
     }
 
     /// Storage file for a logical path: `heads/<path>.json`.
-    pub fn head_file(&self, path: &brainstore_domain::VaultPath) -> PathBuf {
+    pub fn head_file(&self, path: &brains_domain::VaultPath) -> PathBuf {
         self.heads_dir().join(format!("{}.json", path.as_str()))
     }
 
-    pub fn revision_file(&self, revision: &brainstore_domain::HexId) -> PathBuf {
+    pub fn revision_file(&self, revision: &brains_domain::HexId) -> PathBuf {
         self.revisions_dir().join(format!("{revision}.json"))
     }
 }

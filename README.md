@@ -1,12 +1,12 @@
-# BrainStore
+# Brains
 
 **A human-readable, migration-safe knowledge store — plain files in, plain files out, every revision kept.**
 
-[中文文档](README.zh.md) · [Design spec (CN)](brainstore-design/BrainStore-Architecture-v1.md) · [Runbook](docs/runbook.md) · [Verification log](docs/verification.md)
+[中文文档](README.zh.md) · [Design spec (CN)](brainstore-design/Brains-Architecture-v1.md) · [Runbook](docs/runbook.md) · [Verification log](docs/verification.md)
 
 [![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
 
-BrainStore is *not* an AI memory framework. There is no recall engine, no vector database, no context assembly. It is a versioned store for the notes you already write, built on one idea: **the database may disappear — your files and their history must not.**
+Brains is *not* an AI memory framework. There is no recall engine, no vector database, no context assembly. It is a versioned store for the notes you already write, built on one idea: **the database may disappear — your files and their history must not.**
 
 | Login | Workbench |
 |---|---|
@@ -20,7 +20,7 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 
 ## Core properties
 
-- **Ships with content, not a blank screen.** First boot on an empty vault seeds four template notes — a welcome page, the usage guide, an **AI collaboration guide** and an inbox — so humans and agents start from working conventions (cloud instances: `brainstore-cli seed`).
+- **Ships with content, not a blank screen.** First boot on an empty vault seeds four template notes — a welcome page, the usage guide, an **AI collaboration guide** and an inbox — so humans and agents start from working conventions (cloud instances: `bsx seed`).
 - **AI-friendly by construction.** [docs/ai-integration.md](docs/ai-integration.md) is a machine-first API reference (endpoints, CAS etiquette, error model), `llms.txt` indexes the project for crawlers/agents, and every vault carries the condensed etiquette inside itself (`docs/ai-guide.md`).
 
 - **Immutable revisions + one atomic commit point.** Every save writes a content-addressed blob and a revision record, then swaps the per-path HEAD with a compare-and-swap. Two writers racing on the same base: exactly one commits, the loser gets `412` with the current revision — never a silent overwrite.
@@ -34,11 +34,11 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 ## Quickstart (local profile)
 
 ```bash
-cargo build -p brainstore-server -p brainstore-cli
+cargo build -p brains-server -p bsx
 pnpm --dir apps/web build
 
 # boot the whole stack (API + web UI, same origin)
-./target/debug/brainstore-server \
+./target/debug/brains-server \
   --data-dir ./brain-data \
   --token "$MY_TOKEN" \
   --web-dist apps/web/dist
@@ -48,11 +48,11 @@ pnpm --dir apps/web build
 CLI against the same server:
 
 ```bash
-./target/debug/brainstore-cli profile add local --url http://127.0.0.1:8787 --token "$MY_TOKEN"
-./target/debug/brainstore-cli ls ""
+./target/debug/bsx profile add local --url http://127.0.0.1:8787 --token "$MY_TOKEN"
+./target/debug/bsx ls ""
 echo "# hello" > /tmp/hello.md
-./target/debug/brainstore-cli put notes/hello.md --from /tmp/hello.md --create
-./target/debug/brainstore-cli search "hello"
+./target/debug/bsx put notes/hello.md --from /tmp/hello.md --create
+./target/debug/bsx search "hello"
 ```
 
 See the [runbook](docs/runbook.md) for auth model, backup layout, reindex and troubleshooting.
@@ -67,7 +67,7 @@ cargo install worker-build --locked
 pnpm --dir apps/web build
 cd apps/worker
 RUSTFLAGS='--cfg getrandom_backend="wasm_js"' worker-build --release
-pnpm exec wrangler d1 migrations apply BRAIN_INDEX --local
+pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local
 pnpm exec wrangler dev --port 8799          # → http://localhost:8799
 bash tests/worker-smoke.sh                  # CAS race, search, trash/restore acceptance
 ```
@@ -111,7 +111,7 @@ CLI / curl ──/api/v1/*──┐
 ```bash
 cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
-pnpm --dir apps/web build && pnpm --dir tests/e2e exec playwright test   # needs BRAIN_SERVER_BIN/BRAIN_WEB_DIST
+pnpm --dir apps/web build && pnpm --dir tests/e2e exec playwright test   # needs BRAINS_SERVER_BIN/BRAINS_WEB_DIST
 bash tests/worker-smoke.sh                                               # against a running `wrangler dev`
 ```
 

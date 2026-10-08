@@ -5,7 +5,7 @@ use serde_json::{Value, json};
 
 async fn boot() -> (String, String) {
     let dir = tempfile::tempdir().unwrap();
-    let config = brainstore_server::ServerConfig {
+    let config = brains_server::ServerConfig {
         data_dir: dir.path().to_path_buf(),
         vault: "default".into(),
         bind: "127.0.0.1".into(),
@@ -14,7 +14,7 @@ async fn boot() -> (String, String) {
         web_dist: None,
         allowed_origins: vec!["http://localhost:5173".into()],
     };
-    let addr = brainstore_server::serve(config).await.unwrap();
+    let addr = brains_server::serve(config).await.unwrap();
     // Keep the tempdir alive for the process lifetime of the test.
     std::mem::forget(dir);
     (
@@ -224,7 +224,7 @@ async fn session_cookie_flow_with_csrf_and_origin() {
     assert_eq!(session["actor"], "token:default");
     let csrf = session["csrf_token"].as_str().unwrap().to_owned();
     let set_cookie = login_headers["set-cookie"].to_str().unwrap().to_owned();
-    assert!(set_cookie.starts_with("brain_session="));
+    assert!(set_cookie.starts_with("brains_session="));
     assert!(set_cookie.contains("HttpOnly"));
 
     let cookie = set_cookie.split(';').next().unwrap().to_owned();

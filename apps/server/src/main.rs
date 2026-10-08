@@ -2,10 +2,10 @@
 
 use clap::Parser;
 
-use brainstore_server::ServerConfig;
+use brains_server::ServerConfig;
 
 #[derive(Parser, Debug)]
-#[command(name = "brain-server", about = "BrainStore local server")]
+#[command(name = "brain-server", about = "Brains local server")]
 struct Args {
     /// Durable data directory (store, index db, auth registry, signing keys).
     #[arg(long, default_value = "./brain-data")]
@@ -18,7 +18,7 @@ struct Args {
     #[arg(long, default_value_t = 8787)]
     port: u16,
     /// Register (or replace) a whole-vault root token instead of generating
-    /// one. Also read from BRAIN_TOKEN. Printed once when generated.
+    /// one. Also read from BRAINS_TOKEN. Printed once when generated.
     #[arg(long)]
     token: Option<String>,
     /// Serve a built web app (directory with index.html) from the same origin.
@@ -33,7 +33,7 @@ fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "brainstore_server=info,tower_http=warn".into()),
+                .unwrap_or_else(|_| "brains_server=info,tower_http=warn".into()),
         )
         .init();
     let args = Args::parse();
@@ -42,7 +42,7 @@ fn main() {
         vault: args.vault,
         bind: args.bind,
         port: args.port,
-        token: args.token.or_else(|| std::env::var("BRAIN_TOKEN").ok()),
+        token: args.token.or_else(|| std::env::var("BRAINS_TOKEN").ok()),
         web_dist: args.web_dist,
         allowed_origins: args.origin,
     };
@@ -50,7 +50,7 @@ fn main() {
         .enable_all()
         .build()
         .expect("tokio runtime");
-    let code = match runtime.block_on(brainstore_server::serve(config)) {
+    let code = match runtime.block_on(brains_server::serve(config)) {
         Ok(addr) => {
             // serve() spawns the accept loop; park this thread for process life.
             tracing::info!("serving on {addr}");
@@ -59,7 +59,7 @@ fn main() {
             }
         }
         Err(message) => {
-            eprintln!("brain-server: {message}");
+            eprintln!("brains-server: {message}");
             2
         }
     };

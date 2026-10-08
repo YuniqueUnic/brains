@@ -9,7 +9,7 @@
 
 use std::future::Future;
 
-use brainstore_domain::{DomainResult, Head, HexId, Revision, VaultPath};
+use brains_domain::{DomainResult, Head, HexId, Revision, VaultPath};
 
 /// Condition for a HEAD compare-and-swap. `StorageToken` is the adapter's
 /// internal token observed when the current HEAD was read (an R2 object ETag

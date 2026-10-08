@@ -1,5 +1,5 @@
 [package]
-name = "brainstore-worker"
+name = "brains-worker"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,12 +10,12 @@ crate-type = ["cdylib"]
 [dependencies]
 axum = { version = "0.8", default-features = false, features = ["json", "query", "macros"] }
 base64.workspace = true
-brainstore-adapter-d1.workspace = true
-brainstore-adapter-r2.workspace = true
-brainstore-api-http.workspace = true
-brainstore-api-types.workspace = true
-brainstore-application.workspace = true
-brainstore-domain.workspace = true
+brains-adapter-d1.workspace = true
+brains-adapter-r2.workspace = true
+brains-api-http.workspace = true
+brains-api-types.workspace = true
+brains-application.workspace = true
+brains-domain.workspace = true
 hex.workspace = true
 hmac.workspace = true
 serde.workspace = true

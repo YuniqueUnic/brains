@@ -1,4 +1,4 @@
--- BrainStore derived index v1. Source of truth remains HEAD/revisions/blobs.
+-- Brains derived index v1. Source of truth remains HEAD/revisions/blobs.
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS files (

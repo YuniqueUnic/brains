@@ -1,12 +1,12 @@
-# BrainStore
+# Brains
 
 **面向人类、可迁移的长期知识库——进来的是普通文件，出去的也是普通文件，且每一版都留着。**
 
-[English](README.md) · [设计文档](brainstore-design/BrainStore-Architecture-v1.md) · [运行手册](docs/runbook.md) · [验证记录](docs/verification.md)
+[English](README.md) · [设计文档](brainstore-design/Brains-Architecture-v1.md) · [运行手册](docs/runbook.md) · [验证记录](docs/verification.md)
 
 [![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
 
-BrainStore **不是** AI memory framework：没有召回引擎、没有向量库、没有上下文装配。它只做一件事——为已经在写的笔记提供版本化存储，核心承诺是：**数据库可以消失，正文和历史不能。**
+Brains **不是** AI memory framework：没有召回引擎、没有向量库、没有上下文装配。它只做一件事——为已经在写的笔记提供版本化存储，核心承诺是：**数据库可以消失，正文和历史不能。**
 
 | 登录 | 工作台 |
 |---|---|
@@ -20,7 +20,7 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 
 ## 核心性质
 
-- **开箱即有内容，不是空白屏。** 首次启动空库自动播种四篇模板笔记——欢迎页、使用规则、**AI 协作守则**与收件箱，人和 agent 都从可用的约定开始（云端实例用 `brainstore-cli seed`）。
+- **开箱即有内容，不是空白屏。** 首次启动空库自动播种四篇模板笔记——欢迎页、使用规则、**AI 协作守则**与收件箱，人和 agent 都从可用的约定开始（云端实例用 `bsx seed`）。
 - **对 AI 天然友好。** [docs/ai-integration.md](docs/ai-integration.md) 是面向机器的 API 参考（端点、CAS 礼仪、错误模型），`llms.txt` 为爬虫/agent 提供项目索引，且每个库内部自带精简守则（`docs/ai-guide.md`）。
 
 - **不可变修订 + 唯一原子提交点。** 每次保存写入内容寻址的 blob 与修订记录，再以 CAS（compare-and-swap）原子替换该路径的 HEAD。两个客户端基于同一版本并发保存：恰好一个成功，另一个收到携带当前版本的 `412`——不存在静默覆盖。
@@ -34,11 +34,11 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 ## 快速开始（本地 profile）
 
 ```bash
-cargo build -p brainstore-server -p brainstore-cli
+cargo build -p brains-server -p bsx
 pnpm --dir apps/web build
 
 # 一条命令起全栈（API + Web 同域）
-./target/debug/brainstore-server \
+./target/debug/brains-server \
   --data-dir ./brain-data \
   --token "$MY_TOKEN" \
   --web-dist apps/web/dist
@@ -48,10 +48,10 @@ pnpm --dir apps/web build
 CLI 对接同一服务：
 
 ```bash
-./target/debug/brainstore-cli profile add local --url http://127.0.0.1:8787 --token "$MY_TOKEN"
-./target/debug/brainstore-cli ls ""
-echo "# hello" > /tmp/hello.md && ./target/debug/brainstore-cli put notes/hello.md --from /tmp/hello.md --create
-./target/debug/brainstore-cli search "关键词"
+./target/debug/bsx profile add local --url http://127.0.0.1:8787 --token "$MY_TOKEN"
+./target/debug/bsx ls ""
+echo "# hello" > /tmp/hello.md && ./target/debug/bsx put notes/hello.md --from /tmp/hello.md --create
+./target/debug/bsx search "关键词"
 ```
 
 认证模型、备份布局、索引重建与排障见[运行手册](docs/runbook.md)。
@@ -66,7 +66,7 @@ cargo install worker-build --locked
 pnpm --dir apps/web build
 cd apps/worker
 RUSTFLAGS='--cfg getrandom_backend="wasm_js"' worker-build --release
-pnpm exec wrangler d1 migrations apply BRAIN_INDEX --local
+pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local
 pnpm exec wrangler dev --port 8799          # → http://localhost:8799
 bash tests/worker-smoke.sh                  # CAS 竞争、搜索、回收站/恢复验收
 ```
@@ -110,7 +110,7 @@ CLI / curl ──/api/v1/*──┐
 ```bash
 cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
-pnpm --dir apps/web build && pnpm --dir tests/e2e exec playwright test   # 需 BRAIN_SERVER_BIN/BRAIN_WEB_DIST
+pnpm --dir apps/web build && pnpm --dir tests/e2e exec playwright test   # 需 BRAINS_SERVER_BIN/BRAINS_WEB_DIST
 bash tests/worker-smoke.sh                                               # 对运行中的 wrangler dev
 ```
 

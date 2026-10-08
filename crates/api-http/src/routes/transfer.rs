@@ -6,8 +6,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use std::collections::HashMap;
 
-use brainstore_api_types::{DiffResult, TransferBody, TransferResult};
-use brainstore_domain::{DomainError, HexId, VaultPath};
+use brains_api_types::{DiffResult, TransferBody, TransferResult};
+use brains_domain::{DomainError, HexId, VaultPath};
 
 use crate::auth::AuthSource;
 use crate::error::{ApiError, ApiResult};
@@ -96,7 +96,7 @@ fn build_transfer(
     headers: &HeaderMap,
     rid: &str,
     actor: String,
-) -> ApiResult<brainstore_application::transfer::TransferInput> {
+) -> ApiResult<brains_application::transfer::TransferInput> {
     let header_op = crate::routes::single_header(
         headers,
         axum::http::header::HeaderName::from_static("x-operation-id"),
@@ -118,7 +118,7 @@ fn build_transfer(
     let expected_source_revision =
         HexId::from_hex(&body.expected_source_revision).map_err(|e| ApiError::new(e, rid))?;
     let operation_id = HexId::from_hex(&body.operation_id).map_err(|e| ApiError::new(e, rid))?;
-    Ok(brainstore_application::transfer::TransferInput {
+    Ok(brains_application::transfer::TransferInput {
         source,
         target,
         expected_source_revision,
@@ -127,7 +127,7 @@ fn build_transfer(
     })
 }
 
-fn transfer_response(result: brainstore_application::transfer::TransferOutcome) -> Response {
+fn transfer_response(result: brains_application::transfer::TransferOutcome) -> Response {
     let body = TransferResult {
         copied: result.copied,
         source_trashed: result.source_trashed,

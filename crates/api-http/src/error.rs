@@ -5,8 +5,8 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use brainstore_api_types::{ErrorBody, ErrorDetail};
-use brainstore_domain::DomainError;
+use brains_api_types::{ErrorBody, ErrorDetail};
+use brains_domain::DomainError;
 
 pub fn status_for(error: &DomainError) -> StatusCode {
     match error {

@@ -11,8 +11,8 @@
 
 use std::future::Future;
 
-use brainstore_domain::{DomainError, DomainResult, Head, HexId, Revision, VaultPath};
-use brainstore_ports::{BlobStore, CasOutcome, ExpectedHead, HeadStore, RevisionStore, StoredHead};
+use brains_domain::{DomainError, DomainResult, Head, HexId, Revision, VaultPath};
+use brains_ports::{BlobStore, CasOutcome, ExpectedHead, HeadStore, RevisionStore, StoredHead};
 use sha2::{Digest, Sha256};
 use worker::send::SendFuture;
 use worker::{Bucket, Conditional, HttpMetadata};
@@ -205,7 +205,7 @@ impl HeadStore for R2ContentStore {
                         .map(str::to_owned)
                 })
                 // Segment-boundary match, identical to the filesystem adapter.
-                .filter(|path| prefix.is_none_or(|p| brainstore_domain::path::prefix_has(p, path)))
+                .filter(|path| prefix.is_none_or(|p| brains_domain::path::prefix_has(p, path)))
                 .filter(|path| after.as_deref().is_none_or(|a| path.as_str() > a))
                 .map(VaultPath::trusted)
                 .collect();

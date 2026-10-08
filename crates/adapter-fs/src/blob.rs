@@ -2,8 +2,8 @@
 
 use sha2::{Digest, Sha256};
 
-use brainstore_domain::{DomainError, DomainResult};
-use brainstore_ports::BlobStore;
+use brains_domain::{DomainError, DomainResult};
+use brains_ports::BlobStore;
 
 use crate::FsStore;
 
@@ -26,7 +26,7 @@ impl FsBlobStore {
         let (revision, file_name) = rest
             .split_once('/')
             .ok_or_else(|| DomainError::Internal(format!("malformed blob key: {key}")))?;
-        brainstore_domain::revision::validate_blob_key(key, file_name)?;
+        brains_domain::revision::validate_blob_key(key, file_name)?;
         if file_name.contains('/') {
             return Err(DomainError::Internal(format!("malformed blob key: {key}")));
         }

@@ -2,11 +2,11 @@
 
 use sha2::{Digest, Sha256};
 
-use brainstore_domain::{
+use brains_domain::{
     AccessLevel, DomainError, DomainResult, Head, HeadState, HexId, Principal, Revision,
     RevisionAction, VaultPath, blob_key,
 };
-use brainstore_ports::{CasOutcome, ExpectedHead};
+use brains_ports::{CasOutcome, ExpectedHead};
 
 use crate::projection;
 use crate::{IndexState, MutationOutcome, Precondition, SizeClass, Vault, conflict};
@@ -21,15 +21,15 @@ pub struct CommitInput<'a> {
     pub precondition: Precondition,
     pub executable: bool,
     /// `Some` turns the commit into a `copy` revision with this provenance.
-    pub copied_from: Option<brainstore_domain::CopyProvenance>,
+    pub copied_from: Option<brains_domain::CopyProvenance>,
 }
 
 impl<H, R, B, I> Vault<H, R, B, I>
 where
-    H: brainstore_ports::HeadStore + Send + Sync,
-    R: brainstore_ports::RevisionStore + Send + Sync,
-    B: brainstore_ports::BlobStore + Send + Sync,
-    I: brainstore_ports::IndexStore + Send + Sync,
+    H: brains_ports::HeadStore + Send + Sync,
+    R: brains_ports::RevisionStore + Send + Sync,
+    B: brains_ports::BlobStore + Send + Sync,
+    I: brains_ports::IndexStore + Send + Sync,
 {
     /// Create (201) or conditionally replace (200) one file's exact bytes.
     pub async fn put_file(
@@ -67,7 +67,7 @@ where
         let media_type = input
             .media_type
             .map(str::to_owned)
-            .unwrap_or_else(|| brainstore_domain::media_type_for(input.path.as_str()).to_owned());
+            .unwrap_or_else(|| brains_domain::media_type_for(input.path.as_str()).to_owned());
         let action = if input.copied_from.is_some() {
             RevisionAction::Copy
         } else {
@@ -81,10 +81,10 @@ where
             action,
             input.actor.clone(),
             input.operation_id.clone(),
-            brainstore_domain::timestamp::now_rfc3339(),
+            brains_domain::timestamp::now_rfc3339(),
             None,
             input.copied_from,
-            Some(brainstore_domain::ContentRef {
+            Some(brains_domain::ContentRef {
                 key: key.clone(),
                 sha256: sha256.clone(),
                 size: input.content.len() as i64,
@@ -134,7 +134,7 @@ where
                 .expect("put has content")
                 .media_type
                 .clone(),
-            kind: brainstore_domain::detect_kind(input.path.as_str(), input.content),
+            kind: brains_domain::detect_kind(input.path.as_str(), input.content),
             created,
             index_state,
             operation_id: input.operation_id.as_str().to_owned(),
@@ -173,7 +173,7 @@ where
             RevisionAction::Trash,
             actor,
             operation_id,
-            brainstore_domain::timestamp::now_rfc3339(),
+            brains_domain::timestamp::now_rfc3339(),
             None,
             None,
             None,
@@ -204,8 +204,8 @@ where
             updated_at: revision.created_at.clone(),
             size: 0,
             sha256: String::new(),
-            media_type: brainstore_domain::media_type_for(path.as_str()).to_owned(),
-            kind: brainstore_domain::detect_kind(path.as_str(), b""),
+            media_type: brains_domain::media_type_for(path.as_str()).to_owned(),
+            kind: brains_domain::detect_kind(path.as_str(), b""),
             created: false,
             index_state,
             operation_id: revision.operation_id.as_str().to_owned(),
@@ -264,7 +264,7 @@ where
             RevisionAction::Restore,
             actor,
             operation_id,
-            brainstore_domain::timestamp::now_rfc3339(),
+            brains_domain::timestamp::now_rfc3339(),
             Some(source.revision.clone()),
             None,
             Some(content.clone()),
@@ -296,7 +296,7 @@ where
             size: content.size,
             sha256: content.sha256.clone(),
             media_type: content.media_type.clone(),
-            kind: brainstore_domain::detect_kind(path.as_str(), &bytes),
+            kind: brains_domain::detect_kind(path.as_str(), &bytes),
             created: false,
             index_state,
             operation_id: revision.operation_id.as_str().to_owned(),

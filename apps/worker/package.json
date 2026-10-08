@@ -1,5 +1,5 @@
 {
-  "name": "brainstore-worker",
+  "name": "brains-worker",
   "private": true,
   "devDependencies": {
     "wrangler": "^4.42.0"

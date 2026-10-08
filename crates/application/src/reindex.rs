@@ -1,7 +1,7 @@
 //! Paged index rebuild (design §10.5): one bounded page per call, driven
 //! explicitly by the CLI/admin — never a promise of background completion.
 
-use brainstore_domain::{AccessLevel, DomainError, DomainResult, Endpoint, HexId, Principal};
+use brains_domain::{AccessLevel, DomainError, DomainResult, Endpoint, HexId, Principal};
 
 use crate::Vault;
 use crate::projection;
@@ -20,10 +20,10 @@ pub struct ReindexPageResult {
 
 impl<H, R, B, I> Vault<H, R, B, I>
 where
-    H: brainstore_ports::HeadStore + Send + Sync,
-    R: brainstore_ports::RevisionStore + Send + Sync,
-    B: brainstore_ports::BlobStore + Send + Sync,
-    I: brainstore_ports::IndexStore + Send + Sync,
+    H: brains_ports::HeadStore + Send + Sync,
+    R: brains_ports::RevisionStore + Send + Sync,
+    B: brains_ports::BlobStore + Send + Sync,
+    I: brains_ports::IndexStore + Send + Sync,
 {
     /// Reindex one page of heads after `cursor`. The monotonic upsert makes
     /// this safe to run against live writes and to re-run per page.
@@ -82,7 +82,7 @@ where
             Some(content) => Some(self.blobs.get(&content.key).await?),
             None => None,
         };
-        let deleted = revision.action == brainstore_domain::RevisionAction::Trash;
+        let deleted = revision.action == brains_domain::RevisionAction::Trash;
         let proj = projection::build_projection(
             &self.vault,
             &revision,

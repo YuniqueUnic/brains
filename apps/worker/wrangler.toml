@@ -1,6 +1,6 @@
 # Cloudflare deploy config (design §23.3). Local simulation: `wrangler dev`
 # runs workerd with local R2/D1 — no cloud credentials required.
-name = "brainstore"
+name = "brains"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-10-07"
 
@@ -14,12 +14,12 @@ not_found_handling = "single-page-application"
 run_worker_first = ["/api", "/api/*", "/healthz"]
 
 [[r2_buckets]]
-binding = "BRAIN_BUCKET"
-bucket_name = "brainstore-data"
+binding = "BRAINS_BUCKET"
+bucket_name = "brains-data"
 
 [[d1_databases]]
-binding = "BRAIN_INDEX"
-database_name = "brainstore-index"
+binding = "BRAINS_INDEX"
+database_name = "brains-index"
 database_id = "local"
 migrations_dir = "../../migrations/d1"
 

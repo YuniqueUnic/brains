@@ -1,14 +1,14 @@
 import type { Config } from "playwright/test";
 
 const PORT = 18799;
-const BASE_URL = process.env.BRAIN_BASE_URL ?? `http://127.0.0.1:${PORT}`;
-const TOKEN = process.env.BRAIN_E2E_TOKEN ?? "e2e-root-token-0000000000000000";
+const BASE_URL = process.env.BRAINS_BASE_URL ?? `http://127.0.0.1:${PORT}`;
+const TOKEN = process.env.BRAINS_E2E_TOKEN ?? "brains-e2e-root-token-0000000000000000";
 // Keep the e2e data dir outside the cargo target directory: nothing in the
 // suite depends on cargo's build cache.
-const DATA_DIR = process.env.BRAIN_E2E_DATA_DIR ?? "/tmp/brainstore-e2e-data";
+const DATA_DIR = process.env.BRAINS_E2E_DATA_DIR ?? "/tmp/brains-e2e-data";
 
 /**
- * Browser E2E for BrainStore's local stack (design §18 M3): the real
+ * Browser E2E for Brains's local stack (design §18 M3): the real
  * brain-server (Rust) serves the built web app, so every scenario exercises
  * the production HTTP contract end to end.
  */
@@ -32,11 +32,11 @@ const config: Config = {
             [
               `rm -rf ${DATA_DIR}`,
               "&&",
-              process.env.BRAIN_SERVER_BIN ?? "../../target/debug/brainstore-server",
+              process.env.BRAINS_SERVER_BIN ?? "../../target/debug/brains-server",
               `--data-dir ${DATA_DIR}`,
               `--port ${PORT}`,
               `--token ${TOKEN}`,
-              `--web-dist ${process.env.BRAIN_WEB_DIST ?? "../../apps/web/dist"}`,
+              `--web-dist ${process.env.BRAINS_WEB_DIST ?? "../../apps/web/dist"}`,
             ].join(" "),
           ),
         ].join(" "),

@@ -7,8 +7,8 @@ use std::sync::Mutex;
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use brainstore_domain::{DomainError, DomainResult, FileKind};
-use brainstore_ports::{
+use brains_domain::{DomainError, DomainResult, FileKind};
+use brains_ports::{
     FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow,
     prefix_upper_bound,
 };
@@ -95,7 +95,7 @@ impl IndexStore for SqliteIndex {
                 projection.links_json,
                 projection.parser_version,
                 projection.updated_at,
-                brainstore_domain::timestamp::now_rfc3339(),
+                brains_domain::timestamp::now_rfc3339(),
             ],
         )
         .map_err(index_err)?;

@@ -5,7 +5,7 @@
 
 use pulldown_cmark::{Event, Options, Parser};
 
-use brainstore_domain::VaultPath;
+use brains_domain::VaultPath;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LinkKind {

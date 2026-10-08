@@ -1,5 +1,5 @@
-//! BrainStore Worker (design §5.1, §9.2 cloudflare profile): the shared axum
-//! layer from `brainstore_api_http` serving R2 (HEAD/revisions/blobs) and D1
+//! Brains Worker (design §5.1, §9.2 cloudflare profile): the shared axum
+//! layer from `brains_api_http` serving R2 (HEAD/revisions/blobs) and D1
 //! (rebuildable index). Static assets are served by Workers Static Assets;
 //! this handler only sees `/api/*` and `/healthz` (wrangler `run_worker_first`).
 
@@ -7,12 +7,12 @@ mod security;
 
 use std::sync::Arc;
 
-use brainstore_adapter_d1::D1Index;
-use brainstore_adapter_r2::R2ContentStore;
-use brainstore_api_http::auth::Security;
-use brainstore_api_http::state::AppState;
-use brainstore_application::Vault;
-use brainstore_domain::{Capabilities, CursorSigner, Limits};
+use brains_adapter_d1::D1Index;
+use brains_adapter_r2::R2ContentStore;
+use brains_api_http::auth::Security;
+use brains_api_http::state::AppState;
+use brains_application::Vault;
+use brains_domain::{Capabilities, CursorSigner, Limits};
 
 use axum::response::IntoResponse;
 use security::EnvSecurity;
@@ -41,14 +41,14 @@ type StateResult = Result<
 >;
 
 fn plain_error(status: u16, message: &str) -> FetchResponse {
-    use brainstore_api_types::{ErrorBody, ErrorDetail};
+    use brains_api_types::{ErrorBody, ErrorDetail};
     (
         axum::http::StatusCode::from_u16(status).expect("valid status"),
         axum::Json(ErrorBody {
             error: ErrorDetail {
                 code: "INTERNAL".into(),
                 message: message.to_owned(),
-                request_id: brainstore_domain::HexId::generate().as_str().to_owned(),
+                request_id: brains_domain::HexId::generate().as_str().to_owned(),
                 path: None,
                 current_revision: None,
                 details: None,
@@ -63,11 +63,11 @@ fn plain_error(status: u16, message: &str) -> FetchResponse {
 fn build_state(env: &Env) -> StateResult {
     let vault_name = str_var(env, "VAULT_ID")?;
     let bucket = env
-        .bucket("BRAIN_BUCKET")
-        .map_err(|e| Box::new(plain_error(500, &format!("BRAIN_BUCKET binding: {e}"))))?;
+        .bucket("BRAINS_BUCKET")
+        .map_err(|e| Box::new(plain_error(500, &format!("BRAINS_BUCKET binding: {e}"))))?;
     let d1 = env
-        .d1("BRAIN_INDEX")
-        .map_err(|e| Box::new(plain_error(500, &format!("BRAIN_INDEX binding: {e}"))))?;
+        .d1("BRAINS_INDEX")
+        .map_err(|e| Box::new(plain_error(500, &format!("BRAINS_INDEX binding: {e}"))))?;
 
     let limits = Limits {
         max_text_bytes: int_var(env, "MAX_TEXT_BYTES")?,
@@ -139,7 +139,7 @@ async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<FetchRespons
         Ok(state) => state,
         Err(response) => return Ok(*response),
     };
-    let mut router = brainstore_api_http::routes::build_router(state);
+    let mut router = brains_api_http::routes::build_router(state);
     // `Router::call` is infallible: it resolves to the §11.3 error mapping
     // inside the shared axum layer.
     Ok(router.call(req).await?)

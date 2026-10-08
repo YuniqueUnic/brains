@@ -21,7 +21,7 @@ fn boot_server() -> TestServer {
             .enable_all()
             .build()
             .unwrap();
-        let config = brainstore_server::ServerConfig {
+        let config = brains_server::ServerConfig {
             data_dir,
             vault: "default".into(),
             bind: "127.0.0.1".into(),
@@ -30,7 +30,7 @@ fn boot_server() -> TestServer {
             web_dist: None,
             allowed_origins: Vec::new(),
         };
-        let addr = runtime.block_on(brainstore_server::serve(config)).unwrap();
+        let addr = runtime.block_on(brains_server::serve(config)).unwrap();
         addr_tx.send(addr).unwrap();
         // Park the runtime thread forever; the test process exits around it.
         loop {
@@ -47,10 +47,10 @@ fn boot_server() -> TestServer {
 }
 
 fn brain(server: &TestServer) -> Command {
-    let mut command = Command::new(cargo_bin("brainstore-cli"));
+    let mut command = Command::new(cargo_bin("bsx"));
     command
-        .env("BRAIN_URL", &server.url)
-        .env("BRAIN_TOKEN", &server.token);
+        .env("BRAINS_URL", &server.url)
+        .env("BRAINS_TOKEN", &server.token);
     command
 }
 
@@ -223,7 +223,7 @@ fn export_produces_a_readable_working_tree() {
         &std::fs::read_to_string(target.join(".brain/export-manifest.json")).unwrap(),
     )
     .unwrap();
-    assert_eq!(manifest["format"], "brainstore-working-tree");
+    assert_eq!(manifest["format"], "brains-working-tree");
     assert_eq!(manifest["consistency"], "per_file");
     // The four first-boot template notes plus this test's file.
     assert_eq!(manifest["entries"].as_array().unwrap().len(), 5);
@@ -246,9 +246,9 @@ fn whoami_reports_scopes_and_reauth_fails_cleanly() {
     assert!(session["scopes"].as_array().unwrap().len() >= 3);
 
     // A wrong token is exit 4 with a message on stderr only.
-    let output = Command::new(cargo_bin("brainstore-cli"))
-        .env("BRAIN_URL", &server.url)
-        .env("BRAIN_TOKEN", "wrong-token")
+    let output = Command::new(cargo_bin("bsx"))
+        .env("BRAINS_URL", &server.url)
+        .env("BRAINS_TOKEN", "wrong-token")
         .args(["whoami"])
         .output()
         .unwrap();

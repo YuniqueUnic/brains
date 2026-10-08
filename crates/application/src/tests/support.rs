@@ -6,10 +6,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::Vault;
-use brainstore_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
-use brainstore_adapter_sqlite::SqliteIndex;
-use brainstore_domain::{CursorSigner, Limits, Principal, Scope};
-use brainstore_ports::{FileProjection, IndexStore, LinkRow, ListFilter, ListRow, LiteralRow};
+use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
+use brains_adapter_sqlite::SqliteIndex;
+use brains_domain::{CursorSigner, Limits, Principal, Scope};
+use brains_ports::{FileProjection, IndexStore, LinkRow, ListFilter, ListRow, LiteralRow};
 
 /// A real vault backed by real adapters, in a temp directory.
 pub struct TestVault {
@@ -75,11 +75,11 @@ impl FlakyIndex {
 }
 
 impl IndexStore for FlakyIndex {
-    async fn upsert(&self, projection: &FileProjection) -> brainstore_domain::DomainResult<()> {
+    async fn upsert(&self, projection: &FileProjection) -> brains_domain::DomainResult<()> {
         let count = self.upserts.fetch_add(1, Ordering::SeqCst);
         if count >= self.fail_after {
             self.broken.fetch_add(1, Ordering::SeqCst);
-            return Err(brainstore_domain::DomainError::IndexUnavailable(
+            return Err(brains_domain::DomainError::IndexUnavailable(
                 "injected index failure".into(),
             ));
         }
@@ -94,8 +94,8 @@ impl IndexStore for FlakyIndex {
         _limit: usize,
         _query: &str,
         _tag: Option<&str>,
-    ) -> brainstore_domain::DomainResult<Vec<LiteralRow>> {
-        Err(brainstore_domain::DomainError::IndexUnavailable(
+    ) -> brains_domain::DomainResult<Vec<LiteralRow>> {
+        Err(brains_domain::DomainError::IndexUnavailable(
             "index unavailable".into(),
         ))
     }
@@ -108,8 +108,8 @@ impl IndexStore for FlakyIndex {
         _tag: Option<&str>,
         _offset: usize,
         _limit: usize,
-    ) -> brainstore_domain::DomainResult<Vec<(String, String, String)>> {
-        Err(brainstore_domain::DomainError::IndexUnavailable(
+    ) -> brains_domain::DomainResult<Vec<(String, String, String)>> {
+        Err(brains_domain::DomainError::IndexUnavailable(
             "index unavailable".into(),
         ))
     }
@@ -120,7 +120,7 @@ impl IndexStore for FlakyIndex {
         after_path: Option<&str>,
         after_updated: Option<&str>,
         limit: usize,
-    ) -> brainstore_domain::DomainResult<Vec<ListRow>> {
+    ) -> brains_domain::DomainResult<Vec<ListRow>> {
         // Listing falls through to the healthy inner index by design: the
         // degraded-vault tests focus on search/upsert behavior.
         self.inner
@@ -133,7 +133,7 @@ impl IndexStore for FlakyIndex {
         path: &str,
         after: Option<&str>,
         limit: usize,
-    ) -> brainstore_domain::DomainResult<Vec<LinkRow>> {
+    ) -> brains_domain::DomainResult<Vec<LinkRow>> {
         self.inner.links_outbound(path, after, limit).await
     }
 
@@ -142,11 +142,11 @@ impl IndexStore for FlakyIndex {
         path: &str,
         after: Option<&str>,
         limit: usize,
-    ) -> brainstore_domain::DomainResult<Vec<LinkRow>> {
+    ) -> brains_domain::DomainResult<Vec<LinkRow>> {
         self.inner.links_backlinks(path, after, limit).await
     }
 
-    async fn files_count(&self) -> brainstore_domain::DomainResult<u64> {
+    async fn files_count(&self) -> brains_domain::DomainResult<u64> {
         self.inner.files_count().await
     }
 }
@@ -158,14 +158,14 @@ pub async fn put_text<VH, VR, VB, VI>(
     path: &str,
     body: &str,
     precondition: crate::Precondition,
-) -> brainstore_domain::DomainResult<crate::MutationOutcome>
+) -> brains_domain::DomainResult<crate::MutationOutcome>
 where
-    VH: brainstore_ports::HeadStore + Send + Sync,
-    VR: brainstore_ports::RevisionStore + Send + Sync,
-    VB: brainstore_ports::BlobStore + Send + Sync,
-    VI: brainstore_ports::IndexStore + Send + Sync,
+    VH: brains_ports::HeadStore + Send + Sync,
+    VR: brains_ports::RevisionStore + Send + Sync,
+    VB: brains_ports::BlobStore + Send + Sync,
+    VI: brains_ports::IndexStore + Send + Sync,
 {
-    let path = brainstore_domain::VaultPath::new(path).unwrap();
+    let path = brains_domain::VaultPath::new(path).unwrap();
     vault
         .put_file(
             principal,
@@ -174,7 +174,7 @@ where
                 content: body.as_bytes(),
                 media_type: None,
                 actor: principal.actor.clone(),
-                operation_id: brainstore_domain::HexId::generate(),
+                operation_id: brains_domain::HexId::generate(),
                 precondition,
                 executable: false,
                 copied_from: None,

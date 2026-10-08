@@ -4,7 +4,7 @@
 
 use std::future::Future;
 
-use brainstore_domain::{DomainResult, FileKind};
+use brains_domain::{DomainResult, FileKind};
 
 /// Bump when the parser's projection shape changes; the monotonic upsert
 /// then refreshes rows at equal generation (design §10.2).

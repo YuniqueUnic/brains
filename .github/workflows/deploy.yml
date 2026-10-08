@@ -4,8 +4,8 @@ name: Deploy (Cloudflare Workers)
 #   1. Cloudflare API token with Workers/R2/D1 edit permissions, plus the
 #      account id, as repo secrets CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID.
 #   2. Provisioned resources:
-#        pnpm --dir apps/worker exec wrangler r2 bucket create brainstore-data
-#        pnpm --dir apps/worker exec wrangler d1 create brainstore-index
+#        pnpm --dir apps/worker exec wrangler r2 bucket create brains-data
+#        pnpm --dir apps/worker exec wrangler d1 create brains-index
 #      …then paste the returned database_id into apps/worker/wrangler.toml.
 #   3. Instance secrets (never in git):
 #        cd apps/worker
@@ -50,7 +50,7 @@ jobs:
       - name: Apply remote D1 migrations
         if: inputs.apply_migrations
         working-directory: apps/worker
-        run: pnpm exec wrangler d1 migrations apply BRAIN_INDEX --remote
+        run: pnpm exec wrangler d1 migrations apply BRAINS_INDEX --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

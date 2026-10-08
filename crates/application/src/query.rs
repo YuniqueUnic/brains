@@ -1,11 +1,11 @@
 //! Read-side services: raw/meta reads, reachable history, revision access,
 //! authoritative and index-backed listings.
 
-use brainstore_domain::{
+use brains_domain::{
     AccessLevel, DomainError, DomainResult, Endpoint, Head, HeadState, HexId, Principal, Revision,
     VaultPath,
 };
-use brainstore_ports::ListFilter;
+use brains_ports::ListFilter;
 
 use crate::Vault;
 
@@ -17,10 +17,10 @@ pub struct FileContent {
 
 impl<H, R, B, I> Vault<H, R, B, I>
 where
-    H: brainstore_ports::HeadStore + Send + Sync,
-    R: brainstore_ports::RevisionStore + Send + Sync,
-    B: brainstore_ports::BlobStore + Send + Sync,
-    I: brainstore_ports::IndexStore + Send + Sync,
+    H: brains_ports::HeadStore + Send + Sync,
+    R: brains_ports::RevisionStore + Send + Sync,
+    B: brains_ports::BlobStore + Send + Sync,
+    I: brains_ports::IndexStore + Send + Sync,
 {
     /// Read current live bytes. Trashed paths answer 410; absent 404.
     pub async fn read_file(
@@ -60,7 +60,7 @@ where
         &self,
         principal: &Principal,
         path: &VaultPath,
-    ) -> DomainResult<brainstore_domain::EntryInfo> {
+    ) -> DomainResult<brains_domain::EntryInfo> {
         self.require_scope(principal, AccessLevel::Read, path)?;
         let stored = self
             .current_head(path)
@@ -81,17 +81,17 @@ where
             .clone()
             .ok_or_else(|| DomainError::Internal("live HEAD points at a trash revision".into()))?;
         let bytes = self.blobs.get(&content.key).await?;
-        let kind = brainstore_domain::detect_kind(path.as_str(), &bytes);
-        let title = if kind == brainstore_domain::FileKind::Binary {
+        let kind = brains_domain::detect_kind(path.as_str(), &bytes);
+        let title = if kind == brains_domain::FileKind::Binary {
             None
         } else {
             std::str::from_utf8(&bytes)
                 .ok()
-                .map(|text| brainstore_format::parse_document(path, text))
+                .map(|text| brains_format::parse_document(path, text))
                 .and_then(|doc| doc.ok())
                 .and_then(|doc| doc.title)
         };
-        Ok(brainstore_domain::EntryInfo {
+        Ok(brains_domain::EntryInfo {
             path: head.path.clone(),
             revision: head.revision.as_str().to_owned(),
             generation: head.generation,
@@ -246,11 +246,11 @@ where
         let anchor = heads
             .last()
             .map(|stored| stored.head.path.as_str().to_owned());
-        let items: Vec<brainstore_domain::EntryInfo> = heads
+        let items: Vec<brains_domain::EntryInfo> = heads
             .into_iter()
             .filter(|stored| include_deleted || stored.head.is_live())
             .map(|stored| {
-                brainstore_domain::EntryInfo::from_head_parts(
+                brains_domain::EntryInfo::from_head_parts(
                     stored.head.path.clone(),
                     stored.head.revision.as_str().to_owned(),
                     stored.head.generation,
@@ -338,7 +338,7 @@ pub struct HistoryPageResult {
 }
 
 pub struct StoreListResult {
-    pub items: Vec<brainstore_domain::EntryInfo>,
+    pub items: Vec<brains_domain::EntryInfo>,
     pub exhausted: bool,
     /// Signed cursor for the next page (bound to this listing's filters);
     /// `None` once exhausted. Opaque to clients.
@@ -346,7 +346,7 @@ pub struct StoreListResult {
 }
 
 pub struct IndexListResult {
-    pub rows: Vec<brainstore_ports::ListRow>,
+    pub rows: Vec<brains_ports::ListRow>,
     pub exhausted: bool,
     pub next_after_path: Option<String>,
     pub next_after_updated: Option<String>,

@@ -10,7 +10,7 @@ export type Namespace = (typeof NAMESPACES)[number];
 export const LANGUAGES = ["zh-CN", "en"] as const;
 export type Language = (typeof LANGUAGES)[number];
 
-const LANG_KEY = "brainstore-lang";
+const LANG_KEY = "brains-lang";
 
 function initialLanguage(): Language {
   try {

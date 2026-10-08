@@ -15,8 +15,8 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{any, get, post};
 
-use brainstore_application::Precondition;
-use brainstore_domain::{DomainError, HexId, VaultPath};
+use brains_application::Precondition;
+use brains_domain::{DomainError, HexId, VaultPath};
 
 use crate::auth::AuthSource;
 use crate::error::{ApiError, ApiResult};
@@ -26,7 +26,7 @@ use crate::state::{Blob, Head, Idx, Rev, SharedState};
 pub struct RequestId(pub String);
 
 pub async fn api_not_found() -> Response {
-    use brainstore_api_types::{ErrorBody, ErrorDetail};
+    use brains_api_types::{ErrorBody, ErrorDetail};
     (
         StatusCode::NOT_FOUND,
         axum::Json(ErrorBody {

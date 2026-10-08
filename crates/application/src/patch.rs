@@ -2,7 +2,7 @@
 //! candidate; any edit whose match count differs from 1 aborts the whole
 //! operation with HEAD untouched. Dry-run computes a diff and no lock.
 
-use brainstore_domain::{AccessLevel, DomainError, DomainResult, HexId, Principal, VaultPath};
+use brains_domain::{AccessLevel, DomainError, DomainResult, HexId, Principal, VaultPath};
 use similar::TextDiff;
 
 use crate::commit::CommitInput;
@@ -30,10 +30,10 @@ const MAX_DIFF_OUTPUT: usize = 512 * 1024;
 
 impl<H, R, B, I> Vault<H, R, B, I>
 where
-    H: brainstore_ports::HeadStore + Send + Sync,
-    R: brainstore_ports::RevisionStore + Send + Sync,
-    B: brainstore_ports::BlobStore + Send + Sync,
-    I: brainstore_ports::IndexStore + Send + Sync,
+    H: brains_ports::HeadStore + Send + Sync,
+    R: brains_ports::RevisionStore + Send + Sync,
+    B: brains_ports::BlobStore + Send + Sync,
+    I: brains_ports::IndexStore + Send + Sync,
 {
     pub async fn patch_file(
         &self,

@@ -1,5 +1,5 @@
 [package]
-name = "brainstore-domain"
+name = "brains-domain"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

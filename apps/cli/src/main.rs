@@ -1,4 +1,4 @@
-//! `brain` — the BrainStore CLI (design §12). Every remote mutation carries
+//! `brain` — the Brains CLI (design §12). Every remote mutation carries
 //! an explicit revision precondition; structured commands support `--json`;
 //! stdout stays clean for pipes (progress and errors go to stderr).
 
@@ -7,15 +7,15 @@ mod config;
 use clap::{Parser, Subcommand};
 use config::{Config, Profile};
 
-use brainstore_client::{
+use brains_client::{
     BrainClient, ClientError, ClientResult, PatchOutcomeClient, Precondition, TransferKind,
     urlencode,
 };
 
 #[derive(Parser)]
-#[command(name = "brain", version, about = "BrainStore command line client")]
+#[command(name = "brain", version, about = "Brains command line client")]
 struct Cli {
-    /// Named profile from ~/.brainstore/config.json (default: active profile).
+    /// Named profile from ~/.brains/config.json (default: active profile).
     #[arg(long, global = true)]
     profile: Option<String>,
     #[command(subcommand)]
@@ -577,7 +577,7 @@ fn put(
             buffer
         }
     };
-    let media = content_type.unwrap_or_else(|| brainstore_domain::media_type_for(path).to_owned());
+    let media = content_type.unwrap_or_else(|| brains_domain::media_type_for(path).to_owned());
     let result = client.put_content(path, &bytes, &media, precondition, operation_id.as_deref())?;
     println!(
         "{} gen={} rev={}",
@@ -743,8 +743,8 @@ fn patch(
     new: &str,
     dry_run: bool,
 ) -> ClientResult<i32> {
-    let body = brainstore_api_types::PatchBody {
-        edits: vec![brainstore_api_types::PatchEditDto {
+    let body = brains_api_types::PatchBody {
+        edits: vec![brains_api_types::PatchEditDto {
             old_text: old.to_owned(),
             new_text: new.to_owned(),
             expected_matches: 1,
@@ -773,10 +773,10 @@ fn transfer(
     target: &str,
     if_revision: &str,
 ) -> ClientResult<i32> {
-    let operation_id = brainstore_domain::HexId::generate().as_str().to_owned();
+    let operation_id = brains_domain::HexId::generate().as_str().to_owned();
     let result = client.transfer(
         kind,
-        brainstore_api_types::TransferBody {
+        brains_api_types::TransferBody {
             source: source.to_owned(),
             target: target.to_owned(),
             expected_source_revision: if_revision.to_owned(),
@@ -843,7 +843,7 @@ fn export(client: &BrainClient, output: &str) -> ClientResult<i32> {
         .capabilities()?
         .vault
         .unwrap_or_else(|| "default".into());
-    let summary = brainstore_client::export::export_working_tree(client, output, &vault)?;
+    let summary = brains_client::export::export_working_tree(client, output, &vault)?;
     println!("{summary}");
     Ok(0)
 }
@@ -853,7 +853,7 @@ fn export(client: &BrainClient, output: &str) -> ClientResult<i32> {
 fn seed_template(client: &BrainClient) -> ClientResult<i32> {
     let mut written = 0usize;
     let mut skipped = 0usize;
-    for (path, body) in brainstore_application::seed::template_notes() {
+    for (path, body) in brains_application::seed::template_notes() {
         match client.get_meta(path) {
             Ok(_) => skipped += 1,
             Err(error) if error.status == 404 => {
@@ -879,7 +879,7 @@ fn edit(client: &BrainClient, path: &str, if_revision: &str) -> ClientResult<i32
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".into());
     let temp = std::env::temp_dir().join(format!(
         "brain-edit-{}",
-        brainstore_domain::HexId::generate()
+        brains_domain::HexId::generate()
     ));
     std::fs::write(&temp, &bytes).map_err(|e| ClientError::transport(e.to_string()))?;
     let status = std::process::Command::new(&editor)
@@ -899,7 +899,7 @@ fn edit(client: &BrainClient, path: &str, if_revision: &str) -> ClientResult<i32
         let _ = std::fs::remove_file(&temp);
         return Ok(0);
     }
-    let media = brainstore_domain::media_type_for(path).to_owned();
+    let media = brains_domain::media_type_for(path).to_owned();
     match client.put_content(
         path,
         &edited,

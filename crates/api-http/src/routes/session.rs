@@ -5,8 +5,8 @@ use axum::extract::{Extension, State};
 use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 
-use brainstore_api_types::Session;
-use brainstore_domain::DomainError;
+use brains_api_types::Session;
+use brains_domain::DomainError;
 
 use crate::auth::{AuthSource, SESSION_COOKIE, guard_cookie_mutation};
 use crate::error::{ApiError, ApiResult};
@@ -28,7 +28,7 @@ fn principal_or_error(
         .ok_or_else(|| ApiError::new(DomainError::Unauthenticated, rid))
 }
 
-fn session_body(principal: &brainstore_domain::Principal, csrf: Option<String>) -> Session {
+fn session_body(principal: &brains_domain::Principal, csrf: Option<String>) -> Session {
     Session {
         actor: principal.actor.clone(),
         scopes: principal.scopes.iter().map(|s| s.as_string()).collect(),
@@ -110,7 +110,7 @@ pub async fn delete_session<H: Head, R: Rev, B: Blob, I: Idx>(
         .map_err(|e| ApiError::new(e, rid))?;
     }
     let clear = format!("{SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=0");
-    let mut response = Json(brainstore_api_types::OkResult { ok: true }).into_response();
+    let mut response = Json(brains_api_types::OkResult { ok: true }).into_response();
     if let Ok(value) = header::HeaderValue::from_str(&clear) {
         response.headers_mut().insert(header::SET_COOKIE, value);
     }

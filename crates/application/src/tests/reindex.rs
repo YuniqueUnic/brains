@@ -3,9 +3,9 @@
 
 use crate::Precondition;
 use crate::Vault;
-use brainstore_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
-use brainstore_adapter_sqlite::SqliteIndex;
-use brainstore_domain::{CursorSigner, Limits, VaultPath};
+use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
+use brains_adapter_sqlite::SqliteIndex;
+use brains_domain::{CursorSigner, Limits, VaultPath};
 
 use super::support::{TestVault, open_vault, owner_principal, put_text};
 
@@ -127,7 +127,7 @@ async fn reindex_requires_whole_vault_admin() {
     let denied = vault.reindex_page(&limited, None, 5).await;
     assert!(matches!(
         denied,
-        Err(brainstore_domain::DomainError::Forbidden(_))
+        Err(brains_domain::DomainError::Forbidden(_))
     ));
 
     let allowed = vault.reindex_page(&owner, None, 5).await.unwrap();

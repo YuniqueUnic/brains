@@ -9,7 +9,7 @@ import { EditorArea } from "../screens/EditorArea";
 import { Instance } from "../support/Instance";
 
 const OpenApp = () =>
-  Task.where("#actor opens the BrainStore workbench", Navigate.to(Instance.baseUrl));
+  Task.where("#actor opens the Brains workbench", Navigate.to(Instance.baseUrl));
 
 const LogIn = () =>
   Task.where("#actor signs in with the instance token",

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{IndexState, Precondition};
-use brainstore_domain::DomainError;
+use brains_domain::DomainError;
 
 use super::support::{FlakyIndex, TestVault, open_vault, owner_principal, put_text};
 
@@ -17,7 +17,7 @@ async fn two_clients_same_base_exactly_one_wins() {
         .await
         .unwrap();
     let base =
-        Precondition::IfRevision(brainstore_domain::HexId::from_hex(&first.revision).unwrap());
+        Precondition::IfRevision(brains_domain::HexId::from_hex(&first.revision).unwrap());
 
     // Two agents read revision R1 and both try to write. Exactly one
     // outcome is Ok(committed); the other is a revision conflict.
@@ -45,7 +45,7 @@ async fn two_clients_same_base_exactly_one_wins() {
         let page = vault
             .history_page(
                 &owner,
-                &brainstore_domain::VaultPath::new("doc.md").unwrap(),
+                &brains_domain::VaultPath::new("doc.md").unwrap(),
                 cursor.as_deref(),
                 20,
             )
@@ -64,7 +64,7 @@ async fn two_clients_same_base_exactly_one_wins() {
 async fn restore_makes_new_revision_and_never_rewinds() {
     let TestVault { vault, .. } = open_vault();
     let owner = owner_principal();
-    let path = brainstore_domain::VaultPath::new("restore.md").unwrap();
+    let path = brains_domain::VaultPath::new("restore.md").unwrap();
 
     let v1 = put_text(
         &vault,
@@ -80,7 +80,7 @@ async fn restore_makes_new_revision_and_never_rewinds() {
         &owner,
         "restore.md",
         "version two",
-        Precondition::IfRevision(brainstore_domain::HexId::from_hex(&v1.revision).unwrap()),
+        Precondition::IfRevision(brains_domain::HexId::from_hex(&v1.revision).unwrap()),
     )
     .await
     .unwrap();
@@ -90,10 +90,10 @@ async fn restore_makes_new_revision_and_never_rewinds() {
         .restore_file(
             &owner,
             &path,
-            &brainstore_domain::HexId::from_hex(&v1.revision).unwrap(),
-            Precondition::IfRevision(brainstore_domain::HexId::from_hex(&v2.revision).unwrap()),
+            &brains_domain::HexId::from_hex(&v1.revision).unwrap(),
+            Precondition::IfRevision(brains_domain::HexId::from_hex(&v2.revision).unwrap()),
             owner.actor.clone(),
-            brainstore_domain::HexId::generate(),
+            brains_domain::HexId::generate(),
         )
         .await
         .unwrap();
@@ -109,7 +109,7 @@ async fn restore_makes_new_revision_and_never_rewinds() {
         &owner,
         "restore.md",
         "stale write",
-        Precondition::IfRevision(brainstore_domain::HexId::from_hex(&v1.revision).unwrap()),
+        Precondition::IfRevision(brains_domain::HexId::from_hex(&v1.revision).unwrap()),
     )
     .await;
     assert!(matches!(stale, Err(DomainError::RevisionConflict { .. })));
@@ -128,7 +128,7 @@ async fn restore_makes_new_revision_and_never_rewinds() {
 async fn trash_tombstone_and_recreate_from_exact_revision() {
     let TestVault { vault, .. } = open_vault();
     let owner = owner_principal();
-    let path = brainstore_domain::VaultPath::new("trash-me.md").unwrap();
+    let path = brains_domain::VaultPath::new("trash-me.md").unwrap();
 
     let created = put_text(
         &vault,
@@ -144,10 +144,10 @@ async fn trash_tombstone_and_recreate_from_exact_revision() {
             &owner,
             &path,
             Precondition::IfRevision(
-                brainstore_domain::HexId::from_hex(&created.revision).unwrap(),
+                brains_domain::HexId::from_hex(&created.revision).unwrap(),
             ),
             owner.actor.clone(),
-            brainstore_domain::HexId::generate(),
+            brains_domain::HexId::generate(),
         )
         .await
         .unwrap();
@@ -170,7 +170,7 @@ async fn trash_tombstone_and_recreate_from_exact_revision() {
         &owner,
         "trash-me.md",
         "revived",
-        Precondition::IfRevision(brainstore_domain::HexId::from_hex(&trashed.revision).unwrap()),
+        Precondition::IfRevision(brains_domain::HexId::from_hex(&trashed.revision).unwrap()),
     )
     .await
     .unwrap();
@@ -181,10 +181,10 @@ async fn trash_tombstone_and_recreate_from_exact_revision() {
             &owner,
             &path,
             Precondition::IfRevision(
-                brainstore_domain::HexId::from_hex(&trashed.revision).unwrap(),
+                brains_domain::HexId::from_hex(&trashed.revision).unwrap(),
             ),
             owner.actor.clone(),
-            brainstore_domain::HexId::generate(),
+            brains_domain::HexId::generate(),
         )
         .await;
     assert!(matches!(
@@ -208,16 +208,16 @@ async fn index_failure_does_not_lose_the_commit() {
 
     // Swap in a flaky index that fails every subsequent upsert.
     let broken = Arc::new(AtomicUsize::new(0));
-    let index = brainstore_adapter_sqlite::SqliteIndex::open(&dir.path().join("index.db")).unwrap();
+    let index = brains_adapter_sqlite::SqliteIndex::open(&dir.path().join("index.db")).unwrap();
     let flaky = FlakyIndex::new(index, 0, broken.clone());
-    let heads = brainstore_adapter_fs::FsHeadStore::new(
-        brainstore_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
+    let heads = brains_adapter_fs::FsHeadStore::new(
+        brains_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
     );
-    let revisions = brainstore_adapter_fs::FsRevisionStore::new(
-        brainstore_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
+    let revisions = brains_adapter_fs::FsRevisionStore::new(
+        brains_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
     );
-    let blobs = brainstore_adapter_fs::FsBlobStore::new(
-        brainstore_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
+    let blobs = brains_adapter_fs::FsBlobStore::new(
+        brains_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
     );
     let degraded = crate::Vault::new(
         heads,
@@ -225,8 +225,8 @@ async fn index_failure_does_not_lose_the_commit() {
         blobs,
         flaky,
         "default".into(),
-        brainstore_domain::Limits::default(),
-        brainstore_domain::CursorSigner::new([9u8; 32]),
+        brains_domain::Limits::default(),
+        brains_domain::CursorSigner::new([9u8; 32]),
     );
 
     let outcome = put_text(
@@ -245,7 +245,7 @@ async fn index_failure_does_not_lose_the_commit() {
     let content = degraded
         .read_file(
             &owner,
-            &brainstore_domain::VaultPath::new("pending.md").unwrap(),
+            &brains_domain::VaultPath::new("pending.md").unwrap(),
         )
         .await
         .unwrap();
@@ -274,7 +274,7 @@ async fn text_limits_reject_non_utf8_and_demote_oversize() {
     let owner = owner_principal();
 
     // A .md that is not UTF-8 is a fatal pre-CAS error (§22.2).
-    let path = brainstore_domain::VaultPath::new("broken.md").unwrap();
+    let path = brains_domain::VaultPath::new("broken.md").unwrap();
     let err = vault
         .put_file(
             &owner,
@@ -283,7 +283,7 @@ async fn text_limits_reject_non_utf8_and_demote_oversize() {
                 content: &[0xff, 0xfe, 0x61],
                 media_type: None,
                 actor: owner.actor.clone(),
-                operation_id: brainstore_domain::HexId::generate(),
+                operation_id: brains_domain::HexId::generate(),
                 precondition: Precondition::Create,
                 executable: false,
                 copied_from: None,
@@ -301,7 +301,7 @@ async fn text_limits_reject_non_utf8_and_demote_oversize() {
     let content = vault
         .read_file(
             &owner,
-            &brainstore_domain::VaultPath::new("big.md").unwrap(),
+            &brains_domain::VaultPath::new("big.md").unwrap(),
         )
         .await
         .unwrap();
@@ -346,7 +346,7 @@ async fn attachment_and_note_share_the_revision_protocol() {
     let content = vault
         .read_file(
             &owner,
-            &brainstore_domain::VaultPath::new("attachments/bench.csv").unwrap(),
+            &brains_domain::VaultPath::new("attachments/bench.csv").unwrap(),
         )
         .await
         .unwrap();
@@ -357,7 +357,7 @@ async fn attachment_and_note_share_the_revision_protocol() {
     let links = vault
         .links(
             &owner,
-            &brainstore_domain::VaultPath::new("notes/bench.md").unwrap(),
+            &brains_domain::VaultPath::new("notes/bench.md").unwrap(),
             false,
             None,
             10,
@@ -369,7 +369,7 @@ async fn attachment_and_note_share_the_revision_protocol() {
     let backlinks = vault
         .links(
             &owner,
-            &brainstore_domain::VaultPath::new("attachments/bench.csv").unwrap(),
+            &brains_domain::VaultPath::new("attachments/bench.csv").unwrap(),
             true,
             None,
             10,
@@ -391,7 +391,7 @@ async fn retry_after_lost_response_does_not_double_append() {
         .await
         .unwrap();
     let base =
-        Precondition::IfRevision(brainstore_domain::HexId::from_hex(&first.revision).unwrap());
+        Precondition::IfRevision(brains_domain::HexId::from_hex(&first.revision).unwrap());
 
     let winner = put_text(&vault, &owner, "log.md", "line1\nline2", base.clone())
         .await
@@ -408,7 +408,7 @@ async fn retry_after_lost_response_does_not_double_append() {
     let page = vault
         .history_page(
             &owner,
-            &brainstore_domain::VaultPath::new("log.md").unwrap(),
+            &brains_domain::VaultPath::new("log.md").unwrap(),
             None,
             20,
         )

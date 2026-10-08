@@ -6,8 +6,8 @@
 
 use std::future::Future;
 
-use brainstore_domain::{DomainError, DomainResult, FileKind};
-use brainstore_ports::{
+use brains_domain::{DomainError, DomainResult, FileKind};
+use brains_ports::{
     FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow,
     prefix_upper_bound,
 };
@@ -194,7 +194,7 @@ impl IndexStore for D1Index {
                     js_str(&projection.links_json),
                     js_num(projection.parser_version),
                     js_str(&projection.updated_at),
-                    js_str(&brainstore_domain::timestamp::now_rfc3339()),
+                    js_str(&brains_domain::timestamp::now_rfc3339()),
                 ],
             )
             .await

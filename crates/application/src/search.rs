@@ -2,8 +2,8 @@
 //! optionally. Zero hits plus a pending cursor never means "whole vault has
 //! no results"; index failures are loud 503s, never fake-empty pages.
 
-use brainstore_domain::{AccessLevel, DomainError, DomainResult, Endpoint, Principal, VaultPath};
-use brainstore_ports::{LinkRow, prefix_upper_bound};
+use brains_domain::{AccessLevel, DomainError, DomainResult, Endpoint, Principal, VaultPath};
+use brains_ports::{LinkRow, prefix_upper_bound};
 
 use crate::Vault;
 
@@ -58,10 +58,10 @@ fn fts_filter(query: &SearchQuery) -> String {
 
 impl<H, R, B, I> Vault<H, R, B, I>
 where
-    H: brainstore_ports::HeadStore + Send + Sync,
-    R: brainstore_ports::RevisionStore + Send + Sync,
-    B: brainstore_ports::BlobStore + Send + Sync,
-    I: brainstore_ports::IndexStore + Send + Sync,
+    H: brains_ports::HeadStore + Send + Sync,
+    R: brains_ports::RevisionStore + Send + Sync,
+    B: brains_ports::BlobStore + Send + Sync,
+    I: brains_ports::IndexStore + Send + Sync,
 {
     pub async fn search(
         &self,

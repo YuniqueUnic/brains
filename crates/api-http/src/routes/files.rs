@@ -7,10 +7,10 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::Response;
 use std::collections::HashMap;
 
-use brainstore_api_types::{Entry, FilePage, MutationResult, PatchBody, PatchDryRun};
-use brainstore_application::Precondition;
-use brainstore_application::commit::CommitInput;
-use brainstore_domain::{DomainError, HeadState};
+use brains_api_types::{Entry, FilePage, MutationResult, PatchBody, PatchDryRun};
+use brains_application::Precondition;
+use brains_application::commit::CommitInput;
+use brains_domain::{DomainError, HeadState};
 use sha2::{Digest, Sha256};
 
 use crate::auth::{AuthSource, guard_cookie_mutation};
@@ -47,7 +47,7 @@ pub async fn list_files<H: Head, R: Rev, B: Blob, I: Idx>(
     let kind = params
         .get("kind")
         .map(String::as_str)
-        .and_then(brainstore_domain::FileKind::parse);
+        .and_then(brains_domain::FileKind::parse);
     let sort = params.get("sort").map(String::as_str).unwrap_or("path");
     let include_deleted = params
         .get("include_deleted")
@@ -92,16 +92,16 @@ pub async fn list_files<H: Head, R: Rev, B: Blob, I: Idx>(
         };
         Ok(json_response(StatusCode::OK, &body, None))
     } else if source == "index" {
-        use brainstore_ports::ListFilter;
+        use brains_ports::ListFilter;
         let filter = ListFilter {
             prefix,
             tag,
             kind,
             include_deleted,
             order: if sort == "updated_desc" {
-                brainstore_ports::ListOrder::UpdatedDesc
+                brains_ports::ListOrder::UpdatedDesc
             } else {
-                brainstore_ports::ListOrder::Path
+                brains_ports::ListOrder::Path
             },
         };
         let order = filter.order;
@@ -140,10 +140,10 @@ pub async fn list_files<H: Head, R: Rev, B: Blob, I: Idx>(
             None
         } else {
             page.rows.last().map(|row| match order {
-                brainstore_ports::ListOrder::UpdatedDesc => {
+                brains_ports::ListOrder::UpdatedDesc => {
                     format!("{}|{}", row.updated_at, row.path)
                 }
-                brainstore_ports::ListOrder::Path => row.path.clone(),
+                brains_ports::ListOrder::Path => row.path.clone(),
             })
         };
         let body = FilePage {
@@ -163,7 +163,7 @@ pub async fn list_files<H: Head, R: Rev, B: Blob, I: Idx>(
 
 fn decode_index_cursor(
     cursor: Option<&str>,
-) -> brainstore_domain::DomainResult<(Option<String>, Option<String>)> {
+) -> brains_domain::DomainResult<(Option<String>, Option<String>)> {
     match cursor {
         None => Ok((None, None)),
         Some(raw) if raw.contains('|') => {
@@ -330,8 +330,8 @@ pub async fn put_file<H: Head, R: Rev, B: Blob, I: Idx>(
     let declared_sha = single_sha_header(&headers, rid)?;
     let effective_media = media_type
         .clone()
-        .unwrap_or_else(|| brainstore_domain::media_type_for(path.as_str()).to_owned());
-    if !brainstore_domain::is_text_media(&effective_media) && declared_sha.is_none() {
+        .unwrap_or_else(|| brains_domain::media_type_for(path.as_str()).to_owned());
+    if !brains_domain::is_text_media(&effective_media) && declared_sha.is_none() {
         return Err(ApiError::new(
             DomainError::InvalidArgument(
                 "binary PUT requires X-Content-SHA256 (64 lowercase hex)".into(),
@@ -464,7 +464,7 @@ pub async fn patch_file<H: Head, R: Rev, B: Blob, I: Idx>(
             rid,
         ));
     }
-    let edits: Vec<brainstore_application::patch::PatchEdit> = body
+    let edits: Vec<brains_application::patch::PatchEdit> = body
         .edits
         .into_iter()
         .map(|edit| {
@@ -474,7 +474,7 @@ pub async fn patch_file<H: Head, R: Rev, B: Blob, I: Idx>(
                     rid,
                 ));
             }
-            Ok(brainstore_application::patch::PatchEdit {
+            Ok(brains_application::patch::PatchEdit {
                 old_text: edit.old_text,
                 new_text: edit.new_text,
                 expected_matches: 1,
@@ -489,7 +489,7 @@ pub async fn patch_file<H: Head, R: Rev, B: Blob, I: Idx>(
             Precondition::IfRevision(if_match),
             auth.principal().actor.clone(),
             op_id,
-            brainstore_application::patch::PatchInput {
+            brains_application::patch::PatchInput {
                 edits,
                 dry_run: body.dry_run,
             },
@@ -513,7 +513,7 @@ pub async fn patch_file<H: Head, R: Rev, B: Blob, I: Idx>(
     }
 }
 
-pub fn mutation_result(outcome: &brainstore_application::MutationOutcome) -> MutationResult {
+pub fn mutation_result(outcome: &brains_application::MutationOutcome) -> MutationResult {
     MutationResult {
         entry: Entry {
             path: outcome.path.clone(),
@@ -540,7 +540,7 @@ fn clamp_limit(
     raw: Option<&String>,
     default: usize,
     max: usize,
-) -> brainstore_domain::DomainResult<usize> {
+) -> brains_domain::DomainResult<usize> {
     match raw {
         None => Ok(default),
         Some(raw) => {

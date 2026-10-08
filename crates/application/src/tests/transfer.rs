@@ -8,10 +8,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::Precondition;
 use crate::Vault;
 use crate::transfer::TransferInput;
-use brainstore_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
-use brainstore_adapter_sqlite::SqliteIndex;
-use brainstore_domain::{CursorSigner, DomainError, HexId, Limits, VaultPath};
-use brainstore_ports::{CasOutcome, ExpectedHead};
+use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
+use brains_adapter_sqlite::SqliteIndex;
+use brains_domain::{CursorSigner, DomainError, HexId, Limits, VaultPath};
+use brains_ports::{CasOutcome, ExpectedHead};
 
 use super::support::{TestVault, open_vault, owner_principal, put_text};
 
@@ -52,7 +52,7 @@ async fn copy_records_provenance_and_keeps_source() {
     assert_eq!(history.items.len(), 1);
     assert_eq!(
         history.items[0].action,
-        brainstore_domain::RevisionAction::Copy
+        brains_domain::RevisionAction::Copy
     );
     assert_eq!(
         history.items[0].copied_from.as_ref().unwrap().path,
@@ -134,7 +134,7 @@ async fn move_trashes_source_and_target_keeps_own_history() {
         .unwrap();
     assert_eq!(
         source_head.head.state,
-        brainstore_domain::HeadState::Trashed
+        brains_domain::HeadState::Trashed
     );
     let target_content = vault
         .read_file(&owner, &VaultPath::new("new/name.md").unwrap())
@@ -217,11 +217,11 @@ impl FlakyNthCasHeads {
     }
 }
 
-impl brainstore_ports::HeadStore for FlakyNthCasHeads {
+impl brains_ports::HeadStore for FlakyNthCasHeads {
     async fn get(
         &self,
         path: &VaultPath,
-    ) -> brainstore_domain::DomainResult<Option<brainstore_ports::StoredHead>> {
+    ) -> brains_domain::DomainResult<Option<brains_ports::StoredHead>> {
         self.inner.get(path).await
     }
 
@@ -229,8 +229,8 @@ impl brainstore_ports::HeadStore for FlakyNthCasHeads {
         &self,
         path: &VaultPath,
         expected: &ExpectedHead,
-        new_head: &brainstore_domain::Head,
-    ) -> brainstore_domain::DomainResult<CasOutcome> {
+        new_head: &brains_domain::Head,
+    ) -> brains_domain::DomainResult<CasOutcome> {
         let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
         if call == self.fail_on {
             return Ok(CasOutcome::PreconditionFailed);
@@ -243,7 +243,7 @@ impl brainstore_ports::HeadStore for FlakyNthCasHeads {
         prefix: Option<&str>,
         after: Option<&str>,
         limit: usize,
-    ) -> brainstore_domain::DomainResult<Vec<brainstore_ports::StoredHead>> {
+    ) -> brains_domain::DomainResult<Vec<brains_ports::StoredHead>> {
         self.inner.list(prefix, after, limit).await
     }
 }

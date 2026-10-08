@@ -2,10 +2,10 @@
 //! raw UTF-8 text including frontmatter — grep-like semantics. Binary and
 //! oversized content is stored but never indexed.
 
-use brainstore_domain::{FileKind, Revision, VaultPath, detect_kind};
-use brainstore_ports::{FileProjection, PARSER_VERSION};
+use brains_domain::{FileKind, Revision, VaultPath, detect_kind};
+use brains_ports::{FileProjection, PARSER_VERSION};
 
-use brainstore_format::{LinkKind, extract_links, extract_title, split_frontmatter};
+use brains_format::{LinkKind, extract_links, extract_title, split_frontmatter};
 
 pub fn build_projection(
     vault: &str,
@@ -23,14 +23,14 @@ pub fn build_projection(
         path: revision.path.clone(),
         revision: revision.revision.as_str().to_owned(),
         generation: revision.generation,
-        deleted: deleted || revision.action == brainstore_domain::RevisionAction::Trash,
+        deleted: deleted || revision.action == brains_domain::RevisionAction::Trash,
         kind,
         title: String::new(),
         body: String::new(),
         size: revision.content.as_ref().map_or(0, |c| c.size),
         sha256: revision.content.as_ref().map(|c| c.sha256.clone()),
         media_type: revision.content.as_ref().map_or_else(
-            || brainstore_domain::media_type_for(revision.path.as_str()).to_owned(),
+            || brains_domain::media_type_for(revision.path.as_str()).to_owned(),
             |c| c.media_type.clone(),
         ),
         tags_json: "[]".into(),
@@ -59,7 +59,7 @@ pub fn build_projection(
 
     let (yaml, body) = split_frontmatter(text);
     let fm = yaml
-        .map(brainstore_format::frontmatter::parse)
+        .map(brains_format::frontmatter::parse)
         .unwrap_or_default();
     projection.title = extract_title(fm.title.as_deref(), body).unwrap_or_default();
     projection.tags_json = serde_json::to_string(&fm.tags).unwrap_or_else(|_| "[]".into());

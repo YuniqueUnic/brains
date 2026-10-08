@@ -10,7 +10,7 @@ import {
 
 export type Theme = "light" | "dark" | "system";
 
-const THEME_KEY = "brainstore-theme";
+const THEME_KEY = "brains-theme";
 
 type ThemeContextValue = {
   theme: Theme;

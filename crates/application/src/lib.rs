@@ -12,8 +12,8 @@ pub mod search;
 pub mod seed;
 pub mod transfer;
 
-use brainstore_domain::{CursorSigner, DomainError, DomainResult, Limits, Principal, VaultPath};
-use brainstore_ports::{BlobStore, HeadStore, IndexStore, RevisionStore, StoredHead};
+use brains_domain::{CursorSigner, DomainError, DomainResult, Limits, Principal, VaultPath};
+use brains_ports::{BlobStore, HeadStore, IndexStore, RevisionStore, StoredHead};
 
 /// Outcome of a committed mutation: the committed entry plus index state.
 #[derive(Clone, Debug)]
@@ -25,7 +25,7 @@ pub struct MutationOutcome {
     pub size: i64,
     pub sha256: String,
     pub media_type: String,
-    pub kind: brainstore_domain::FileKind,
+    pub kind: brains_domain::FileKind,
     pub created: bool,
     pub index_state: IndexState,
     pub operation_id: String,
@@ -52,7 +52,7 @@ pub enum Precondition {
     /// `If-None-Match: *` — the path must not exist (tombstones exist).
     Create,
     /// `If-Match: "<revision>"` — act only on exactly this HEAD revision.
-    IfRevision(brainstore_domain::HexId),
+    IfRevision(brains_domain::HexId),
 }
 
 /// The vault facade binding four stores and instance configuration.
@@ -133,7 +133,7 @@ where
     pub(crate) fn require_scope(
         &self,
         principal: &Principal,
-        level: brainstore_domain::AccessLevel,
+        level: brains_domain::AccessLevel,
         path: &VaultPath,
     ) -> DomainResult<()> {
         principal.require(level, path.as_str())
@@ -148,7 +148,7 @@ where
             return Ok(SizeClass::TooLarge);
         }
         let utf8 = std::str::from_utf8(content).is_ok();
-        if brainstore_domain::declares_text(path.as_str()) {
+        if brains_domain::declares_text(path.as_str()) {
             if !utf8 {
                 return Err(DomainError::InvalidFormat(format!(
                     "{path} declares text but is not valid UTF-8"
@@ -159,8 +159,8 @@ where
             }
             return Ok(SizeClass::Text);
         }
-        if brainstore_domain::detect_kind(path.as_str(), content)
-            == brainstore_domain::FileKind::Binary
+        if brains_domain::detect_kind(path.as_str(), content)
+            == brains_domain::FileKind::Binary
         {
             Ok(SizeClass::Binary)
         } else {

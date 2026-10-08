@@ -459,7 +459,7 @@ export default function Workspace({
       <header className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2 shadow-card">
         <span className="flex items-center gap-1.5 pl-1 pr-0.5 text-sm font-semibold">
           <Brain className="size-4 text-primary" />
-          BrainStore
+          Brains
         </span>
         <Tooltip content={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}>
           <Button

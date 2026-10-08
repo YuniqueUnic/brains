@@ -1,6 +1,6 @@
 use crate::SqliteIndex;
-use brainstore_domain::FileKind;
-use brainstore_ports::{FileProjection, IndexStore, ListFilter, ListOrder, PARSER_VERSION};
+use brains_domain::FileKind;
+use brains_ports::{FileProjection, IndexStore, ListFilter, ListOrder, PARSER_VERSION};
 
 fn projection(path: &str, revision: &str, generation: i64, body: &str) -> FileProjection {
     FileProjection {

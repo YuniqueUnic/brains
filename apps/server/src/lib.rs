@@ -1,20 +1,20 @@
 //! brain-server library: the local-rust runtime profile (design §5.3, §9.2)
 //! — filesystem + SQLite adapters and the file-backed security store, wired
-//! into the shared axum layer from `brainstore-api-http`. Exposed so
+//! into the shared axum layer from `brains-api-http`. Exposed so
 //! integration tests can boot the exact production stack in-process.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use brainstore_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
-use brainstore_adapter_sqlite::SqliteIndex;
-use brainstore_api_http::auth::SecurityStore;
-use brainstore_api_http::state::{AppState, Blob, Head, Idx, Rev};
-use brainstore_application::Vault;
-use brainstore_domain::{CursorSigner, Limits};
+use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
+use brains_adapter_sqlite::SqliteIndex;
+use brains_api_http::auth::SecurityStore;
+use brains_api_http::state::{AppState, Blob, Head, Idx, Rev};
+use brains_application::Vault;
+use brains_domain::{CursorSigner, Limits};
 
-pub use brainstore_api_http::error;
-pub use brainstore_api_http::routes;
+pub use brains_api_http::error;
+pub use brains_api_http::routes;
 
 #[derive(Clone, Debug)]
 pub struct ServerConfig {
@@ -54,7 +54,7 @@ pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool),
     let store = FsStore::create(&config.data_dir, &config.vault)
         .or_else(|_| FsStore::open(&config.data_dir, &config.vault))
         .map_err(|e| format!("store init failed: {e}"))?;
-    let index = brainstore_adapter_sqlite::SqliteIndex::open(&config.data_dir.join("index.db"))
+    let index = brains_adapter_sqlite::SqliteIndex::open(&config.data_dir.join("index.db"))
         .map_err(|e| format!("index init failed: {e}"))?;
     let security =
         SecurityStore::open(&config.data_dir).map_err(|e| format!("security init failed: {e}"))?;
@@ -74,7 +74,7 @@ pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool),
         limits.clone(),
         CursorSigner::generate(),
     );
-    let capabilities = brainstore_domain::Capabilities::local(
+    let capabilities = brains_domain::Capabilities::local(
         &config.vault,
         limits.max_text_bytes,
         limits.max_attachment_bytes,
@@ -101,10 +101,10 @@ where
     let (state, plaintext, token_new) = build_state(&config)?;
     // First boot on a completely empty vault: lay down the template notes so
     // humans and AI agents start from guide content, not a blank screen.
-    match brainstore_application::seed::seed_if_empty(&state.vault).await {
+    match brains_application::seed::seed_if_empty(&state.vault).await {
         Ok(0) => {}
-        Ok(count) => eprintln!("brain-server: seeded {count} template notes into the empty vault."),
-        Err(e) => eprintln!("brain-server: template seeding failed (continuing): {e}"),
+        Ok(count) => eprintln!("brains-server: seeded {count} template notes into the empty vault."),
+        Err(e) => eprintln!("brains-server: template seeding failed (continuing): {e}"),
     }
     // build_router owns the body limit (from limits) and the JSON fallbacks;
     // here we only attach the outer JSON 404 for the no-SPA profile (§5.1).
@@ -118,19 +118,19 @@ where
         .await
         .map_err(|e| format!("cannot bind {addr}: {e}"))?;
     let local = listener.local_addr().map_err(|e| e.to_string())?;
-    if config.token.is_none() && std::env::var("BRAIN_TOKEN").is_err() {
+    if config.token.is_none() && std::env::var("BRAINS_TOKEN").is_err() {
         if token_new {
-            eprintln!("brain-server: generated root token (also stored in auth.json):");
+            eprintln!("brains-server: generated root token (also stored in auth.json):");
             eprintln!("  {plaintext}");
-            eprintln!("brain-server: pass it as `Authorization: Bearer <token>` or BRAIN_TOKEN.");
+            eprintln!("brains-server: pass it as `Authorization: Bearer <token>` or BRAINS_TOKEN.");
         } else {
-            eprintln!("brain-server: existing root token kept (recovered from auth.json).");
+            eprintln!("brains-server: existing root token kept (recovered from auth.json).");
         }
     }
     tracing::info!("listening on http://{local} (vault {:?})", config.vault);
     tokio::spawn(async move {
         if let Err(e) = axum::serve(listener, router).await {
-            eprintln!("brain-server: serve failed: {e}");
+            eprintln!("brains-server: serve failed: {e}");
         }
     });
     Ok(local)

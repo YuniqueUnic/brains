@@ -1,31 +1,31 @@
-# BrainStore 运行手册（local-rust profile）
+# Brains 运行手册（local-rust profile）
 
-面向本机运行与排障。协议与架构见 `brainstore-design/BrainStore-Architecture-v1.md`；本文只讲"怎么跑、怎么备份、怎么修索引"。
+面向本机运行与排障。协议与架构见 `brainstore-design/Brains-Architecture-v1.md`；本文只讲"怎么跑、怎么备份、怎么修索引"。
 
 ## 构建
 
 ```bash
-cargo build -p brainstore-server -p brainstore-cli   # 服务端 + CLI
+cargo build -p brains-server -p bsx   # 服务端 + CLI
 pnpm --dir apps/web build                            # Web 前端（产物 apps/web/dist）
 ```
 
 ## 启动服务
 
 ```bash
-./target/debug/brainstore-server \
+./target/debug/brains-server \
   --data-dir ./brain-data \
   --vault default \
   --bind 127.0.0.1 --port 8787 \
-  --token "$BRAIN_TOKEN" \
+  --token "$BRAINS_TOKEN" \
   --web-dist apps/web/dist
 ```
 
-- `--token`：注册（或替换）全库 root token；也可用环境变量 `BRAIN_TOKEN`。省略时**生成一个并打印一次**，落在 `--data-dir` 下（见下）。
+- `--token`：注册（或替换）全库 root token；也可用环境变量 `BRAINS_TOKEN`。省略时**生成一个并打印一次**，落在 `--data-dir` 下（见下）。
 - `--web-dist`：同源托管 Web 应用；缺省时纯 API 服务。
 - `--origin`：额外允许的 cookie 流 Origin；默认仅同源。
 - 服务启动时自动应用 `migrations/` 内嵌 SQL（索引库）；无需手工迁移。
 
-认证模型（设计 §15）：root token 存 `auth.json`（0600）；Web 登录后发 HMAC 签名会话 cookie `brain_session`（HttpOnly, SameSite=Lax），cookie 变更请求要求 CSRF token + Origin 校验；API 直连用 `Authorization: Bearer`。
+认证模型（设计 §15）：root token 存 `auth.json`（0600）；Web 登录后发 HMAC 签名会话 cookie `brains_session`（HttpOnly, SameSite=Lax），cookie 变更请求要求 CSRF token + Origin 校验；API 直连用 `Authorization: Bearer`。
 
 ## 数据布局（即裸备份布局）
 
@@ -45,31 +45,31 @@ pnpm --dir apps/web build                            # Web 前端（产物 apps/
 
 ## CLI
 
-`brainstore-cli --help`。常用链路：
+`bsx --help`。常用链路：
 
 ```bash
-brainstore-cli login --base-url http://127.0.0.1:8787 --token "$BRAIN_TOKEN"  # 写 ~/.brainstore/config.json
-brainstore-cli capabilities && brainstore-cli whoami
-brainstore-cli ls ""                              # `ls /` 同义；LsArgs 支持 --prefix/--limit 等
-brainstore-cli put note.md --file local.md       # 文本自动判型；二进制自动携带 X-Content-SHA256
-brainstore-cli cat note.md / stat note.md / history note.md / show <revision>
-brainstore-cli search "关键词" --mode literal|fts
-brainstore-cli links note.md --kind outbound|backlinks
-brainstore-cli patch note.md --set-kind note ...
-brainstore-cli cp a.md b.md / mv a.md b.md / diff a.md b.md
-brainstore-cli restore note.md --revision <hex>
-brainstore-cli reindex --all-pages                # 重建索引投影（不碰 store）
-brainstore-cli seed                              # 推送内置模板笔记（已存在的跳过，幂等）
-brainstore-cli export ./worktree                 # 导出可读工作树（两阶段 revision 锚定 + manifest + casefold/便携名检查）
-brainstore-cli edit note.md / add note.md        # $EDITOR 编辑后落库
+bsx login --base-url http://127.0.0.1:8787 --token "$BRAINS_TOKEN"  # 写 ~/.brains/config.json
+bsx capabilities && bsx whoami
+bsx ls ""                              # `ls /` 同义；LsArgs 支持 --prefix/--limit 等
+bsx put note.md --file local.md       # 文本自动判型；二进制自动携带 X-Content-SHA256
+bsx cat note.md / stat note.md / history note.md / show <revision>
+bsx search "关键词" --mode literal|fts
+bsx links note.md --kind outbound|backlinks
+bsx patch note.md --set-kind note ...
+bsx cp a.md b.md / mv a.md b.md / diff a.md b.md
+bsx restore note.md --revision <hex>
+bsx reindex --all-pages                # 重建索引投影（不碰 store）
+bsx seed                              # 推送内置模板笔记（已存在的跳过，幂等）
+bsx export ./worktree                 # 导出可读工作树（两阶段 revision 锚定 + manifest + casefold/便携名检查）
+bsx edit note.md / add note.md        # $EDITOR 编辑后落库
 ```
 
 冲突语义与 HTTP 一致：预置条件失败返回 412（携带当前 revision），CLI 报错并提示远端当前版本；不自动重试。
 
 ## 模板内容（首启播种）
 
-- **本地**：`brainstore-server` 启动时若 vault 完全为空（无任何 HEAD，含墓碑），自动写入 4 篇模板笔记：`README.md`、`docs/brainstore-guide.md`（使用规则）、`docs/ai-guide.md`（AI 协作守则）、`inbox/README.md`。有任何内容即跳过，绝不覆盖。
-- **云端**（Worker 首次部署后是空库）：`brainstore-cli --profile <cloud> seed` 推送同一套模板；已存在的路径自动跳过，可重复执行。
+- **本地**：`brains-server` 启动时若 vault 完全为空（无任何 HEAD，含墓碑），自动写入 4 篇模板笔记：`README.md`、`docs/brains-guide.md`（使用规则）、`docs/ai-guide.md`（AI 协作守则）、`inbox/README.md`。有任何内容即跳过，绝不覆盖。
+- **云端**（Worker 首次部署后是空库）：`bsx --profile <cloud> seed` 推送同一套模板；已存在的路径自动跳过，可重复执行。
 
 ## GitHub 自动 Release / 部署清单（真实运行所需）
 
@@ -86,13 +86,13 @@ git tag v0.1.0 && git push origin v0.1.0     # 或 Actions 页手动 dispatch �
 | 步骤 | 命令 / 位置 |
 |---|---|
 | repo secrets | `CLOUDFLARE_API_TOKEN`（Workers/R2/D1 编辑权限）、`CLOUDFLARE_ACCOUNT_ID`（GitHub → Settings → Secrets and variables → Actions） |
-| 资源开通（一次） | `pnpm --dir apps/worker exec wrangler r2 bucket create brainstore-data` |
-| | `pnpm --dir apps/worker exec wrangler d1 create brainstore-index` → 把输出的 `database_id` 填进 `apps/worker/wrangler.toml` |
+| 资源开通（一次） | `pnpm --dir apps/worker exec wrangler r2 bucket create brains-data` |
+| | `pnpm --dir apps/worker exec wrangler d1 create brains-index` → 把输出的 `database_id` 填进 `apps/worker/wrangler.toml` |
 | 实例密钥（一次，永不入库） | `cd apps/worker && pnpm exec wrangler secret put TOKEN_REGISTRY_JSON`（内容形如 `{"tokens":[{"id":"default","name":"owner","token_sha256":"<sha256(token)>","scopes":["read:/","write:/","admin:/"],"enabled":true}]}`） |
 | | `wrangler secret put SESSION_SIGNING_KEY`（64 位 hex）、`wrangler secret put CURSOR_SIGNING_KEY`（64 位 hex） |
 | 可选 var | `wrangler.toml` 的 `[vars]` 追加 `ALLOWED_ORIGINS = "https://a.example,https://b.example"`（跨域 cookie 白名单，缺省仅同源） |
 | 触发部署 | Actions → Deploy → Run workflow（可选先应用远程 D1 迁移），或本地 `pnpm --dir apps/worker exec wrangler deploy` |
-| 部署后 | 给空库灌内容：`brainstore-cli profile add cloud --url https://<worker>.workers.dev --token <token> && brainstore-cli --profile cloud seed` |
+| 部署后 | 给空库灌内容：`bsx profile add cloud --url https://<worker>.workers.dev --token <token> && bsx --profile cloud seed` |
 
 **3. CI（`.github/workflows/ci.yml`）**：push/PR 自动跑 Rust 全门禁 + web build + 双运行时 e2e + worker smoke，无 secret 依赖。
 
@@ -102,7 +102,7 @@ git tag v0.1.0 && git push origin v0.1.0     # 或 Actions 页手动 dispatch �
 pnpm --dir tests/e2e exec playwright test
 ```
 
-`tests/e2e/playwright.config.ts` 自动拉起独立服务实例（端口 18799、独立数据目录 `/tmp/brainstore-e2e-data`），需环境变量 `BRAIN_SERVER_BIN`（服务端二进制）与 `BRAIN_WEB_DIST`（前端产物）。本机注意：若 build-cache 守护进程会清理 `target/` 内二进制，把构建与测试放在同一条命令内执行。
+`tests/e2e/playwright.config.ts` 自动拉起独立服务实例（端口 18799、独立数据目录 `/tmp/brainstore-e2e-data`），需环境变量 `BRAINS_SERVER_BIN`（服务端二进制）与 `BRAINS_WEB_DIST`（前端产物）。本机注意：若 build-cache 守护进程会清理 `target/` 内二进制，把构建与测试放在同一条命令内执行。
 
 ## Cloudflare 本地模拟（wrangler dev，无需云凭据）
 
@@ -114,7 +114,7 @@ cargo install worker-build --locked
 pnpm --dir apps/web build
 cd apps/worker
 RUSTFLAGS='--cfg getrandom_backend="wasm_js"' worker-build --release   # 产物 build/worker/shim.mjs
-pnpm exec wrangler d1 migrations apply BRAIN_INDEX --local            # 幂等 schema（migrations/d1/）
+pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local            # 幂等 schema（migrations/d1/）
 pnpm exec wrangler dev --port 8799                                    # 本地 workerd，静态资源 + /api 同域
 ```
 
@@ -125,7 +125,7 @@ pnpm exec wrangler dev --port 8799                                    # 本地 w
 
 ## 排障
 
-- **搜索结果落后/缺失**：索引是有界投影，可能短暂落后于 HEAD（设计 §10，`complete=false` 或 503 Pending）。运行 `brainstore-cli reindex` 重建；无需重启。
+- **搜索结果落后/缺失**：索引是有界投影，可能短暂落后于 HEAD（设计 §10，`complete=false` 或 503 Pending）。运行 `bsx reindex` 重建；无需重启。
 - **412 VersionConflict**：另一客户端已推进 HEAD。重新读取后基于新基线重做；Web 端冲突视图提供三栏比较。
 - **token 丢失**：`--token` 重新注册即替换 root token；`secret.key` 删除会使所有 Web 会话失效（重登录即可），不影响数据。
-- **误删文件**：删除是墓碑（tombstone），历史保留；`brainstore-cli restore` 或 Web 回收站恢复，恢复产生新修订（generation 只前进）。
+- **误删文件**：删除是墓碑（tombstone），历史保留；`bsx restore` 或 Web 回收站恢复，恢复产生新修订（generation 只前进）。

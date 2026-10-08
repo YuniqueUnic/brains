@@ -6,9 +6,9 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 use std::collections::HashMap;
 
-use brainstore_api_types::{HistoryPage, RestoreBody, RevisionDto};
-use brainstore_application::Precondition;
-use brainstore_domain::{DomainError, HexId};
+use brains_api_types::{HistoryPage, RestoreBody, RevisionDto};
+use brains_application::Precondition;
+use brains_domain::{DomainError, HexId};
 
 use crate::auth::AuthSource;
 use crate::error::{ApiError, ApiResult};
@@ -128,7 +128,7 @@ pub async fn restore<H: Head, R: Rev, B: Blob, I: Idx>(
     Json(body): Json<RestoreBody>,
 ) -> ApiResult<Response> {
     let rid = request_id.0.as_str();
-    let path = brainstore_domain::VaultPath::new(&body.path).map_err(|e| ApiError::new(e, rid))?;
+    let path = brains_domain::VaultPath::new(&body.path).map_err(|e| ApiError::new(e, rid))?;
     if let Some(cookie) = auth.cookie_value() {
         crate::auth::guard_cookie_mutation(
             state.security.as_ref(),

@@ -29,7 +29,7 @@ jobs:
       - name: Tests (workspace, all features)
         run: cargo test --workspace --all-features
       - name: Worker wasm check
-        run: cargo check -p brainstore-worker --target wasm32-unknown-unknown
+        run: cargo check -p brains-worker --target wasm32-unknown-unknown
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
 
@@ -65,15 +65,15 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build server + web
         run: |
-          cargo build -p brainstore-server
+          cargo build -p brains-server
           pnpm --dir apps/web build
       - name: Install Playwright browser
         run: pnpm --dir tests/e2e exec playwright install --with-deps chromium
       - name: Run screenplay E2E
         working-directory: tests/e2e
         env:
-          BRAIN_SERVER_BIN: ${{ github.workspace }}/target/debug/brainstore-server
-          BRAIN_WEB_DIST: ${{ github.workspace }}/apps/web/dist
+          BRAINS_SERVER_BIN: ${{ github.workspace }}/target/debug/brains-server
+          BRAINS_WEB_DIST: ${{ github.workspace }}/apps/web/dist
         run: pnpm exec playwright test
       - name: Upload failure context
         if: failure()
@@ -110,7 +110,7 @@ jobs:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
       - name: Apply local D1 migrations
         working-directory: apps/worker
-        run: pnpm exec wrangler d1 migrations apply BRAIN_INDEX --local
+        run: pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local
       - name: Start workerd and run business smoke
         working-directory: apps/worker
         run: |
@@ -152,7 +152,7 @@ jobs:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
       - name: Apply local D1 migrations
         working-directory: apps/worker
-        run: pnpm exec wrangler d1 migrations apply BRAIN_INDEX --local
+        run: pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local
       - name: Start workerd
         working-directory: apps/worker
         run: |
@@ -165,8 +165,8 @@ jobs:
       - name: Run screenplay E2E against the Worker
         working-directory: tests/e2e
         env:
-          BRAIN_BASE_URL: http://127.0.0.1:8799
-          BRAIN_E2E_TOKEN: brain-dev-token-0000000000000000
+          BRAINS_BASE_URL: http://127.0.0.1:8799
+          BRAINS_E2E_TOKEN: brains-dev-token-0000000000000000
         run: pnpm exec playwright test
       - name: Upload failure context
         if: failure()

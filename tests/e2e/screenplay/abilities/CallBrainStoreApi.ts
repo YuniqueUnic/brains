@@ -1,18 +1,18 @@
 import { Ability } from "@serenity-js/core";
 
 /**
- * Technical capability to talk to BrainStore's HTTP API directly — the
+ * Technical capability to talk to Brains's HTTP API directly — the
  * "second client" in conflict scenarios (design §8.3) and a fast path for
  * test-data setup. No business logic lives here. Access via
- * `actor.abilityTo(CallBrainStoreApi)`.
+ * `actor.abilityTo(CallBrainsApi)`.
  */
-export class CallBrainStoreApi extends Ability {
+export class CallBrainsApi extends Ability {
   constructor(private readonly baseUrl: string, private readonly token: string) {
     super();
   }
 
-  static using(baseUrl: string, token: string): CallBrainStoreApi {
-    return new CallBrainStoreApi(baseUrl, token);
+  static using(baseUrl: string, token: string): CallBrainsApi {
+    return new CallBrainsApi(baseUrl, token);
   }
 
   async get(path: string): Promise<Response> {

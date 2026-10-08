@@ -8,7 +8,7 @@ pub mod markdown;
 pub use frontmatter::{Frontmatter, split_frontmatter};
 pub use markdown::{LinkKind, ParsedDocument, ResolvedLink, extract_links, extract_title};
 
-use brainstore_domain::{DomainError, VaultPath};
+use brains_domain::{DomainError, VaultPath};
 
 /// Parse a full text document into the projection used by the index.
 pub fn parse_document(path: &VaultPath, text: &str) -> Result<ParsedDocument, DomainError> {

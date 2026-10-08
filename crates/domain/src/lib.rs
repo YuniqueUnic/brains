@@ -1,4 +1,4 @@
-//! BrainStore domain: vault paths, immutable HEAD/revision records, error codes,
+//! Brains domain: vault paths, immutable HEAD/revision records, error codes,
 //! instance limits, authorization scopes and signed pagination cursors.
 //!
 //! This crate knows nothing about HTTP, filesystems, SQLite or Cloudflare.

@@ -11,10 +11,10 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use brainstore_domain::{DomainError, DomainResult, Principal, Scope};
+use brains_domain::{DomainError, DomainResult, Principal, Scope};
 
 const SESSION_TTL_SECONDS: u64 = 8 * 3600;
-pub const SESSION_COOKIE: &str = "brain_session";
+pub const SESSION_COOKIE: &str = "brains_session";
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TokenRecord {
@@ -25,7 +25,7 @@ pub struct TokenRecord {
     pub enabled: bool,
     /// Plaintext, stored ONLY for tokens this instance generated itself so a
     /// restart neither rotates nor loses the root credential. Tokens supplied
-    /// via `--token`/`BRAIN_TOKEN` are recorded as hashes only (0600 file).
+    /// via `--token`/`BRAINS_TOKEN` are recorded as hashes only (0600 file).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plaintext: Option<String>,
 }
@@ -83,7 +83,7 @@ pub fn issue_session_with_key(
         .strip_prefix("token:")
         .unwrap_or(&principal.actor)
         .to_owned();
-    let nonce = brainstore_domain::HexId::generate().as_str().to_owned();
+    let nonce = brains_domain::HexId::generate().as_str().to_owned();
     let exp = now_unix() + SESSION_TTL_SECONDS;
     let claims = SessionClaims { tid, exp, nonce };
     let json = serde_json::to_vec(&claims).expect("serializes");
@@ -306,8 +306,8 @@ impl SecurityStore {
         let plaintext = match token {
             Some(t) if !t.is_empty() => (t.to_owned(), None),
             _ => {
-                let generated = brainstore_domain::HexId::generate().as_str().to_owned()
-                    + brainstore_domain::HexId::generate().as_str();
+                let generated = brains_domain::HexId::generate().as_str().to_owned()
+                    + brains_domain::HexId::generate().as_str();
                 let stored = generated.clone();
                 (generated, Some(stored))
             }

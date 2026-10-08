@@ -1,5 +1,5 @@
 use crate::{LinkKind, ResolvedLink, extract_links, extract_title};
-use brainstore_domain::VaultPath;
+use brains_domain::VaultPath;
 
 #[test]
 fn resolves_relative_links() {

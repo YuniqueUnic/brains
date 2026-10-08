@@ -1,7 +1,7 @@
 //! Immutable revision records: create-only JSON files keyed by revision ID.
 
-use brainstore_domain::{DomainError, DomainResult, HexId, Revision};
-use brainstore_ports::RevisionStore;
+use brains_domain::{DomainError, DomainResult, HexId, Revision};
+use brains_ports::RevisionStore;
 
 use crate::{FsStore, read_json_file};
 

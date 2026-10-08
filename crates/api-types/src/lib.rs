@@ -4,7 +4,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use brainstore_domain::{EntryInfo, FileKind};
+use brains_domain::{EntryInfo, FileKind};
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -133,7 +133,7 @@ pub struct ContentRefDto {
 }
 
 impl RevisionDto {
-    pub fn from_revision(revision: &brainstore_domain::Revision, commit_state: &str) -> Self {
+    pub fn from_revision(revision: &brains_domain::Revision, commit_state: &str) -> Self {
         Self {
             revision: revision.revision.as_str().to_owned(),
             path: revision.path.clone(),

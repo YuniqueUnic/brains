@@ -1,5 +1,5 @@
 use crate::FsBlobStore;
-use brainstore_ports::BlobStore;
+use brains_ports::BlobStore;
 use sha2::{Digest, Sha256};
 
 use super::temp_store;
@@ -40,6 +40,6 @@ async fn reading_missing_blob_is_not_found() {
         .unwrap_err();
     assert!(matches!(
         err,
-        brainstore_domain::DomainError::NotFound { .. }
+        brains_domain::DomainError::NotFound { .. }
     ));
 }

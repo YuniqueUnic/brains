@@ -1,12 +1,12 @@
 [package]
-name = "brainstore-client"
+name = "brains-client"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-brainstore-api-types.workspace = true
-brainstore-domain.workspace = true
+brains-api-types.workspace = true
+brains-domain.workspace = true
 hex.workspace = true
 reqwest = { workspace = true, features = ["blocking"] }
 serde.workspace = true

@@ -3,7 +3,7 @@
 //! unchanged source. A source that moved mid-operation yields a partial
 //! result both sides keep, never a rollback of the user's target.
 
-use brainstore_domain::{
+use brains_domain::{
     AccessLevel, CopyProvenance, DomainError, DomainResult, HexId, Principal, VaultPath,
 };
 
@@ -30,10 +30,10 @@ pub struct TransferOutcome {
 
 impl<H, R, B, I> Vault<H, R, B, I>
 where
-    H: brainstore_ports::HeadStore + Send + Sync,
-    R: brainstore_ports::RevisionStore + Send + Sync,
-    B: brainstore_ports::BlobStore + Send + Sync,
-    I: brainstore_ports::IndexStore + Send + Sync,
+    H: brains_ports::HeadStore + Send + Sync,
+    R: brains_ports::RevisionStore + Send + Sync,
+    B: brains_ports::BlobStore + Send + Sync,
+    I: brains_ports::IndexStore + Send + Sync,
 {
     pub async fn copy_file(
         &self,
@@ -116,7 +116,7 @@ where
                 .ok_or_else(|| DomainError::NotFound {
                     path: input.source.as_str().to_owned(),
                 })?;
-        if source_head.head.state != brainstore_domain::HeadState::Live {
+        if source_head.head.state != brains_domain::HeadState::Live {
             return Err(DomainError::Trashed {
                 path: input.source.as_str().to_owned(),
                 revision: source_head.head.revision.as_str().to_owned(),

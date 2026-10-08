@@ -1,7 +1,7 @@
 //! TEMP probe: locate the non-Send component. Delete after diagnosis.
-use brainstore_application::Vault;
-use brainstore_domain::{Principal, VaultPath};
-use brainstore_ports::{BlobStore, HeadStore, IndexStore, RevisionStore};
+use brains_application::Vault;
+use brains_domain::{Principal, VaultPath};
+use brains_ports::{BlobStore, HeadStore, IndexStore, RevisionStore};
 
 #[allow(unused)]
 fn probe<

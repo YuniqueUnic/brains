@@ -6,7 +6,7 @@ import { SignIn, Visit } from "../screenplay/tasks/Authoring";
 import { Workbench } from "../screenplay/screens/Workbench";
 
 /** U-Auth: the browser session exchange (design §15.1). */
-describe("BrainStore login", () => {
+describe("Brains login", () => {
   it("rejects a wrong token with a visible error", async ({ actor }) => {
     await actor.attemptsTo(Visit());
     await actor.attemptsTo(

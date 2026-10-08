@@ -1,15 +1,15 @@
 //! Worker security backend (design §15.1): the token registry and signing
 //! keys come from Worker vars/secrets instead of the local `auth.json`, and
 //! reuse the exact same hashing, session-cookie and CSRF primitives as the
-//! file-backed store via `brainstore_api_http::auth`.
+//! file-backed store via `brains_api_http::auth`.
 
 use base64::Engine;
-use brainstore_api_http::auth::{
+use brains_api_http::auth::{
     Security, SessionClaims, TokenRecord, hash_token, issue_session_with_key, sign_with_key,
     verify_session_with_key,
 };
 
-use brainstore_domain::{DomainError, DomainResult, Principal, Scope};
+use brains_domain::{DomainError, DomainResult, Principal, Scope};
 
 pub struct EnvSecurity {
     registry: Vec<TokenRecord>,

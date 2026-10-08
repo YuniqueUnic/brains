@@ -219,7 +219,7 @@ async fn scoped_token_cannot_search_beyond_prefix() {
         .await;
     assert!(matches!(
         whole,
-        Err(brainstore_domain::DomainError::Forbidden(_))
+        Err(brains_domain::DomainError::Forbidden(_))
     ));
 
     // A prefix inside the scope works and never sees other scopes' hits.
