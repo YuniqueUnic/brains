@@ -652,7 +652,7 @@ export default function EditorPane({
     const current = stateRef.current;
     if (current.kind !== "dirty" && current.kind !== "error" && current.kind !== "saving") return;
     flushDrafts();
-    toast.info(t("draftStored"));
+    toast.info(t("draftStoredTitle"), { description: t("draftStoredHint") });
   }, [t]);
 
   // ⌘S stashes the draft; ⌘⏎ publishes. ⌘S must never create a revision.
@@ -774,13 +774,6 @@ export default function EditorPane({
                 {t("modePreview")}
               </Toggle>
             </ToggleGroup>
-            {onOpenProperties && (
-              <Tooltip content={`${t("properties")}（⌘I）`}>
-                <Button size="icon" aria-label={t("properties")} onClick={onOpenProperties}>
-                  <Info />
-                </Button>
-              </Tooltip>
-            )}
             {viewMode === "source" && (
               <>
             <Tooltip content={t("undoTooltip")}>
@@ -865,6 +858,13 @@ export default function EditorPane({
               </Menu.Portal>
             </Menu.Root>
             <EditorSettingsPopover settings={settings} onChange={updateSettings} />
+            {onOpenProperties && (
+              <Tooltip content={`${t("properties")}（⌘I）`}>
+                <Button size="icon" aria-label={t("properties")} onClick={onOpenProperties}>
+                  <Info />
+                </Button>
+              </Tooltip>
+            )}
           </div>
         )}
       </div>

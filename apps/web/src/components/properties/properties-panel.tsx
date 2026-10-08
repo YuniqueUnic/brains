@@ -1,14 +1,9 @@
 import { ArchiveRestore, Eye, History, Link2, ListTree, X } from "lucide-react";
-import { Tooltip as TooltipPrimitive } from "@base-ui-components/react/tooltip";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type Entry, type RevisionDto } from "../../api/client";
-import {
-  markdownToSafeHtml,
-  previewFor,
-  revisionPreviewFor,
-  type PreviewResult,
-} from "./preview";
+import { markdownToSafeHtml, previewFor, revisionPreviewFor } from "./preview";
+import { HoverPreview } from "../ui/hover-preview";
 import { ToggleGroupSection } from "../shell/toggle-section";
 import {
   AlertDialog,
@@ -36,56 +31,24 @@ import { Button } from "../ui/button";
  * click to jump / view, restore only through confirmation.
  */
 
-/** Hover popover body shared by backlink and history triggers. */
-function PreviewBody({ path, preview }: { path: string; preview: PreviewResult | null }) {
-  const { t } = useTranslation("info");
-  return (
-    <div className="flex h-auto max-h-[320px] items-start justify-center overflow-auto">
-      {preview === null ? (
-        <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewLoading")}</p>
-      ) : preview.kind === "image" ? (
-        <img src={preview.url} alt={path} className="max-h-[320px] w-auto object-contain" />
-      ) : preview.kind === "text" ? (
-        <div
-          className="markdown-preview w-full !py-4 text-[13px]"
-          dangerouslySetInnerHTML={{ __html: preview.html }}
-        />
-      ) : (
-        <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewUnavailable")}</p>
-      )}
-    </div>
-  );
-}
-
 function BacklinkItem({ source, onOpenFile }: { source: string; onOpenFile: (path: string) => void }) {
   const { t } = useTranslation("info");
-  const [preview, setPreview] = useState<PreviewResult | null>(null);
   return (
     <li>
-      <TooltipPrimitive.Root>
-        <TooltipPrimitive.Trigger
-          render={
-            <button
-              type="button"
-              onClick={() => onOpenFile(source)}
-              className="block w-full cursor-pointer truncate rounded-md px-1.5 py-1 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
-              title={t("openHint")}
-            >
-              {source}
-            </button>
-          }
-          onMouseEnter={() => {
-            void previewFor(source).then(setPreview, () => setPreview({ kind: "binary" }));
-          }}
-        />
-        <TooltipPrimitive.Portal>
-          <TooltipPrimitive.Positioner side="left" sideOffset={10} align="start">
-            <TooltipPrimitive.Popup className="z-50 max-h-[320px] w-[min(360px,80vw)] overflow-hidden rounded-[10px] border bg-card shadow-overlay">
-              <PreviewBody path={source} preview={preview} />
-            </TooltipPrimitive.Popup>
-          </TooltipPrimitive.Positioner>
-        </TooltipPrimitive.Portal>
-      </TooltipPrimitive.Root>
+      <HoverPreview
+        load={() => previewFor(source)}
+        onOpen={() => onOpenFile(source)}
+        trigger={
+          <button
+            type="button"
+            onClick={() => onOpenFile(source)}
+            className="block w-full cursor-pointer truncate rounded-md px-1.5 py-1 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
+            title={t("openHint")}
+          >
+            {source}
+          </button>
+        }
+      />
     </li>
   );
 }
@@ -100,26 +63,11 @@ function HistoryRowTooltip({
   revision: string;
   children: React.ReactNode;
 }) {
-  const [preview, setPreview] = useState<PreviewResult | null>(null);
   return (
-    <TooltipPrimitive.Root>
-      <TooltipPrimitive.Trigger
-        render={<div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>}
-        onMouseEnter={() => {
-          void revisionPreviewFor(path, revision).then(
-            setPreview,
-            () => setPreview({ kind: "binary" }),
-          );
-        }}
-      />
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Positioner side="left" sideOffset={10} align="start">
-          <TooltipPrimitive.Popup className="z-50 max-h-[320px] w-[min(360px,80vw)] overflow-hidden rounded-[10px] border bg-card shadow-overlay" role="tooltip">
-            <PreviewBody path={`${path}@${revision.slice(0, 8)}`} preview={preview} />
-          </TooltipPrimitive.Popup>
-        </TooltipPrimitive.Positioner>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
+    <HoverPreview
+      load={() => revisionPreviewFor(path, revision)}
+      trigger={<div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>}
+    />
   );
 }
 

@@ -5,9 +5,10 @@ import { cn } from "../../lib/utils";
 export type WorkspaceMode = "workspace" | "trash";
 
 /**
- * Sidebar (DESIGN.UI.md §10): nav (All files / Trash), the file tree, and a
- * one-line footer. 248px default, 220–320 resize window (handled by the
- * shell's resizable panel).
+ * Sidebar (DESIGN.UI.md §10): nav (All files / Trash), the mode's list
+ * (workspace tree or trash items — the caller picks), and a one-line footer.
+ * 248px default, 220–320 resize window (handled by the shell's resizable
+ * panel).
  */
 export function Sidebar({
   mode,
@@ -59,7 +60,7 @@ export function Sidebar({
         {navItem("trash", t("panelTrash"), Trash2, "toggle-trash")}
       </nav>
       <div className="mx-3 mb-1 h-px bg-border" />
-      {mode === "workspace" && children}
+      {children}
       <div className="flex h-8 shrink-0 items-center gap-2 px-3 text-[11px] text-faint">
         <FileText className="size-3.5 stroke-[1.5]" />
         <span>

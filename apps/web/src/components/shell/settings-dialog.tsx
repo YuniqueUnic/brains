@@ -47,7 +47,11 @@ export function loadUiSettings(): UiSettings {
 
 function applyUiSettings(settings: UiSettings) {
   document.documentElement.style.setProperty("--font-sans", FONT_STACKS[settings.font]);
-  document.documentElement.style.setProperty("--ui-font-size", `${settings.fontSize}px`);
+  // Interface size zooms the whole shell (px classes don't follow the body
+  // font-size; zoom scales text, spacing and icons together). Portals live
+  // inside body, so dialogs/toasts scale with everything else.
+  document.body.style.setProperty("--ui-font-size", `${settings.fontSize}px`);
+  document.body.style.zoom = String(settings.fontSize / 13);
 }
 
 export function UiSettingsProvider({ children }: { children: React.ReactNode }) {
@@ -109,12 +113,12 @@ export function SettingsDialog({
           <SettingRow label={t("settingsFontSize")}>
             <SliderRow
               value={settings.fontSize}
-              min={12}
-              max={15}
-              step={0.5}
+              min={8}
+              max={32}
+              step={1}
               suffix="px"
               onChange={(fontSize) => update({ fontSize })}
-              className="w-40"
+              className="w-44"
             />
           </SettingRow>
 

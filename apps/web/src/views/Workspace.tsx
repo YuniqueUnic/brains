@@ -16,7 +16,9 @@ import { FileTree, collectFolders, type TreeActions } from "../components/tree/f
 import { CommandPalette } from "../components/search/command-palette";
 import EditorPane, { type EditorState } from "../components/EditorPane";
 import { PropertiesPanel } from "../components/properties/properties-panel";
-import { TrashView } from "../components/trash/trash-view";
+import { TrashList } from "../components/trash/trash-list";
+import { TrashViewer } from "../components/trash/trash-viewer";
+import { newestContentful } from "../components/trash/content";
 import {
   UploadConflictDialog,
 } from "../components/upload/upload-conflict-dialog";
@@ -50,7 +52,11 @@ import { TriangleAlert, X, FolderInput } from "lucide-react";
  * mutations flow through the conditional-write API client.
  */
 
-type SidePanel = { type: "none" } | { type: "properties"; path: string | null };
+type SidePanel =
+  | { type: "none" }
+  // follow: the panel tracks the context selection (editor file in the
+  // workspace, trash selection in the trash) instead of a pinned path.
+  | { type: "properties"; path: string | null; follow: boolean };
 
 type DialogState =
   | null
@@ -78,9 +84,10 @@ export default function Workspace({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [panel, setPanel] = useState<SidePanel>({ type: "none" });
   const propertiesOpen = panel.type === "properties";
-  const propertiesPath = panel.type === "properties" ? panel.path : null;
-  const openProperties = (path: string | null) => setPanel({ type: "properties", path });
+  const openProperties = (path: string | null, follow = true) =>
+    setPanel({ type: "properties", path, follow });
   const closeProperties = () => setPanel({ type: "none" });
+  const [trashSelected, setTrashSelected] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchMode, setSearchMode] = useState<"literal" | "fts">("literal");
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -97,6 +104,14 @@ export default function Workspace({
   const editorRef = useRef(editor);
   editorRef.current = editor;
   const [banner, setBanner] = useState<string | null>(null);
+
+  // A restored (or externally vanished) tombstone leaves the trash list —
+  // the selection goes with it.
+  useEffect(() => {
+    if (trashSelected && !trashedFiles.some((item) => item.path === trashSelected)) {
+      setTrashSelected(null);
+    }
+  }, [trashedFiles, trashSelected]);
 
   const folders = useMemo(() => collectFolders(liveFiles), [liveFiles]);
   const folderSet = useMemo(() => new Set(folders), [folders]);
@@ -587,24 +602,25 @@ export default function Workspace({
   const restoreOne = async (path: string): Promise<boolean> => {
     // The tombstone itself has no content: restore the newest contentful
     // revision reachable from it (design §8.1: restore takes a live source).
-    const history = await api.history(path);
-    const anchor = history.anchor_revision;
-    let source: string | null = null;
-    let cursor: string | null = null;
-    let pages = 0;
-    do {
-      const page = await api.history(path, cursor ?? undefined);
-      const newestContentful = page.items.find((rev) => rev.action !== "trash");
-      if (newestContentful) {
-        source = newestContentful.revision;
-        break;
-      }
-      cursor = page.next_cursor;
-      pages += 1;
-    } while (cursor && pages < 10);
-    if (!source) return false;
-    await api.restore(path, source, anchor);
+    const found = await newestContentful(path);
+    if (!found) return false;
+    await api.restore(path, found.revision, found.anchor);
     return true;
+  };
+
+  // Restore from the properties panel while in the trash: base is the
+  // tombstone's anchor (the editor-based path only applies to live files).
+  const restoreTrashedRevision = (path: string, revision: string) => {
+    void (async () => {
+      try {
+        const anchor = (await api.history(path)).anchor_revision;
+        await api.restore(path, revision, anchor);
+        toast.success(t("bannerRestoredShort"));
+        await refreshFiles();
+      } catch (error) {
+        fail(error);
+      }
+    })();
   };
 
   const restoreFromTrash = async (path: string) => {
@@ -703,6 +719,15 @@ export default function Workspace({
 
   const activeEditorPath =
     editor.kind === "empty" || editor.kind === "loading" ? null : editor.path;
+  // The properties panel either follows the context selection (editor file
+  // in the workspace, trash selection in the trash) or stays pinned.
+  const contextPath = mode === "workspace" ? activeEditorPath : trashSelected;
+  const propertiesPath =
+    panel.type === "properties"
+      ? panel.follow
+        ? contextPath
+        : panel.path
+      : null;
 
   const restoreRevision = (path: string, revision: string, baseRevision: string) => {
     if (editorRef.current.kind !== "clean") {
@@ -732,11 +757,8 @@ export default function Workspace({
         setPaletteOpen((open) => !open);
       } else if (meta && event.key.toLowerCase() === "i") {
         event.preventDefault();
-        setPanel(
-          propertiesOpen && propertiesPath === activeEditorPath
-            ? { type: "none" }
-            : { type: "properties", path: activeEditorPath },
-        );
+        if (propertiesOpen && propertiesPath === activeEditorPath) setPanel({ type: "none" });
+        else openProperties(activeEditorPath, true);
       } else if (meta && event.key.toLowerCase() === "n") {
         event.preventDefault();
         setNewFilePath("");
@@ -849,23 +871,38 @@ export default function Workspace({
               setMode(next);
               setSelected(new Set());
               setRenaming(null);
+              setTrashSelected(null);
             }}
             fileCount={shownFiles.length}
             truncated={filesTruncated}
           >
-            <FileTree
-              files={liveFiles}
-              selected={selected}
-              activePath={activeEditorPath}
-              renamingPath={renaming}
-              selecting={selecting}
-              onToggleSelecting={() => {
-                setSelecting((value) => !value);
-                setSelected(new Set());
-              }}
-              actions={treeActions}
-              onSelectionChange={setSelected}
-            />
+            {mode === "workspace" ? (
+              <FileTree
+                files={liveFiles}
+                selected={selected}
+                activePath={activeEditorPath}
+                renamingPath={renaming}
+                selecting={selecting}
+                onToggleSelecting={() => {
+                  setSelecting((value) => !value);
+                  setSelected(new Set());
+                }}
+                actions={treeActions}
+                onSelectionChange={setSelected}
+              />
+            ) : (
+              <TrashList
+                items={trashedFiles}
+                selectedPath={trashSelected}
+                onSelect={(path) => {
+                  setTrashSelected(path);
+                  openProperties(path, true);
+                }}
+                onRestore={(path) => void restoreFromTrash(path)}
+                onRestoreAll={() => void batchRestore()}
+                restoringAll={restoringAll}
+              />
+            )}
           </Sidebar>
         </Panel>
 
@@ -895,12 +932,10 @@ export default function Workspace({
               />
             </div>
           ) : (
-            <TrashView
-              items={trashedFiles}
+            <TrashViewer
+              item={trashedFiles.find((one) => one.path === trashSelected) ?? null}
               onRestore={(path) => void restoreFromTrash(path)}
-              onBatchRestore={() => void batchRestore()}
               onCopyPath={treeActions.onCopyPath}
-              restoringAll={restoringAll}
             />
           )}
         </Panel>
@@ -913,14 +948,16 @@ export default function Workspace({
                 onOpenFile={requestOpen}
                 path={propertiesPath}
                 revision={
-                  propertiesPath && propertiesPath === activeEditorPath
+                  mode === "workspace" && propertiesPath && propertiesPath === activeEditorPath
                     ? (editor.kind !== "empty" && editor.kind !== "loading" && editor.kind !== "conflict"
                       ? editor.baseRevision
                       : null)
                     : null
                 }
                 onRestore={(revision) => {
-                  if (propertiesPath && propertiesPath === activeEditorPath && editor.kind !== "empty" && editor.kind !== "loading" && editor.kind !== "conflict") {
+                  if (mode === "trash" && propertiesPath) {
+                    restoreTrashedRevision(propertiesPath, revision);
+                  } else if (propertiesPath && propertiesPath === activeEditorPath && editor.kind !== "empty" && editor.kind !== "loading" && editor.kind !== "conflict") {
                     restoreRevision(propertiesPath, revision, editor.baseRevision);
                   } else if (propertiesPath) {
                     // Properties of a non-open file: restore against its HEAD.

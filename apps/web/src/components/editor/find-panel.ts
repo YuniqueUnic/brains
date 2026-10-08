@@ -41,7 +41,9 @@ export function createFindPanel(labels: FindPanelLabels): (view: EditorView) => 
     dom.className = "brains-find";
 
     const findInput = document.createElement("input");
-    findInput.className = "brains-find-input";
+    // flex-1: the find row stretches like the replace row below it, so the
+    // close button lands at the far edge instead of mid-panel.
+    findInput.className = "brains-find-input flex-1";
     findInput.placeholder = labels.find;
     findInput.spellcheck = false;
 
