@@ -1,6 +1,6 @@
 #!/bin/bash
 # Regenerate every committed API artifact from api/brains.idl.
-# Requires xidlc 0.95+: cargo install xidlc --locked --features cli,fmt
+# Requires xidlc 0.96+: cargo install xidlc --locked --features cli,fmt
 set -euo pipefail
 cd "$(dirname "$0")/.."
 XIDLC="${XIDLC:-$HOME/.cargo/bin/xidlc}"
@@ -14,12 +14,10 @@ mv sdk/openapi/openapi_brains.json sdk/openapi/brains-openapi.json
 
 "$XIDLC" gen --out-dir sdk/typescript typescript-rest api/brains.idl
 
-# xidlc 0.95 gaps: `rust-axum --client` omits named IDL structs, and the
-# `rust` target panics on interfaces — so generate types (from an interface-
-# stripped copy) and the client separately, then merge into one module.
-python3 scripts/splice-rust-types.py
-"$XIDLC" gen --out-dir /tmp/brains-sdk-types rust /tmp/brains-types.idl
+# xidlc 0.96 emits module types in the rust-axum client (xidl#295 part 1),
+# so one generation covers types + client. The @optional-header compile bug
+# (xidl#295 part 2, still open) is patched by scripts/patch-rust-sdk.py.
 "$XIDLC" gen --out-dir /tmp/brains-sdk-rs rust-axum --client api/brains.idl
-python3 scripts/merge-rust-sdk.py
+python3 scripts/patch-rust-sdk.py
 
 echo "sdk/ regenerated from api/brains.idl"

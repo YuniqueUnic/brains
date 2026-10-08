@@ -856,6 +856,14 @@
             }
           },
           {
+            "in": "query",
+            "name": "purge",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "in": "header",
             "name": "If-Match",
             "required": false,
