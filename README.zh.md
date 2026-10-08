@@ -13,6 +13,10 @@ BrainStore **不是** AI memory framework：没有召回引擎、没有向量库
 | ![登录](docs/screenshots/01-login.png) | ![工作台](docs/screenshots/02-workspace.png) |
 | *全库搜索* | *三栏冲突视图——绝不自动覆盖* |
 | ![搜索](docs/screenshots/03-search.png) | ![冲突](docs/screenshots/04-conflict.png) |
+| *暗色主题* | |
+| ![暗色](docs/screenshots/05-dark.png) | |
+
+Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空间化 i18n（简体中文 / English，基于 i18next）**，均可在顶栏一键切换并按浏览器记忆。
 
 ## 核心性质
 

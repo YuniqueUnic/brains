@@ -1,4 +1,5 @@
 import { Brain, KeyRound, LoaderCircle } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { api, ApiError, type SessionInfo } from "../api/client";
 import { Button } from "../components/ui/button";
@@ -11,6 +12,7 @@ export default function Login({
   onLogin: (session: SessionInfo) => void;
   error?: string;
 }) {
+  const { t } = useTranslation("login");
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(error ?? null);
@@ -25,7 +27,9 @@ export default function Login({
       onLogin(session);
     } catch (err) {
       setMessage(
-        err instanceof ApiError ? `登录失败：${err.message}` : "登录失败：网络错误",
+        err instanceof ApiError
+          ? t("failed", { message: err.message })
+          : t("networkError"),
       );
     } finally {
       setBusy(false);
@@ -43,14 +47,14 @@ export default function Login({
             <Brain className="size-6" />
           </span>
           <h1 className="text-base font-semibold text-foreground">BrainStore</h1>
-          <p className="text-xs text-muted-foreground">使用访问令牌登录本机知识库</p>
+          <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="relative">
           <KeyRound className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             data-testid="token-input"
             type="password"
-            placeholder="访问令牌"
+            placeholder={t("placeholder")}
             className="h-9 pl-8"
             value={token}
             onChange={(e) => setToken(e.target.value)}
@@ -64,7 +68,7 @@ export default function Login({
           disabled={busy || !token.trim()}
         >
           {busy && <LoaderCircle className="size-3.5 animate-spin" />}
-          {busy ? "登录中…" : "登录"}
+          {busy ? t("submitting") : t("submit")}
         </Button>
         {message && (
           <p

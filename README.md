@@ -13,6 +13,10 @@ BrainStore is *not* an AI memory framework. There is no recall engine, no vector
 | ![login](docs/screenshots/01-login.png) | ![workspace](docs/screenshots/02-workspace.png) |
 | *Full-text search* | *Three-way conflict view — nothing is ever auto-overwritten* |
 | ![search](docs/screenshots/03-search.png) | ![conflict](docs/screenshots/04-conflict.png) |
+| *Dark theme* | |
+| ![dark](docs/screenshots/05-dark.png) | |
+
+The web UI ships with **dark / light / system themes** and **i18n (zh-CN / English, namespace-based via i18next)** — switchable from the header; the choice persists per browser.
 
 ## Core properties
 

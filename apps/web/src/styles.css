@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Dark mode is class-driven (html.dark) so the toggle can override the
+   system preference; index.html applies the class before first paint. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
  * Design tokens — semantic shadcn model, palette follows the syzygy workbench
  * (cool gray-blue surfaces, one brand blue, green/amber/red states).
@@ -29,7 +33,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     --background: hsl(222 18% 10%);
     --foreground: hsl(216 24% 94%);
     --card: hsl(222 16% 14%);
@@ -50,6 +54,29 @@
     --ring: hsl(212 88% 68%);
     --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.28);
   }
+}
+
+/* Explicit toggle wins over the system preference (declared last). */
+.dark {
+  --background: hsl(222 18% 10%);
+  --foreground: hsl(216 24% 94%);
+  --card: hsl(222 16% 14%);
+  --muted: hsl(222 14% 20%);
+  --muted-foreground: hsl(220 12% 68%);
+  --border: hsl(222 12% 28%);
+  --input: hsl(222 12% 28%);
+  --primary: hsl(212 88% 68%);
+  --primary-foreground: hsl(222 22% 12%);
+  --secondary: hsl(222 14% 20%);
+  --secondary-foreground: hsl(216 24% 94%);
+  --accent: hsl(222 14% 22%);
+  --accent-foreground: hsl(216 24% 94%);
+  --destructive: hsl(0 72% 56%);
+  --destructive-foreground: hsl(0 0% 100%);
+  --success: hsl(142 60% 56%);
+  --warning: hsl(38 92% 58%);
+  --ring: hsl(212 88% 68%);
+  --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.28);
 }
 
 @theme inline {

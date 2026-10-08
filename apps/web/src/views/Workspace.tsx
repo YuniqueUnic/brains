@@ -3,6 +3,7 @@ import {
   Brain,
   FileText,
   FolderOpen,
+  Languages,
   LoaderCircle,
   LogOut,
   PanelLeftClose,
@@ -15,7 +16,13 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { useTranslation } from "react-i18next";
+import {
+  Group,
+  Panel,
+  Separator,
+  type PanelImperativeHandle,
+} from "react-resizable-panels";
 import {
   api,
   ApiError,
@@ -26,6 +33,7 @@ import {
 } from "../api/client";
 import EditorPane, { type EditorState } from "../components/EditorPane";
 import InfoPanel from "../components/InfoPanel";
+import { ThemeToggle } from "../components/ThemeToggle";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,11 +56,12 @@ import {
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Tooltip } from "../components/ui/tooltip";
+import { cycleLanguage } from "../i18n";
 import { cn } from "../lib/utils";
 
 /**
  * Main workspace (design §13.1) in the workbench shell shape: one header row,
- * then a three-column resizable grid — file list, editor, info panel. Each
+ * then a resizable three-column group — file list, editor, info panel. Each
  * column is its own card; the canvas stays quiet behind them.
  */
 export default function Workspace({
@@ -62,6 +71,8 @@ export default function Workspace({
   session: SessionInfo;
   onLogout: () => void;
 }) {
+  const { t } = useTranslation("workspace");
+  const { t: tCommon } = useTranslation("common");
   const [files, setFiles] = useState<Entry[]>([]);
   const [filesTruncated, setFilesTruncated] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
@@ -77,22 +88,36 @@ export default function Workspace({
   const [newFilePath, setNewFilePath] = useState("");
   const [showTrashConfirm, setShowTrashConfirm] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarPanel = useRef<PanelImperativeHandle | null>(null);
   // Opening another file with unsaved/conflicting text in the editor requires
   // an explicit discard — the confirm dialog reuses the trash pattern.
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
   const editorRef = useRef(editor);
   editorRef.current = editor;
 
+  const toggleSidebar = () => {
+    const panel = sidebarPanel.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) {
+      panel.expand();
+      setSidebarCollapsed(false);
+    } else {
+      panel.collapse();
+      setSidebarCollapsed(true);
+    }
+  };
+
   const fail = useCallback(
     (error: unknown) => {
       // An expired session has no in-page recovery: back to login.
       if (error instanceof ApiError && error.status === 401) {
+        setBanner(t("bannerAuthLost"));
         onLogout();
         return;
       }
       setBanner(error instanceof Error ? error.message : String(error));
     },
-    [onLogout],
+    [onLogout, t],
   );
 
   const refreshFiles = useCallback(async () => {
@@ -144,7 +169,7 @@ export default function Workspace({
       const meta = await api.readMeta(path);
       if (!isTextMedia(meta.media_type)) {
         setBanner(
-          `${path} 是二进制文件（${meta.media_type}），网页端仅提供下载；请用 CLI put/get 处理。`,
+          t("bannerBinary", { path, mediaType: meta.media_type }),
         );
         setEditor({ kind: "empty" });
         return;
@@ -155,7 +180,7 @@ export default function Workspace({
       const latest = await api.readMeta(path);
       if (latest.revision !== etag) {
         if (!isTextMedia(latest.media_type)) {
-          setBanner(`${path} 已被替换为二进制内容，网页端仅提供下载。`);
+          setBanner(t("bannerReplacedBinary", { path }));
           setEditor({ kind: "empty" });
           return;
         }
@@ -166,7 +191,7 @@ export default function Workspace({
       setEditor({ kind: "clean", path, text, baseText: text, baseRevision: etag });
     } catch (error) {
       if (error instanceof ApiError && error.status === 410) {
-        setBanner(`${path} 在回收站中；勾选“回收站”可查看与恢复。`);
+        setBanner(t("bannerInTrash", { path }));
         setEditor({ kind: "empty" });
         return;
       }
@@ -180,7 +205,7 @@ export default function Workspace({
     if (!path) return;
     const current = editorRef.current;
     if (current.kind === "dirty" || current.kind === "conflict" || current.kind === "error") {
-      setBanner("有未保存修改：请先保存（或放弃）后再新建文件。");
+      setBanner(t("blockedNewFile"));
       return;
     }
     try {
@@ -217,7 +242,7 @@ export default function Workspace({
         { mode: "create" },
         file.type || "application/octet-stream",
       );
-      setBanner(`${path} 已上传。`);
+      setBanner(t("bannerUploaded", { path }));
       await refreshFiles();
     } catch (error) {
       fail(error);
@@ -270,11 +295,11 @@ export default function Workspace({
         pages += 1;
       } while (cursor && pages < 10);
       if (!source) {
-        setBanner(`${path} 没有可恢复的历史版本。`);
+        setBanner(t("bannerNoHistory", { path }));
         return;
       }
       await api.restore(path, source, anchor);
-      setBanner(`${path} 已恢复为新版本。`);
+      setBanner(t("bannerRestored", { path }));
       await refreshFiles();
     } catch (error) {
       fail(error);
@@ -290,12 +315,12 @@ export default function Workspace({
           <Brain className="size-4 text-primary" />
           BrainStore
         </span>
-        <Tooltip content={sidebarCollapsed ? "展开侧栏" : "折叠侧栏"}>
+        <Tooltip content={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}>
           <Button
             variant="ghost"
             size="icon"
             aria-pressed={sidebarCollapsed}
-            onClick={() => setSidebarCollapsed((v) => !v)}
+            onClick={toggleSidebar}
           >
             {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
           </Button>
@@ -305,7 +330,7 @@ export default function Workspace({
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             data-testid="search-box"
-            placeholder="全库搜索（Enter 执行）"
+            placeholder={t("searchPlaceholder")}
             className="pr-16 pl-8"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -319,14 +344,14 @@ export default function Workspace({
               testid="mode-literal"
               onClick={() => setSearchMode("literal")}
             >
-              字面
+              {t("modeLiteral")}
             </ModeButton>
             <ModeButton
               active={searchMode === "fts"}
               testid="mode-fts"
               onClick={() => setSearchMode("fts")}
             >
-              FTS
+              {t("modeFts")}
             </ModeButton>
           </div>
         </div>
@@ -334,12 +359,12 @@ export default function Workspace({
         <div className="ml-auto flex items-center gap-1.5">
           <Button data-testid="new-file" onClick={() => setShowNewFile(true)}>
             <Plus />
-            新建
+            {tCommon("newFile")}
           </Button>
           <label>
             <Button variant="outline" className="cursor-pointer">
               <Upload />
-              上传
+              {tCommon("upload")}
               <input
                 type="file"
                 data-testid="upload-input"
@@ -359,14 +384,25 @@ export default function Workspace({
             onClick={() => setShowTrash((value) => !value)}
           >
             {showTrash ? <ArchiveRestore /> : <Trash2 />}
-            {showTrash ? "退出回收站" : "回收站"}
+            {showTrash ? tCommon("exitTrash") : tCommon("trash")}
           </Button>
+          <ThemeToggle />
+          <Tooltip content={tCommon("languageLabel")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="language"
+              onClick={() => cycleLanguage()}
+            >
+              <Languages />
+            </Button>
+          </Tooltip>
           <span className="ml-1 rounded-full bg-muted px-2 py-1 text-[10.5px] text-muted-foreground">
             {session.actor}
           </span>
           <Button variant="ghost" data-testid="logout" onClick={onLogout}>
             <LogOut />
-            退出
+            {tCommon("logout")}
           </Button>
         </div>
       </header>
@@ -382,7 +418,7 @@ export default function Workspace({
             <span className="min-w-0 flex-1 leading-relaxed">{banner}</span>
             <button
               onClick={() => setBanner(null)}
-              aria-label="关闭提示"
+              aria-label={tCommon("close")}
               className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <X className="size-3.5" />
@@ -391,12 +427,14 @@ export default function Workspace({
         </div>
       )}
 
-      <PanelGroup direction="horizontal" className="min-h-0 flex-1 gap-2">
+      <Group orientation="horizontal" className="min-h-0 flex-1 gap-2">
         <Panel
-          defaultSize={24}
-          minSize={16}
-          maxSize={45}
-          className={cn(sidebarCollapsed && "hidden")}
+          panelRef={sidebarPanel}
+          collapsible
+          collapsedSize="0"
+          defaultSize="24"
+          minSize="16"
+          maxSize="45"
         >
           <div className="flex h-full min-h-0 flex-col gap-2">
             {searchResults && (
@@ -407,13 +445,18 @@ export default function Workspace({
                 <div className="flex items-center gap-2 border-b px-3 py-2">
                   <Search className="size-3.5 shrink-0 text-muted-foreground" />
                   <h3 className="min-w-0 flex-1 truncate text-xs font-semibold">
-                    搜索“{searchQuery}” — {searchResults.length} 个命中
+                    {t("searchResultsTitle", {
+                      query: searchQuery,
+                      count: searchResults.length,
+                    })}
                     {searchIncomplete && (
-                      <span className="font-normal text-destructive">（未翻完全库）</span>
+                      <span className="font-normal text-destructive">
+                        {t("searchIncomplete")}
+                      </span>
                     )}
                     {searchBuilding && (
                       <span className="font-normal text-muted-foreground">
-                        （索引建库中，结果可能不全）
+                        {t("searchBuilding")}
                       </span>
                     )}
                   </h3>
@@ -421,7 +464,7 @@ export default function Workspace({
                     <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
                   )}
                   <button
-                    aria-label="关闭搜索结果"
+                    aria-label={t("closeSearch")}
                     className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={() => setSearchResults(null)}
                   >
@@ -450,7 +493,7 @@ export default function Workspace({
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card shadow-card">
               <div className="flex items-center gap-2 border-b px-3 py-2">
                 <h2 className="flex-1 text-xs font-semibold">
-                  {showTrash ? "回收站" : "文件"}
+                  {showTrash ? t("panelTrash") : t("panelFiles")}
                   <span className="ml-1.5 font-normal text-muted-foreground">
                     {files.length}
                   </span>
@@ -460,7 +503,7 @@ export default function Workspace({
                     className="text-[10.5px] text-muted-foreground"
                     data-testid="files-truncated"
                   >
-                    列表未翻完
+                    {t("truncated")}
                   </span>
                 )}
               </div>
@@ -468,7 +511,7 @@ export default function Workspace({
                 {files.length === 0 && (
                   <div className="flex flex-col items-center gap-2 px-3 py-8 text-muted-foreground">
                     <FolderOpen className="size-5 opacity-60" />
-                    <p className="text-xs">没有文件</p>
+                    <p className="text-xs">{t("noFiles")}</p>
                   </div>
                 )}
                 <ul className="space-y-0.5">
@@ -485,15 +528,15 @@ export default function Workspace({
                         </span>
                         {file.state === "trashed" && (
                           <span className="shrink-0 rounded-full bg-warning/12 px-1.5 py-0.5 text-[9.5px] text-warning">
-                            已删除
+                            {t("trashedBadge")}
                           </span>
                         )}
                       </button>
                       {file.state === "trashed" && (
                         <button
                           className="restore-button absolute bottom-1/2 right-1.5 translate-y-1/2 rounded-md bg-card/95 p-1 text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100"
-                          aria-label={`恢复 ${file.path}`}
-                          title="恢复到文件列表"
+                          aria-label={t("restoreAria", { path: file.path })}
+                          title={t("restoreTooltip")}
                           onClick={(e) => {
                             e.stopPropagation();
                             void restoreFromTrash(file.path);
@@ -510,15 +553,15 @@ export default function Workspace({
           </div>
         </Panel>
 
-        {!sidebarCollapsed && <ResizeHandle />}
+        <ResizeSeparator />
 
-        <Panel minSize={35}>
+        <Panel minSize="35">
           <EditorPane
             state={editor}
             onChange={setEditor}
             onStateChange={setEditor}
             onAuthLost={() => {
-              setBanner("登录已过期，请重新登录。");
+              setBanner(t("bannerAuthLost"));
               onLogout();
             }}
             canTrash={canTrash}
@@ -526,9 +569,9 @@ export default function Workspace({
           />
         </Panel>
 
-        <ResizeHandle />
+        <ResizeSeparator />
 
-        <Panel defaultSize={22} minSize={15} maxSize={40}>
+        <Panel defaultSize="22" minSize="15" maxSize="40">
           <InfoPanel
             path={infoPath(editor)}
             revision={infoRevision(editor)}
@@ -536,7 +579,7 @@ export default function Workspace({
               // Restoring replaces the buffer: only a clean editor may lose it
               // silently; dirty/conflict editors must resolve first.
               if (editor.kind !== "clean") {
-                setBanner("有未保存修改：请先保存（或放弃修改）后再恢复历史版本。");
+                setBanner(t("blockedRestore"));
                 return;
               }
               void (async () => {
@@ -551,7 +594,7 @@ export default function Workspace({
                     baseText: text,
                     baseRevision: etag,
                   });
-                  setBanner(`已恢复。`);
+                  setBanner(t("bannerRestoredShort"));
                   await refreshFiles();
                 } catch (error) {
                   fail(error);
@@ -560,18 +603,18 @@ export default function Workspace({
             }}
           />
         </Panel>
-      </PanelGroup>
+      </Group>
 
       <Dialog open={showNewFile} onOpenChange={setShowNewFile}>
         <DialogContent data-testid="new-file-dialog">
           <DialogHeader>
-            <DialogTitle>新建文件</DialogTitle>
-            <DialogDescription>vault 内相对路径，例如 inbox/idea.md</DialogDescription>
+            <DialogTitle>{t("newFileDialogTitle")}</DialogTitle>
+            <DialogDescription>{t("newFileDialogHint")}</DialogDescription>
           </DialogHeader>
           <div className="px-5 pt-4">
             <Input
               data-testid="new-file-path"
-              placeholder="inbox/idea.md"
+              placeholder={t("newFilePlaceholder")}
               value={newFilePath}
               onChange={(e) => setNewFilePath(e.target.value)}
               onKeyDown={(e) => {
@@ -582,10 +625,10 @@ export default function Workspace({
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewFile(false)}>
-              取消
+              {tCommon("cancel")}
             </Button>
             <Button data-testid="new-file-confirm" onClick={() => void newFile()}>
-              创建
+              {tCommon("create")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -593,18 +636,18 @@ export default function Workspace({
 
       <AlertDialog open={showTrashConfirm} onOpenChange={setShowTrashConfirm}>
         <AlertDialogContent data-testid="trash-confirm">
-          <AlertDialogTitle>移入回收站？</AlertDialogTitle>
-          <AlertDialogDescription>
-            未保存的修改会一并丢弃（无法恢复）；历史版本保留，可随时恢复。
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t("trashConfirmTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>{t("trashConfirmBody")}</AlertDialogDescription>
           <AlertDialogFooter>
-            <AlertDialogCancel className={alertCancelClass()}>取消</AlertDialogCancel>
+            <AlertDialogCancel className={alertCancelClass()}>
+              {tCommon("cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
               data-testid="trash-confirm-yes"
               className={alertActionClass("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
               onClick={() => void trashCurrent()}
             >
-              移入回收站
+              {t("trashConfirmAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -612,12 +655,14 @@ export default function Workspace({
 
       <AlertDialog open={pendingOpen !== null} onOpenChange={(open) => !open && setPendingOpen(null)}>
         <AlertDialogContent data-testid="open-confirm">
-          <AlertDialogTitle>放弃未保存的修改？</AlertDialogTitle>
+          <AlertDialogTitle>{t("openConfirmTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            当前有未保存修改或未解决的冲突，放弃并打开 {pendingOpen}？
+            {t("openConfirmBody", { path: pendingOpen ?? "" })}
           </AlertDialogDescription>
           <AlertDialogFooter>
-            <AlertDialogCancel className={alertCancelClass()}>取消</AlertDialogCancel>
+            <AlertDialogCancel className={alertCancelClass()}>
+              {tCommon("cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
               data-testid="open-confirm-yes"
               className={alertActionClass("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
@@ -627,7 +672,7 @@ export default function Workspace({
                 if (path) void openFile(path);
               }}
             >
-              放弃并打开
+              {t("openConfirmAction")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -664,11 +709,9 @@ function ModeButton({
   );
 }
 
-function ResizeHandle() {
+function ResizeSeparator() {
   return (
-    <PanelResizeHandle className="group relative w-2">
-      <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/40 group-data-[resize-handle-state=drag]:bg-primary/60" />
-    </PanelResizeHandle>
+    <Separator className="group relative w-1 rounded-full bg-transparent transition-colors hover:bg-primary/40 data-[state=dragging]:bg-primary/60" />
   );
 }
 

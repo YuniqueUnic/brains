@@ -6,8 +6,8 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
-    // CodeMirror + marked account for the bundle; this is a local-first app.
-    chunkSizeWarningLimit: 900,
+    // CodeMirror + marked + i18next account for the bundle; local-first app.
+    chunkSizeWarningLimit: 1000,
   },
   server: {
     proxy: {

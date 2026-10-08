@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { History, Link2, ListTree, ArchiveRestore, Hash } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api, type Entry, type RevisionDto } from "../api/client";
 
 /** Right-hand metadata panel: entry facts, links and reachable history. */
@@ -12,6 +13,7 @@ export default function InfoPanel({
   revision: string | null;
   onRestore: (revision: string) => void;
 }) {
+  const { t } = useTranslation("info");
   const [meta, setMeta] = useState<Entry | null>(null);
   const [history, setHistory] = useState<RevisionDto[]>([]);
   const [links, setLinks] = useState<{ outbound: number; backlinks: string[] }>({
@@ -49,7 +51,7 @@ export default function InfoPanel({
     return (
       <aside className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <ListTree className="size-5 opacity-60" />
-        <p className="text-xs">未选择文件</p>
+        <p className="text-xs">{t("noSelection")}</p>
       </aside>
     );
   }
@@ -57,7 +59,7 @@ export default function InfoPanel({
   return (
     <aside className="flex h-full min-h-0 flex-col gap-3 overflow-auto" data-testid="info-panel">
       {meta && (
-        <Section icon={<Hash className="size-3.5" />} title="元信息">
+        <Section icon={<Hash className="size-3.5" />} title={t("meta")}>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11.5px]">
             <Fact label="generation" value={String(meta.generation)} mono />
             <Fact label="kind" value={meta.kind ?? "-"} mono />
@@ -69,7 +71,7 @@ export default function InfoPanel({
 
       <Section icon={<Link2 className="size-3.5" />} title="链接">
         <p className="text-[11.5px] text-muted-foreground">
-          出链 {links.outbound} · 反链 {links.backlinks.length}
+          {t("linkSummary", { outbound: links.outbound, backlinks: links.backlinks.length })}
         </p>
         {links.backlinks.length > 0 && (
           <ul className="mt-1 space-y-0.5">
@@ -102,13 +104,13 @@ export default function InfoPanel({
               </span>
               {rev.revision === revision ? (
                 <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                  当前
+                  {t("current")}
                 </span>
               ) : rev.action === "trash" ? (
                 // A tombstone has no content to restore; the trash view's
                 // restore walks history for the newest contentful revision.
                 <span className="shrink-0 text-[10px] text-muted-foreground">
-                  墓碑（回收站可恢复）
+                  {t("tombstone")}
                 </span>
               ) : (
                 <button
@@ -117,13 +119,13 @@ export default function InfoPanel({
                   className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring"
                 >
                   <ArchiveRestore className="size-3" />
-                  恢复此版本
+                  {t("restoreRevision")}
                 </button>
               )}
             </li>
           ))}
           {history.length === 0 && (
-            <li className="px-1.5 text-[11px] text-muted-foreground">暂无历史版本</li>
+            <li className="px-1.5 text-[11px] text-muted-foreground">{t("noHistory")}</li>
           )}
         </ul>
       </Section>

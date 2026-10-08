@@ -3,6 +3,7 @@ import { EditorState as CodeMirrorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { CopyPlus, GitMerge, Save, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import { Button } from "./ui/button";
 import { SaveIndicator, type SaveTone } from "./SaveIndicator";
@@ -65,6 +66,7 @@ export default function EditorPane({
   onTrashCurrent?: () => void;
   canTrash?: boolean;
 }) {
+  const { t } = useTranslation("editor");
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const stateRef = useRef<EditorState>(state);
@@ -211,7 +213,7 @@ export default function EditorPane({
         try {
           remoteText = (await api.readText(current.path)).text;
         } catch {
-          remoteText = "(无法读取远端当前内容)";
+          remoteText = t("conflictRemotePlaceholder");
         }
         if (!stillMine()) return;
         const conflict: EditorState = {
@@ -254,7 +256,7 @@ export default function EditorPane({
   const createSave = async () => {
     const current = stateRef.current;
     if (current.kind !== "clean" && current.kind !== "dirty") return;
-    const path = window.prompt("新文件路径（vault 内相对路径）:", current.path);
+    const path = window.prompt(t("saveAsPrompt"), current.path);
     if (!path) return;
     try {
       const result = await api.saveText(path, current.text, { mode: "create" });
@@ -291,13 +293,13 @@ export default function EditorPane({
         </span>
         <SaveIndicator
           tone={statusTone(state)}
-          label={statusText(state)}
+          label={statusLabel(state, t)}
           busy={state.kind === "saving" || state.kind === "loading"}
           title={state.kind === "error" ? state.message : undefined}
         />
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-1">
-            <Tooltip content="保存（⌘S）">
+            <Tooltip content={t("saveTooltip")}>
               <Button
                 data-testid="save-button"
                 size="sm"
@@ -307,18 +309,18 @@ export default function EditorPane({
                 {state.kind === "dirty" || state.kind === "error" ? (
                   <Save className="size-3.5" />
                 ) : null}
-                保存
+                {t("save")}
               </Button>
             </Tooltip>
             {state.kind === "clean" || state.kind === "dirty" ? (
-              <Tooltip content="另存为新文件">
+              <Tooltip content={t("saveAs")}>
                 <Button variant="ghost" size="icon" onClick={() => void createSave()}>
                   <CopyPlus />
                 </Button>
               </Tooltip>
             ) : null}
             {canTrash ? (
-              <Tooltip content="移入回收站">
+              <Tooltip content={t("trashTooltip")}>
                 <Button
                   variant="dangerGhost"
                   size="icon"
@@ -354,19 +356,23 @@ export default function EditorPane({
               <path d="M4 5.5v13" />
               <path d="M9 8h7M9 11.5h5" strokeLinecap="round" />
             </svg>
-            <p className="text-xs">从左侧选择或新建一个文件</p>
+            <p className="text-xs">{t("emptyState")}</p>
           </div>
         )}
       </div>
 
       <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
         <span className="font-mono">
-          {stats.chars} 字符 · {stats.words} 词 · {stats.lines} 行
+          {t("stats", {
+            chars: stats.chars,
+            words: stats.words,
+            lines: stats.lines,
+          })}
         </span>
         <span className="font-mono">
           {inConflict || state.kind === "empty" || state.kind === "loading"
             ? null
-            : `rev ${state.baseRevision.slice(0, 8)}`}
+            : t("revLabel", { revision: state.baseRevision.slice(0, 8) })}
         </span>
       </div>
     </div>
@@ -384,6 +390,7 @@ function ConflictView({
 }) {
   // True while THIS conflict still owns the editor (the human may have
   // opened another file while the request was in flight).
+  const { t } = useTranslation("editor");
   const stillMine = () =>
     stateRef.current.kind === "conflict" &&
     stateRef.current.path === state.path &&
@@ -408,7 +415,7 @@ function ConflictView({
         } catch {
           // Never pair a NEW revision with the STALE text the human compared:
           // keep the old pair together and say why (design §13.2).
-          notice = "远端已再次推进，但暂无法读取其内容；请重试后再决定。";
+          notice = t("conflictReReadFailed");
         }
         onChange({
           ...state,
@@ -449,9 +456,9 @@ function ConflictView({
       <div className="flex items-start gap-2">
         <GitMerge className="mt-0.5 size-4 shrink-0" style={{ color: "var(--warning)" }} />
         <div className="min-w-0 flex-1">
-          <p className="text-[12.5px] font-semibold">版本冲突 — 保存期间文件已被其他客户端修改</p>
+          <p className="text-[12.5px] font-semibold">{t("conflictTitle")}</p>
           <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-            当前远端版本 {state.remoteRevision.slice(0, 8)}…。请比较三个版本后选择操作；不会自动覆盖。
+            {t("conflictDesc", { revision: state.remoteRevision.slice(0, 8) })}
           </p>
         </div>
       </div>
@@ -468,29 +475,31 @@ function ConflictView({
         </p>
       )}
       <div className="grid min-h-0 flex-1 grid-cols-3 gap-2">
-        <ConflictColumn label="基线（你的起点）" value={state.baseText} />
+        <ConflictColumn label={t("conflictBase")} value={state.baseText} />
         <div className="flex min-h-0 flex-col gap-1">
-          <span className="text-[11px] font-medium text-muted-foreground">本地（你的修改，可编辑）</span>
+          <span className="text-[11px] font-medium text-muted-foreground">
+            {t("conflictLocal")}
+          </span>
           <textarea
             className="min-h-0 flex-1 resize-none rounded-md border bg-card p-2 font-mono text-xs focus-visible:border-primary focus-visible:outline-none"
             value={state.localText}
             onChange={(e) => onChange({ ...state, localText: e.target.value })}
           />
         </div>
-        <ConflictColumn label="远端（当前版本）" value={state.remoteText} />
+        <ConflictColumn label={t("conflictRemote")} value={state.remoteText} />
       </div>
       <div className="flex items-center justify-end gap-2">
         <Button data-testid="conflict-keep-local" onClick={() => void saveWithRemoteBase()}>
-          以本地内容保存（基于远端当前版本）
+          {t("conflictKeepLocal")}
         </Button>
         <Button
           variant="outline"
           data-testid="conflict-take-remote"
           onClick={takeRemote}
           disabled={!remoteUsable}
-          title={remoteUsable ? undefined : "远端内容暂不可读取，不能采用"}
+          title={remoteUsable ? undefined : t("conflictRemoteUnreadable")}
         >
-          放弃本地，采用远端
+          {t("conflictTakeRemote")}
         </Button>
       </div>
     </div>
@@ -527,22 +536,22 @@ function statusTone(state: EditorState): SaveTone {
   }
 }
 
-function statusText(state: EditorState): string {
+function statusLabel(state: EditorState, t: (key: string) => string): string {
   switch (state.kind) {
     case "empty":
-      return "未打开文件";
+      return t("statusEmpty");
     case "loading":
-      return "加载中…";
+      return t("statusLoading");
     case "clean":
-      return "已保存";
+      return t("statusSaved");
     case "dirty":
-      return "未保存修改";
+      return t("statusDirty");
     case "saving":
-      return "保存中…";
+      return t("statusSaving");
     case "conflict":
-      return "版本冲突";
+      return t("statusConflict");
     case "error":
-      return state.message ?? "保存失败";
+      return state.message ?? t("statusFailed");
   }
 }
 

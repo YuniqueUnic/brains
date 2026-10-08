@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>BrainStore</title>
+    <script>
+      // Apply the stored theme before first paint to avoid a flash of the
+      // wrong palette; the React ThemeProvider takes over after hydration.
+      try {
+        var t = localStorage.getItem("brainstore-theme") || "system";
+        var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        document.documentElement.classList.toggle("dark", dark);
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

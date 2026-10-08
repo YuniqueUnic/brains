@@ -91,5 +91,16 @@ if (columns[1] === 0 || columns[2] === 0) {
 }
 await page.screenshot({ path: `${OUT}/04-conflict.png` });
 
+// 5. Dark theme (explicit toggle), same note open.
+await page.evaluate(() => localStorage.setItem("brainstore-theme", "dark"));
+await page.reload();
+await page.getByTestId("file-list").waitFor();
+await page.locator(".file-path", { hasText: "rust-ci-cache.md" }).first().click();
+await page.waitForFunction(() =>
+  document.querySelector('[data-testid="editor-status"]')?.textContent === "已保存",
+);
+await page.waitForTimeout(600);
+await page.screenshot({ path: `${OUT}/05-dark.png` });
+
 await browser.close();
 console.log("screenshots written to", OUT);

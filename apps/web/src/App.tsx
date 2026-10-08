@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api, ApiError, type SessionInfo } from "./api/client";
 import { TooltipProvider } from "./components/ui/tooltip";
 import Login from "./views/Login";
@@ -10,6 +11,7 @@ type SessionState =
   | { kind: "ready"; session: SessionInfo };
 
 export default function App() {
+  const { t } = useTranslation("login");
   const [state, setState] = useState<SessionState>({ kind: "checking" });
 
   useEffect(() => {
@@ -20,7 +22,11 @@ export default function App() {
   }, []);
 
   if (state.kind === "checking") {
-    return <div className="flex h-full items-center justify-center text-muted-foreground">连接中…</div>;
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        {t("connecting")}
+      </div>
+    );
   }
   if (state.kind === "anonymous") {
     return (
