@@ -4,7 +4,7 @@ import { Text } from "@serenity-js/web";
 import { EditorArea } from "../screens/EditorArea";
 import { Workbench } from "../screens/Workbench";
 
-/** The editor status line text (已保存 / 未保存修改 / 保存中… / 版本冲突…). */
+/** The editor status line text (已发布 / 未发布草稿 / 发布中… / 版本冲突…). */
 export const EditorStatus = () => Text.of(EditorArea.status());
 
 /** The banner text, or an empty string when no banner is shown. */

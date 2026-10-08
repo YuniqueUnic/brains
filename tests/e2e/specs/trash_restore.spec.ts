@@ -7,7 +7,7 @@ import {
   equals,
 } from "@serenity-js/assertions";
 import { Duration } from "@serenity-js/core";
-import { Click, Press, Text } from "@serenity-js/web";
+import { By, Click, PageElement, Press, Text } from "@serenity-js/web";
 
 import { CreateNote, RewriteNote, SignIn } from "../screenplay/tasks/Authoring";
 import { OpenNote, ToggleTrash } from "../screenplay/tasks/Navigation";
@@ -15,7 +15,7 @@ import { Workbench } from "../screenplay/screens/Workbench";
 import { EditorArea } from "../screenplay/screens/EditorArea";
 import { BannerText, EditorStatus, ListedFiles } from "../screenplay/questions/Views";
 
-const SAVED = equals("已保存");
+const SAVED = equals("已发布");
 
 /**
  * U07/U08: soft delete keeps a recoverable tombstone; restore creates a NEW
@@ -69,6 +69,14 @@ describe("trash and restore", () => {
       Ensure.eventually(Text.of(EditorArea.historyList()), includes("gen 3"))
         .timeoutAfter(Duration.ofSeconds(10)),
       Click.on(EditorArea.restoreRevisionButtonForGeneration(2)),
+      // Destructive: restore goes through the confirm dialog.
+      Ensure.eventually(
+        Text.of(PageElement.located(By.css('[data-testid="restore-revision-confirm"]'))),
+        includes("恢复此历史版本"),
+      ).timeoutAfter(Duration.ofSeconds(10)),
+      Click.on(
+        PageElement.located(By.css('[data-testid="restore-revision-confirm-yes"]')),
+      ),
       Ensure.eventually(BannerText(), includes("已恢复"))
         .timeoutAfter(Duration.ofSeconds(10)),
       Ensure.eventually(Text.of(EditorArea.content()), includes("第一版内容"))

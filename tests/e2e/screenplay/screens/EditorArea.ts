@@ -8,8 +8,8 @@ export const EditorArea = {
     PageElement.located(By.css('[data-testid="editor-path"]')).describedAs("editor path"),
   status: () =>
     PageElement.located(By.css('[data-testid="editor-status"]')).describedAs("editor status"),
-  saveButton: () =>
-    PageElement.located(By.css('[data-testid="save-button"]')).describedAs("save button"),
+  publishButton: () =>
+    PageElement.located(By.css('[data-testid="publish-button"]')).describedAs("publish button"),
   content: () =>
     PageElement.located(By.css(".cm-content")).describedAs("editor content"),
   trashCurrentButton: () =>

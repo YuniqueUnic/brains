@@ -1,7 +1,7 @@
 import { describe, it } from "@serenity-js/playwright-test";
 import { Ensure, EnsureEventually, includes, equals } from "@serenity-js/assertions";
 import { Duration } from "@serenity-js/core";
-import { Text } from "@serenity-js/web";
+import { Click, Text } from "@serenity-js/web";
 
 import { SignIn } from "../screenplay/tasks/Authoring";
 import {
@@ -17,7 +17,7 @@ import { ConflictViewText, EditorStatus } from "../screenplay/questions/Views";
 import { CallBrainsApi } from "../screenplay/abilities/CallBrainsApi";
 import { Instance } from "../screenplay/support/Instance";
 
-const SAVED = equals("已保存");
+const SAVED = equals("已发布");
 const CONFLICT = equals("版本冲突");
 
 /**
@@ -39,7 +39,7 @@ describe("conflict handling", () => {
       OpenNote(path),
       AnotherClientRewrites(path, "远端同事改过的版本"),
       Enter.theValue("初始版本\n浏览器里的本地修改 缓存").into(EditorArea.content()),
-      Press.the("ControlOrMeta+s").in(EditorArea.content()),
+      Click.on(EditorArea.publishButton()),
       Ensure.eventually(EditorStatus(), CONFLICT).timeoutAfter(Duration.ofSeconds(10)),
     );
 
@@ -80,7 +80,7 @@ describe("conflict handling", () => {
     await actor.attemptsTo(
       AnotherClientRewrites(path, "远端 v2"),
       Enter.theValue("初始\n本地 v2").into(EditorArea.content()),
-      Press.the("ControlOrMeta+s").in(EditorArea.content()),
+      Click.on(EditorArea.publishButton()),
       Ensure.eventually(EditorStatus(), CONFLICT).timeoutAfter(Duration.ofSeconds(10)),
     );
 

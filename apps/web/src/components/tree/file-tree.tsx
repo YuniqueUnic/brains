@@ -9,6 +9,7 @@ import {
   FolderOpen,
   FolderPlus,
   Info,
+  Link2,
   ListChecks,
   MoreHorizontal,
   Trash2,
@@ -97,6 +98,8 @@ export interface TreeActions {
   onTrash: (paths: string[]) => void;
   onDuplicate: (path: string) => void;
   onCopyPath: (path: string) => void;
+  /** Copy a fetchable absolute URL for the file content (auth via token). */
+  onCopyNetPath?: (path: string) => void;
   onNewDocumentIn: (folder: string) => void;
   onCreateFolderIn: (folder: string) => void;
   onProperties: (path: string) => void;
@@ -654,6 +657,16 @@ function FileMenuItems({
         <Copy className="size-4 stroke-[1.5] text-muted-foreground" />
         {t("menuCopyPath")}
       </Menu.Item>
+      {actions.onCopyNetPath && (
+        <Menu.Item
+          className={menuItemClass()}
+          onClick={() => actions.onCopyNetPath?.(path)}
+          data-testid="menu-copy-net-path"
+        >
+          <Link2 className="size-4 stroke-[1.5] text-muted-foreground" />
+          {t("menuCopyNetPath")}
+        </Menu.Item>
+      )}
       <Menu.Separator className="mx-2 my-1 h-px bg-border" />
       <Menu.Item
         className={menuItemClass()}

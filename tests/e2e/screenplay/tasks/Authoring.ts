@@ -1,6 +1,6 @@
 import { Ensure, includes } from "@serenity-js/assertions";
 import { Duration } from "@serenity-js/core";
-import { Enter, Click, Navigate, Press, Text } from "@serenity-js/web";
+import { Enter, Click, Navigate, Text } from "@serenity-js/web";
 import { Task } from "@serenity-js/core";
 
 import { LoginScreen } from "../screens/LoginScreen";
@@ -35,11 +35,12 @@ export const StartNewNote = (path: string) =>
       .timeoutAfter(Duration.ofSeconds(10)),
   );
 
-/** Replace the open note's whole content and save it (Ctrl/Cmd+S). */
+/** Replace the open note's whole content and publish it (⌘S only stashes
+ * the local draft — a new revision requires the explicit publish button). */
 export const RewriteNote = (content: string) =>
-  Task.where("#actor rewrites and saves the open note",
+  Task.where("#actor rewrites and publishes the open note",
     Enter.theValue(content).into(EditorArea.content()),
-    Press.the("ControlOrMeta+s").in(EditorArea.content()),
+    Click.on(EditorArea.publishButton()),
   );
 
 /** Create a note end to end through the UI. */

@@ -1,45 +1,65 @@
-import { ArchiveRestore, History, Link2, ListTree, X } from "lucide-react";
+import { ArchiveRestore, Eye, History, Link2, ListTree, X } from "lucide-react";
 import { Tooltip as TooltipPrimitive } from "@base-ui-components/react/tooltip";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import DOMPurify from "dompurify";
-import { marked } from "marked";
-import { api, isTextMedia, type Entry, type RevisionDto } from "../../api/client";
+import { api, type Entry, type RevisionDto } from "../../api/client";
+import {
+  markdownToSafeHtml,
+  previewFor,
+  revisionPreviewFor,
+  type PreviewResult,
+} from "./preview";
+import { ToggleGroupSection } from "../shell/toggle-section";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../ui/dialog";
+import { Button } from "../ui/button";
 
 /*
  * Properties (DESIGN.md §43, #49): transient context opened with ⌘I / the
  * context menu / the editor toolbar button — never a permanent column.
- * Backlinks are live: click to jump, hover for a rendered preview popover.
+ * Backlinks and history rows are live: hover for a rendered preview popover,
+ * click to jump / view, restore only through confirmation.
  */
 
-/** One-flight cache so repeated hovers don't refetch the same target. */
-const previewCache = new Map<string, Promise<{ kind: "text"; html: string } | { kind: "image"; url: string } | { kind: "binary" }>>();
-
-function previewFor(path: string): Promise<{ kind: "text"; html: string } | { kind: "image"; url: string } | { kind: "binary" }> {
-  let cached = previewCache.get(path);
-  if (!cached) {
-    cached = (async () => {
-      const meta = await api.readMeta(path);
-      if (meta.media_type?.startsWith("image/")) {
-        const { bytes } = await api.readRaw(path);
-        const blob = new Blob([bytes as unknown as BlobPart], { type: meta.media_type });
-        return { kind: "image", url: URL.createObjectURL(blob) } as const;
-      }
-      if (isTextMedia(meta.media_type)) {
-        const { text } = await api.readText(path);
-        const html = DOMPurify.sanitize(marked.parse(text, { async: false }) as string);
-        return { kind: "text", html } as const;
-      }
-      return { kind: "binary" } as const;
-    })();
-    previewCache.set(path, cached);
-  }
-  return cached;
+/** Hover popover body shared by backlink and history triggers. */
+function PreviewBody({ path, preview }: { path: string; preview: PreviewResult | null }) {
+  const { t } = useTranslation("info");
+  return (
+    <div className="flex h-auto max-h-[320px] items-start justify-center overflow-auto">
+      {preview === null ? (
+        <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewLoading")}</p>
+      ) : preview.kind === "image" ? (
+        <img src={preview.url} alt={path} className="max-h-[320px] w-auto object-contain" />
+      ) : preview.kind === "text" ? (
+        <div
+          className="markdown-preview w-full !py-4 text-[13px]"
+          dangerouslySetInnerHTML={{ __html: preview.html }}
+        />
+      ) : (
+        <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewUnavailable")}</p>
+      )}
+    </div>
+  );
 }
 
 function BacklinkItem({ source, onOpenFile }: { source: string; onOpenFile: (path: string) => void }) {
   const { t } = useTranslation("info");
-  const [preview, setPreview] = useState<Awaited<ReturnType<typeof previewFor>> | null>(null);
+  const [preview, setPreview] = useState<PreviewResult | null>(null);
   return (
     <li>
       <TooltipPrimitive.Root>
@@ -55,34 +75,51 @@ function BacklinkItem({ source, onOpenFile }: { source: string; onOpenFile: (pat
             </button>
           }
           onMouseEnter={() => {
-            void previewFor(source).then(
-              (result) => setPreview(result),
-              () => setPreview({ kind: "binary" }),
-            );
+            void previewFor(source).then(setPreview, () => setPreview({ kind: "binary" }));
           }}
         />
         <TooltipPrimitive.Portal>
           <TooltipPrimitive.Positioner side="left" sideOffset={10} align="start">
             <TooltipPrimitive.Popup className="z-50 max-h-[320px] w-[min(360px,80vw)] overflow-hidden rounded-[10px] border bg-card shadow-overlay">
-              <div className="flex h-auto max-h-[320px] items-start justify-center overflow-auto">
-                {preview === null ? (
-                  <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewLoading")}</p>
-                ) : preview.kind === "image" ? (
-                  <img src={preview.url} alt={source} className="max-h-[320px] w-auto object-contain" />
-                ) : preview.kind === "text" ? (
-                  <div
-                    className="markdown-preview w-full !py-4 text-[13px]"
-                    dangerouslySetInnerHTML={{ __html: preview.html }}
-                  />
-                ) : (
-                  <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewUnavailable")}</p>
-                )}
-              </div>
+              <PreviewBody path={source} preview={preview} />
             </TooltipPrimitive.Popup>
           </TooltipPrimitive.Positioner>
         </TooltipPrimitive.Portal>
       </TooltipPrimitive.Root>
     </li>
+  );
+}
+
+/** Hoverable wrapper giving a history row the same rendered preview popover. */
+function HistoryRowTooltip({
+  path,
+  revision,
+  children,
+}: {
+  path: string;
+  revision: string;
+  children: React.ReactNode;
+}) {
+  const [preview, setPreview] = useState<PreviewResult | null>(null);
+  return (
+    <TooltipPrimitive.Root>
+      <TooltipPrimitive.Trigger
+        render={<div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>}
+        onMouseEnter={() => {
+          void revisionPreviewFor(path, revision).then(
+            setPreview,
+            () => setPreview({ kind: "binary" }),
+          );
+        }}
+      />
+      <TooltipPrimitive.Portal>
+        <TooltipPrimitive.Positioner side="left" sideOffset={10} align="start">
+          <TooltipPrimitive.Popup className="z-50 max-h-[320px] w-[min(360px,80vw)] overflow-hidden rounded-[10px] border bg-card shadow-overlay" role="tooltip">
+            <PreviewBody path={`${path}@${revision.slice(0, 8)}`} preview={preview} />
+          </TooltipPrimitive.Popup>
+        </TooltipPrimitive.Positioner>
+      </TooltipPrimitive.Portal>
+    </TooltipPrimitive.Root>
   );
 }
 
@@ -106,6 +143,15 @@ export function PropertiesPanel({
     outbound: 0,
     backlinks: [],
   });
+  // 查看: rendered/raw content of an old revision. 恢复: destructive, confirmed.
+  const [viewing, setViewing] = useState<
+    | { rev: RevisionDto; kind: "text"; html: string; raw: string }
+    | { rev: RevisionDto; kind: "image"; url: string }
+    | { rev: RevisionDto; kind: "binary" }
+    | null
+  >(null);
+  const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
+  const [confirming, setConfirming] = useState<RevisionDto | null>(null);
 
   useEffect(() => {
     if (!path) {
@@ -132,6 +178,28 @@ export function PropertiesPanel({
       alive = false;
     };
   }, [path, revision]);
+
+  const openRevisionView = (rev: RevisionDto) => {
+    if (!path) return;
+    setViewing({ rev, kind: "binary" });
+    setViewMode("preview");
+    void (async () => {
+      try {
+        if (rev.content?.media_type?.startsWith("image/")) {
+          const bytes = await api.readRevisionRaw(path, rev.revision);
+          const blob = new Blob([bytes as unknown as BlobPart], {
+            type: rev.content.media_type,
+          });
+          setViewing({ rev, kind: "image", url: URL.createObjectURL(blob) });
+          return;
+        }
+        const text = await api.readRevisionText(path, rev.revision);
+        setViewing({ rev, kind: "text", html: await markdownToSafeHtml(text), raw: text });
+      } catch {
+        setViewing({ rev, kind: "binary" });
+      }
+    })();
+  };
 
   return (
     <aside
@@ -211,32 +279,64 @@ export function PropertiesPanel({
                   key={rev.revision}
                   className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[12px] hover:bg-muted/70"
                 >
-                  <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-                    gen {rev.generation}
-                  </span>
-                  <span className="shrink-0">{rev.action}</span>
-                  <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-faint">
-                    {rev.created_at.slice(0, 19)}
-                  </span>
                   {rev.revision === revision ? (
-                    <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
-                      {t("current")}
-                    </span>
+                    <>
+                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                        gen {rev.generation}
+                      </span>
+                      <span className="shrink-0">{rev.action}</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-faint">
+                        {rev.created_at.slice(0, 19)}
+                      </span>
+                      <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                        {t("current")}
+                      </span>
+                    </>
                   ) : rev.action === "trash" ? (
                     // A tombstone has no content to restore; the trash view's
                     // restore walks history for the newest contentful revision.
-                    <span className="shrink-0 text-[10px] text-muted-foreground">
-                      {t("tombstone")}
-                    </span>
+                    <>
+                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                        gen {rev.generation}
+                      </span>
+                      <span className="shrink-0">{rev.action}</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-faint">
+                        {rev.created_at.slice(0, 19)}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        {t("tombstone")}
+                      </span>
+                    </>
                   ) : (
-                    <button
-                      data-testid={`restore-revision-gen-${rev.generation}`}
-                      onClick={() => onRestore(rev.revision)}
-                      className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
-                    >
-                      <ArchiveRestore className="size-3 stroke-[1.5]" />
-                      {t("restoreRevision")}
-                    </button>
+                    <HistoryRowTooltip path={path} revision={rev.revision}>
+                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                        gen {rev.generation}
+                      </span>
+                      <span className="shrink-0">{rev.action}</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-faint">
+                        {rev.created_at.slice(0, 19)}
+                      </span>
+                      <span className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          data-testid={`view-revision-gen-${rev.generation}`}
+                          onClick={() => openRevisionView(rev)}
+                          aria-label={t("viewRevision")}
+                          title={t("viewRevision")}
+                          className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
+                        >
+                          <Eye className="size-3 stroke-[1.5]" />
+                          {t("viewRevision")}
+                        </button>
+                        <button
+                          data-testid={`restore-revision-gen-${rev.generation}`}
+                          onClick={() => setConfirming(rev)}
+                          className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
+                        >
+                          <ArchiveRestore className="size-3 stroke-[1.5]" />
+                          {t("restoreRevision")}
+                        </button>
+                      </span>
+                    </HistoryRowTooltip>
                   )}
                 </li>
               ))}
@@ -247,6 +347,104 @@ export function PropertiesPanel({
           </section>
         </div>
       )}
+
+      {/* 查看: read-only rendering of an old revision. */}
+      <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
+        <DialogContent data-testid="revision-view-dialog" className="flex max-h-[80vh] w-[min(44rem,94vw)] flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {t("viewRevisionTitle", {
+                gen: viewing?.rev.generation ?? 0,
+                time: viewing?.rev.created_at.slice(0, 19) ?? "",
+              })}
+            </DialogTitle>
+            <DialogDescription>
+              {viewing?.rev.content?.media_type ?? ""}
+            </DialogDescription>
+          </DialogHeader>
+          {viewing?.kind === "text" && (
+            <div className="flex items-center">
+              <ToggleGroupSection
+                value={viewMode}
+                onChange={(next) => setViewMode(next as "preview" | "code")}
+                options={[
+                  { value: "preview", label: t("modePreview") },
+                  { value: "code", label: t("modeCode") },
+                ]}
+              />
+            </div>
+          )}
+          <div className="min-h-0 flex-1 overflow-auto rounded-md border bg-background">
+            {viewing?.kind === "image" ? (
+              <div className="flex items-center justify-center p-4">
+                <img src={viewing.url} alt={viewing.rev.path} className="max-h-[52vh] w-auto object-contain" />
+              </div>
+            ) : viewing?.kind === "text" ? (
+              viewMode === "code" ? (
+                <pre
+                  data-testid="revision-view-code"
+                  className="max-h-[52vh] overflow-auto p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap"
+                >
+                  {viewing.raw}
+                </pre>
+              ) : (
+                <div
+                  className="markdown-preview !p-4"
+                  dangerouslySetInnerHTML={{ __html: viewing.html }}
+                />
+              )
+            ) : (
+              <p className="px-4 py-8 text-center text-xs text-muted-foreground">
+                {t("previewUnavailable")}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewing(null)}>
+              {t("close")}
+            </Button>
+            {viewing && viewing.rev.action !== "trash" && viewing.rev.revision !== revision && (
+              <Button
+                variant="default"
+                data-testid="restore-from-view"
+                onClick={() => {
+                  setConfirming(viewing.rev);
+                  setViewing(null);
+                }}
+              >
+                <ArchiveRestore />
+                {t("restoreRevision")}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 恢复: destructive → confirmed (design §59 danger levels). */}
+      <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+        <AlertDialogContent data-testid="restore-revision-confirm">
+          <AlertDialogTitle>{t("restoreConfirmTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("restoreConfirmBody", {
+              gen: confirming?.generation ?? 0,
+              time: confirming?.created_at.slice(0, 19) ?? "",
+            })}
+          </AlertDialogDescription>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="restore-revision-confirm-yes"
+              onClick={() => {
+                const target = confirming?.revision ?? null;
+                setConfirming(null);
+                if (target) onRestore(target);
+              }}
+            >
+              {t("restoreConfirmAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </aside>
   );
 }

@@ -548,3 +548,68 @@
     animation: none;
   }
 }
+
+/* Reference completions ([[wiki]], []() links) on the token system. */
+.cm-tooltip.cm-tooltip-autocomplete {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow-menu);
+  overflow: hidden;
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+.cm-tooltip-autocomplete ul li {
+  padding: 3px 8px;
+}
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--selected);
+  color: var(--foreground);
+}
+.cm-completionDetail {
+  margin-left: 10px;
+  color: var(--faint-foreground);
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+
+/* Editor reference hover (docs/… links, [[wiki]]): same preview language as
+   the properties panel popovers. */
+.cm-tooltip.brains-ref-tooltip {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow-overlay);
+  overflow: hidden;
+  padding: 0;
+}
+.brains-ref-hover {
+  max-width: min(380px, 80vw);
+  max-height: 320px;
+  overflow: auto;
+  font-size: 12px;
+}
+.brains-ref-hover-path {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted-foreground);
+}
+.brains-ref-hover-body {
+  cursor: pointer;
+}
+.brains-ref-hover-note {
+  padding: 10px 12px;
+  color: var(--muted-foreground);
+}
+.brains-ref-hover-md {
+  padding: 8px 12px 12px !important;
+  font-size: 12.5px;
+}
+.brains-ref-hover-body img {
+  max-width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+}

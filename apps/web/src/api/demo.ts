@@ -312,6 +312,11 @@ export const demoApi = {
     return found?.content?.text ?? "";
   },
 
+  async readRevisionRaw(path: string, revision: string): Promise<Uint8Array> {
+    const text = await this.readRevisionText(path, revision);
+    return new TextEncoder().encode(text);
+  },
+
   async restore(
     path: string,
     revision: string,

@@ -100,6 +100,15 @@ export default function Workspace({
 
   const folders = useMemo(() => collectFolders(liveFiles), [liveFiles]);
   const folderSet = useMemo(() => new Set(folders), [folders]);
+  // Reference completions for the editor ([[wiki]], [](/![]() links).
+  const completionFiles = useMemo(
+    () =>
+      liveFiles.map((entry) => ({
+        path: entry.path,
+        binary: !isTextMedia(entry.media_type),
+      })),
+    [liveFiles],
+  );
   const shownFiles = mode === "workspace" ? liveFiles : trashedFiles;
 
   const fail = (error: unknown) => {
@@ -412,6 +421,10 @@ export default function Workspace({
     },
     onCopyPath: (path) => {
       void navigator.clipboard.writeText(path).then(() => toast.success(t("copyPathDone")));
+    },
+    onCopyNetPath: (path) => {
+      const url = `${window.location.origin}/api/v1/file?path=${encodeURIComponent(path)}`;
+      void navigator.clipboard.writeText(url).then(() => toast.success(t("copyNetPathDone")));
     },
     onNewDocumentIn: (folder) => {
       setNewFilePath(folder ? `${folder}/` : "");
@@ -866,6 +879,8 @@ export default function Workspace({
                 onChange={setEditor}
                 onStateChange={setEditor}
                 onOpenProperties={() => openProperties(activeEditorPath)}
+                onOpenReference={requestOpen}
+                completions={completionFiles}
                 onAuthLost={() => {
                   setBanner(t("bannerAuthLost"));
                   onLogout();

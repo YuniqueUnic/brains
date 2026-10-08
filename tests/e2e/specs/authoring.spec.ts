@@ -11,7 +11,7 @@ import { Instance } from "../screenplay/support/Instance";
 import { Workbench } from "../screenplay/screens/Workbench";
 import { EditorStatus } from "../screenplay/questions/Views";
 
-const SAVED = equals("已保存");
+const SAVED = equals("已发布");
 
 /**
  * U01 (design §19): a human writes a new memory in the web app; the bytes
@@ -47,7 +47,7 @@ describe("note authoring", () => {
       StartNewNote(path),
       // Replace the empty document with the first version, unsaved.
       Enter.theValue("original body\nappended 缓存").into(EditorArea.content()),
-      Ensure.that(EditorStatus(), equals("未保存修改")),
+      Ensure.that(EditorStatus(), equals("未发布草稿")),
     );
 
     // The server never auto-saves (P0). Locally the draft restores so a
@@ -58,7 +58,7 @@ describe("note authoring", () => {
       OpenNote(path),
       Ensure.eventually(Text.of(EditorArea.content()), includes("appended"))
         .timeoutAfter(Duration.ofSeconds(10)),
-      Ensure.that(EditorStatus(), equals("未保存修改")),
+      Ensure.that(EditorStatus(), equals("未发布草稿")),
       Click.on(
         PageElement.located(By.css('button:has-text("丢弃")')).describedAs("discard draft"),
       ),

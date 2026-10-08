@@ -276,12 +276,17 @@ const httpApi = {
   },
 
   async readRevisionText(path: string, revision: string): Promise<string> {
+    const bytes = await this.readRevisionRaw(path, revision);
+    return new TextDecoder().decode(bytes);
+  },
+
+  async readRevisionRaw(path: string, revision: string): Promise<Uint8Array> {
     const response = await fetch(
       `/api/v1/revision?path=${encodeURIComponent(path)}&revision=${revision}`,
       { credentials: "same-origin" },
     );
     if (!response.ok) throw await errorFrom(response);
-    return new TextDecoder().decode(await response.arrayBuffer());
+    return new Uint8Array(await response.arrayBuffer());
   },
 
   async restore(

@@ -121,6 +121,7 @@ pnpm exec wrangler dev --port 8799                                    # 本地 w
 - 本地密钥在 `apps/worker/.dev.vars`（TOKEN_REGISTRY_JSON 存 token 的 SHA-256 哈希；SESSION/CURSOR_SIGNING_KEY 为 64 位 hex）。生产用 `wrangler secret put` 同名注入，禁止明文入库。
 - **`wrangler dev` 不自动应用 D1 迁移**：首次运行或清空 `.wrangler/state` 后，必须先执行上面的 `migrations apply`，否则索引为空、搜索恒 0 命中（服务端不伪装成功）。
 - 验收速查：`bash tests/worker-smoke.sh`（workerd 运行中执行）覆盖 CAS 竞争、条件写、字面/FTS+prefix、trash→restore、历史链。
+- 浏览器 e2e 对 workerd：`tests/e2e/run-workerd.sh`（自动重启 wrangler → 就绪探测 → playwright）。**重建 `apps/web/dist` 后必须重启 wrangler dev**：资产清单在启动时快照，在跑实例对新 hash 会落 SPA fallback 返回 text/html（浏览器报 MIME module script 错）。脚本会幂等确保 `.dev.vars` 注册表包含 e2e token 的 SHA-256（id: e2e）。
 - CLI 对接：`bsx profile add worker --url http://127.0.0.1:8799 --token <token>` 后加 `--profile worker`，导出与 reindex 语义一致。
 
 ## 排障

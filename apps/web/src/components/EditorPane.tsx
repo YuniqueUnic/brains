@@ -3,6 +3,9 @@ import { Compartment, EditorState as CodeMirrorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import {
+  autocompletion,
+} from "@codemirror/autocomplete";
 import { tags } from "@lezer/highlight";
 import {
   defaultKeymap,
@@ -23,11 +26,13 @@ import { MergeView, unifiedMergeView } from "@codemirror/merge";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import { createFindPanel, type FindPanelLabels } from "./editor/find-panel";
+import { fileCompletions, type CompletionFile } from "./editor/completions";
+import { referenceHover } from "./editor/reference-hover";
 import { Toggle } from "@base-ui-components/react/toggle";
 import { ToggleGroup } from "@base-ui-components/react/toggle-group";
 import { Switch } from "@base-ui-components/react/switch";
 import { Popover } from "@base-ui-components/react/popover";
-import { Settings2 } from "lucide-react";
+import { Settings2, Send } from "lucide-react";
 import {
   CopyPlus,
   Eye,
@@ -36,7 +41,6 @@ import {
   Info,
   MoreHorizontal,
   Redo2,
-  Save,
   Search,
   Sparkles,
   SquarePen,
@@ -51,7 +55,7 @@ import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { SaveIndicator, type SaveTone } from "./SaveIndicator";
 import { Tooltip } from "./ui/tooltip";
-import { menuItemClass, menuPopupClass } from "./ui/menu";
+import { menuItemClass, menuPopupClass, MenuShortcut } from "./ui/menu";
 import { SliderRow } from "./ui/slider-row";
 import {
   Dialog,
@@ -67,8 +71,10 @@ import { cn } from "../lib/utils";
 /*
  * Editor (DESIGN.md §26-34): the document is the star — 860px measure (CSS),
  * document typography, restrained markdown highlighting. Chrome is one quiet
- * toolbar: undo/redo, find, diff, save; everything else lives in ⋯.
- * State machine unchanged (design §13.2): loading → clean → dirty → saving
+ * toolbar: undo/redo, find, diff, publish; everything else lives in ⋯.
+ * Draft/publish model: typing keeps a LOCAL draft (debounced localStorage,
+ * crash-safe); ⌘S stashes it; only 发布 (button / ⌘⏎) writes a new revision.
+ * State machine (design §13.2): loading → clean → dirty → saving
  * → clean | conflict | error.
  */
 export type EditorState =
@@ -278,6 +284,8 @@ export default function EditorPane({
   onTrashCurrent,
   canTrash,
   onOpenProperties,
+  onOpenReference,
+  completions,
 }: {
   state: EditorState;
   onChange: (next: EditorState) => void;
@@ -289,6 +297,10 @@ export default function EditorPane({
   canTrash?: boolean;
   /** Open the properties panel for the active document (toolbar button). */
   onOpenProperties?: () => void;
+  /** Open a vault file referenced by hover (docs/… targets, [[wiki]]). */
+  onOpenReference?: (path: string) => void;
+  /** Vault listing for [[wiki]] / []() completions and hover previews. */
+  completions?: CompletionFile[];
 }) {
   const { t } = useTranslation("editor");
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -311,6 +323,7 @@ export default function EditorPane({
   const diffCompartment = useRef(new Compartment());
   const lineNumComp = useRef(new Compartment());
   const wrapComp = useRef(new Compartment());
+  const completionsComp = useRef(new Compartment());
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -353,6 +366,17 @@ export default function EditorPane({
           diffCompartment.current.of([]),
           lineNumComp.current.of(initialSettings.lineNumbers ? lineNumbers() : []),
           wrapComp.current.of(initialSettings.wrap ? EditorView.lineWrapping : []),
+          completionsComp.current.of(
+            completions
+              ? [
+                  autocompletion({ override: [fileCompletions(completions)] }),
+                  referenceHover(completions, onOpenReference, {
+                    loading: t("previewLoading"),
+                    unavailable: t("previewUnavailable"),
+                  }),
+                ]
+              : [],
+          ),
         ],
       }),
     });
@@ -512,11 +536,26 @@ export default function EditorPane({
       effects: [
         lineNumComp.current.reconfigure(settings.lineNumbers ? lineNumbers() : []),
         wrapComp.current.reconfigure(settings.wrap ? EditorView.lineWrapping : []),
+        completionsComp.current.reconfigure(
+          completions
+            ? [
+                autocompletion({ override: [fileCompletions(completions)] }),
+                referenceHover(completions, onOpenReference, {
+                  loading: t("previewLoading"),
+                  unavailable: t("previewUnavailable"),
+                }),
+              ]
+            : [],
+        ),
       ],
     });
-  }, [settings.lineNumbers, settings.wrap]);
+  }, [settings.lineNumbers, settings.wrap, completions, onOpenReference, t]);
 
-  const save = useCallback(async () => {
+  /**
+   * 发布 (the ONLY path that moves HEAD): a conditional PUT creating a new
+   * revision. ⌘S deliberately does NOT publish — it stashes the draft.
+   */
+  const publish = useCallback(async () => {
     const current = stateRef.current;
     // `error` keeps the last text+precondition: retrying must be possible
     // without retyping (design §13.2 — errors are states, not dead ends).
@@ -607,17 +646,30 @@ export default function EditorPane({
     }
   }, [onStateChange, onAuthLost, t]);
 
-  // Ctrl+S saves; saving stays explicit (design §13.2).
+  // ⌘S = 暂存 (stash): flush the debounce-pending draft NOW and say so.
+  // Publishing stays explicit — the 发布 button or ⌘⏎.
+  const stashDraft = useCallback(() => {
+    const current = stateRef.current;
+    if (current.kind !== "dirty" && current.kind !== "error" && current.kind !== "saving") return;
+    flushDrafts();
+    toast.info(t("draftStored"));
+  }, [t]);
+
+  // ⌘S stashes the draft; ⌘⏎ publishes. ⌘S must never create a revision.
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+      const meta = event.metaKey || event.ctrlKey;
+      if (meta && event.key.toLowerCase() === "s") {
         event.preventDefault();
-        void save();
+        stashDraft();
+      } else if (meta && event.key === "Enter") {
+        event.preventDefault();
+        void publish();
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [save]);
+  }, [publish, stashDraft]);
 
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [saveAsPath, setSaveAsPath] = useState("");
@@ -771,14 +823,15 @@ export default function EditorPane({
             </>
             )}
             <Button
-              variant="secondary"
-              data-testid="save-button"
+              variant="default"
+              data-testid="publish-button"
               className="ml-1"
               disabled={state.kind !== "dirty" && state.kind !== "error"}
-              onClick={() => void save()}
+              onClick={() => void publish()}
             >
-              <Save />
-              {t("save")}
+              <Send />
+              {t("publish")}
+              <MenuShortcut>⌘⏎</MenuShortcut>
             </Button>
             <Menu.Root>
               <Menu.Trigger
@@ -916,7 +969,7 @@ export default function EditorPane({
               {t("close")}
             </Button>
             <Button variant="default" data-testid="save-as-confirm" onClick={() => void commitSaveAs()}>
-              {t("save")}
+              {t("publish")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1250,7 +1303,7 @@ function ModeChip({
   );
 }
 
-/** Traffic-light tone for the save capsule; labels stay the e2e contract. */
+/** Traffic-light tone for the publish capsule; labels stay the e2e contract. */
 function statusTone(state: EditorState): SaveTone {
   switch (state.kind) {
     case "empty":
@@ -1267,6 +1320,7 @@ function statusTone(state: EditorState): SaveTone {
   }
 }
 
+/** Draft/publish model: clean = everything published; dirty = local draft. */
 function statusLabel(state: EditorState, t: (key: string) => string): string {
   switch (state.kind) {
     case "empty":
