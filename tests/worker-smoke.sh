@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 B=http://127.0.0.1:8799/api/v1
-T="brain-dev-token-0000000000000000"
+T="brains-dev-token-0000000000000000"
 A="Authorization: Bearer $T"
 P="e2e-smoke/notes/hello-中文-$RANDOM.md"
 echo "== 1. capabilities"

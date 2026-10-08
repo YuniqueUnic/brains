@@ -29,6 +29,9 @@ fn boot_server() -> TestServer {
             token: Some("cli-contract-token-0123456789".into()),
             web_dist: None,
             allowed_origins: Vec::new(),
+            // The CLI contract tests assert against template-aware baselines
+            // (export counts, seeded-note behavior), so keep seeding on.
+            seed_templates: true,
         };
         let addr = runtime.block_on(brains_server::serve(config)).unwrap();
         addr_tx.send(addr).unwrap();

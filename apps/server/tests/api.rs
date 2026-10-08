@@ -13,6 +13,7 @@ async fn boot() -> (String, String) {
         token: Some("contract-token-0123456789abcdef".into()),
         web_dist: None,
         allowed_origins: vec!["http://localhost:5173".into()],
+        seed_templates: false,
     };
     let addr = brains_server::serve(config).await.unwrap();
     // Keep the tempdir alive for the process lifetime of the test.

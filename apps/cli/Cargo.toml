@@ -4,6 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+# The CLI is invoked as `bsx`.
+[[bin]]
+name = "bsx"
+path = "src/main.rs"
+
 [dependencies]
 anyhow.workspace = true
 brains-api-types.workspace = true

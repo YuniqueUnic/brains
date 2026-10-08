@@ -2,7 +2,7 @@
 
 **面向人类、可迁移的长期知识库——进来的是普通文件，出去的也是普通文件，且每一版都留着。**
 
-[English](README.md) · [设计文档](brainstore-design/Brains-Architecture-v1.md) · [运行手册](docs/runbook.md) · [验证记录](docs/verification.md)
+[English](README.md) · [架构文档](docs/architecture.md) · [运行手册](docs/runbook.md) · [验证记录](docs/verification.md)
 
 [![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
 
@@ -34,7 +34,7 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 ## 快速开始（本地 profile）
 
 ```bash
-cargo build -p brains-server -p bsx
+cargo build -p brains-server -p brains-cli
 pnpm --dir apps/web build
 
 # 一条命令起全栈（API + Web 同域）
@@ -42,13 +42,13 @@ pnpm --dir apps/web build
   --data-dir ./brain-data \
   --token "$MY_TOKEN" \
   --web-dist apps/web/dist
-# → http://127.0.0.1:8787 （把 token 粘进登录页）
+# → http://127.0.0.1:45800 （把 token 粘进登录页）
 ```
 
 CLI 对接同一服务：
 
 ```bash
-./target/debug/bsx profile add local --url http://127.0.0.1:8787 --token "$MY_TOKEN"
+./target/debug/bsx profile add local --url http://127.0.0.1:45800 --token "$MY_TOKEN"
 ./target/debug/bsx ls ""
 echo "# hello" > /tmp/hello.md && ./target/debug/bsx put notes/hello.md --from /tmp/hello.md --create
 ./target/debug/bsx search "关键词"
@@ -79,7 +79,7 @@ bash tests/worker-smoke.sh                  # CAS 竞争、搜索、回收站/�
 浏览器 ──/ (静态)──▶ Workers Static Assets  │  原生 Axum + web dist
 CLI / curl ──/api/v1/*──┐
                         ▼
-      共享 axum 层（crates/api-http）：路由 · §11.3 错误映射 · §15 鉴权
+      共享 axum 层（crates/api-http）：路由 · 错误映射 · 鉴权
                         │
       ┌─────────────────┴──────────────────┐
       ▼ local-rust profile                ▼ cloudflare-rust profile
@@ -92,18 +92,18 @@ CLI / curl ──/api/v1/*──┐
 |---|---|
 | `crates/domain` | 路径、HEAD/Revision、错误分类、能力报告 |
 | `crates/format` | 有界 frontmatter/Markdown 解析、链接提取 |
-| `crates/ports` | 存储 trait——CAS HEAD、create-only blob/revision、索引（按 §9.4 不强制 Send） |
+| `crates/ports` | 存储 trait——CAS HEAD、create-only blob/revision、索引（刻意不强制 `Send`，Worker 侧桥接 `!Send` future） |
 | `crates/application` | 全部业务编排：提交管线、搜索、恢复、patch、copy/move、reindex |
 | `crates/api-http` | 两个运行时共享的 HTTP 层（路由、错误映射、鉴权） |
 | `crates/adapter-fs` / `adapter-sqlite` | 本地 profile 适配器 |
 | `crates/adapter-r2` / `adapter-d1` | Worker profile 适配器（同键布局、同 SQL） |
 | `crates/client` | CLI 的类型化 HTTP 客户端：条件写、两阶段导出 |
-| `apps/web` | React + CodeMirror 编辑器状态机（设计 §13.2） |
+| `apps/web` | React + CodeMirror 编辑器（显式 load/clean/dirty/saving/conflict 状态机） |
 | `apps/server` · `apps/worker` | 各 profile 的薄装配 |
 
 ## 测试
 
-- **76 个 Rust 测试**——domain、format、适配器、24 个业务测试（真实 fs+SQLite，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
+- **79 个 Rust 测试**——domain、format、适配器、27 个业务测试（真实 fs+SQLite，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
 - **12 个浏览器 E2E**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
 - **Worker 业务冒烟**——同一验收清单对 workerd 执行（`tests/worker-smoke.sh`）。
 
@@ -118,7 +118,7 @@ bash tests/worker-smoke.sh                                               # 对�
 
 | Workflow | 触发 | 内容 |
 |---|---|---|
-| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · 76 测试 · wasm 检查 · web 构建 · screenplay E2E（原生 **与** Worker）· workerd 业务冒烟 |
+| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · 79 测试 · SDK 代码生成漂移检查 · wasm 检查 · web 构建 · screenplay E2E（原生 **与** Worker）· workerd 业务冒烟 |
 | [release.yml](.github/workflows/release.yml) | 打 `v*` tag **或**手动 dispatch | 构建 CLI+server（macOS arm64/x64、Linux musl）、web 产物、Worker 包 → 发布带 SHA-256 的 GitHub Release。一键：*Actions → Release → Run workflow → 填版本号* |
 | [deploy.yml](.github/workflows/deploy.yml) | 手动 dispatch | 构建 Worker 并部署到 Cloudflare（`wrangler deploy` + 远端 D1 迁移）。需要 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets 与文件头部记载的一次性资源开通 |
 | dependabot | 每周 | cargo · npm · actions 依赖更新 |
@@ -126,7 +126,7 @@ bash tests/worker-smoke.sh                                               # 对�
 ## 状态与如实声明
 
 - local-rust profile：**已完成并验证**（P0 全量 + patch/copy/move/diff/export；四项未交付能力路由返回 `501`、capabilities 报 `false`）。
-- cloudflare-rust profile：**已实现并经本地 workerd 验证**；真实账户部署、真实 R2/D1 行为与免费额度 CPU 预算（§16）待凭据后验证。
+- cloudflare-rust profile：**已实现并经本地 workerd 验证**；真实账户部署、真实 R2/D1 行为与免费额度 CPU 预算待凭据后验证。
 - Windows 与非 Chromium 浏览器未测试；尚未做长时间并发压测。
 
 ## 许可

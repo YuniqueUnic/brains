@@ -1,0 +1,353 @@
+#pragma xidlc package Brains HTTP API
+#pragma xidlc version v1
+#pragma xidlc service http://127.0.0.1:45800 localhost
+
+// ---------------------------------------------------------------------------
+// Brains wire contract (design §11): the source of truth for SDKs and the
+// OpenAPI document. The axum server in crates/api-http implements this
+// contract by hand because parts of it are beyond the current IDL (see the
+// BLOCKER notes per method and docs/ai-integration.md):
+//   1. conditional GET (If-None-Match -> 304 with ETag header),
+//   2. response headers on the error channel (412/410 carry ETag),
+//   3. per-response dynamic Content-Type on GET /file (raw vs JSON).
+// ---------------------------------------------------------------------------
+
+module brains {
+
+struct CapabilityLimits {
+    uint64 max_text_bytes;
+    uint64 max_attachment_bytes;
+};
+
+enum Runtime {
+    LOCAL_RUST,
+    CLOUDFLARE_RUST,
+    CLOUDFLARE_TYPESCRIPT,
+};
+
+struct Capabilities {
+    string api_version;
+    uint64 store_format;
+    Runtime runtime;
+    CapabilityLimits limits;
+    map<string, boolean> features;
+    @optional string vault;
+};
+
+struct Entry {
+    string path;
+    string revision;
+    int64 generation;
+    string state;
+    @optional string updated_at;
+    @optional int64 size;
+    @optional string sha256;
+    @optional string media_type;
+    @optional string kind;
+    @optional string title;
+};
+
+struct MutationResult {
+    string path;
+    string revision;
+    int64 generation;
+    string state;
+    @optional string updated_at;
+    @optional int64 size;
+    @optional string sha256;
+    @optional string media_type;
+    @optional string kind;
+    @optional string title;
+    string index_state;
+    string operation_id;
+};
+
+struct FilePage {
+    sequence<Entry> items;
+    @optional string next_cursor;
+    string source;
+    string consistency;
+};
+
+struct ContentRef {
+    int64 size;
+    string sha256;
+    string media_type;
+    boolean executable;
+};
+
+struct CopiedFrom {
+    string path;
+    string revision;
+};
+
+struct Revision {
+    string revision;
+    string path;
+    int64 generation;
+    @optional string parent;
+    string action;
+    @optional string actor;
+    @optional string operation_id;
+    string created_at;
+    @optional string restores_revision;
+    @optional CopiedFrom copied_from;
+    @optional string commit_state;
+    @optional ContentRef content;
+};
+
+struct HistoryPage {
+    sequence<Revision> items;
+    string anchor_revision;
+    @optional string next_cursor;
+};
+
+struct SearchHit {
+    string path;
+    string indexed_revision;
+    string snippet;
+};
+
+struct SearchPage {
+    sequence<SearchHit> items;
+    @optional string next_cursor;
+    boolean complete;
+    int64 scanned;
+    string index_state;
+};
+
+struct LinkItem {
+    string source;
+    string target;
+    string kind;
+    @optional string source_revision;
+};
+
+struct LinkPage {
+    sequence<LinkItem> items;
+    @optional string next_cursor;
+};
+
+struct ReindexRequest {
+    @optional string cursor;
+    @optional int64 limit;
+};
+
+struct ReindexFailure {
+    string path;
+    string code;
+};
+
+struct ReindexPage {
+    int64 processed;
+    sequence<ReindexFailure> failed;
+    @optional string next_cursor;
+};
+
+struct Session {
+    string actor;
+    sequence<string> scopes;
+    @optional string expires_at;
+    @optional string csrf_token;
+};
+
+struct OkResult {
+    boolean ok;
+};
+
+struct PatchEdit {
+    string old_text;
+    string new_text;
+    int64 expected_matches;
+};
+
+struct PatchBody {
+    sequence<PatchEdit> edits;
+    @optional boolean dry_run;
+};
+
+struct PatchDryRun {
+    string diff;
+    string base_revision;
+};
+
+struct RestoreBody {
+    string path;
+    string revision;
+};
+
+struct TransferBody {
+    string source;
+    string target;
+    string expected_source_revision;
+    string operation_id;
+};
+
+struct ErrorDetail {
+    string code;
+    string message;
+    string request_id;
+    @optional string path;
+    @optional string current_revision;
+};
+
+struct TransferResult {
+    boolean copied;
+    boolean source_trashed;
+    boolean partial;
+    string operation_id;
+    @optional string target_revision;
+    @optional string source_revision;
+    @optional ErrorDetail error;
+};
+
+struct DiffResult {
+    string diff;
+};
+
+// Shared mutation headers. `If-Match`/`If-None-Match` carry STRONG revision
+// ETags; `*` on If-None-Match means create-only. `X-Operation-ID` makes
+// retries idempotent (design §8.2).
+
+@http_bearer
+interface Files {
+    // Instance capabilities and limits.
+    @get(path = "/capabilities")
+    Capabilities capabilities();
+
+    // Listing. source=store is the authoritative HEAD scan; source=index adds
+    // tag/kind filters and updated_desc order. Cursors are opaque + signed:
+    // echo them back unchanged or the server answers 400.
+    @get(path = "/files")
+    FilePage list_files(
+        @query @rename("source") @optional string source,
+        @query @optional string prefix,
+        @query @optional int64 limit,
+        @query @optional string cursor,
+        @query @optional string tag,
+        @query @optional string kind,
+        @query @optional string sort,
+        @query @rename("include_deleted") @optional boolean include_deleted
+    );
+
+    // Create or conditionally replace one file's exact bytes (design §8.2).
+    // Raw body = application/octet-stream; text media types are declared via
+    // Content-Type. Responds 201 on create, 200 on update, 412 on CAS loss.
+    @put(path = "/file")
+    MutationResult put_file(
+        @query string path,
+        @header @rename("If-Match") @optional string if_match,
+        @header @rename("If-None-Match") @optional string if_none_match,
+        @header @rename("X-Operation-ID") @optional string operation_id,
+        @header @rename("X-Content-SHA256") @optional string content_sha256,
+        in sequence<octet> body
+    );
+
+    // Current-HEAD read (JSON metadata view). The same route also serves
+    // raw bytes (`format` omitted -> application/octet-stream) with a strong
+    // ETag and answers If-None-Match with 304 + ETag. BLOCKED in IDL:
+    // one route cannot declare two representations, and the error/success
+    // channels cannot attach response headers (304's ETag is REQUIRED by
+    // RFC 9110) — filed upstream; raw reads stay on the documented wire
+    // format for generated SDKs until then. 410 once the path is trashed.
+    @get(path = "/file")
+    Entry get_file_meta(
+        @query string path,
+        @query @rename("format") @optional string format
+    );
+
+    // Conditional delete: writes a tombstone revision. 412 on stale base.
+    @delete(path = "/file")
+    MutationResult delete_file(
+        @query string path,
+        @header @rename("If-Match") @optional string if_match,
+        @header @rename("X-Operation-ID") @optional string operation_id
+    );
+
+    // Patch text in place: exact-match replacements on the stored bytes.
+    // With body.dry_run the server answers the unified diff
+    // (`PatchDryRun`: diff + base_revision) instead of committing — one
+    // route, two response representations, kept out of the typed SDK the
+    // same way as the raw file read (see get_file_meta).
+    @patch(path = "/file")
+    MutationResult patch_file(
+        @query string path,
+        @header @rename("If-Match") @optional string if_match,
+        @header @rename("X-Operation-ID") @optional string operation_id,
+        in PatchBody body
+    );
+
+    // Reachable history of one path, newest first (signed cursor pages).
+    @get(path = "/revisions")
+    HistoryPage list_revisions(
+        @query string path,
+        @query @optional int64 limit,
+        @query @optional string cursor
+    );
+
+    // Restore a prior revision's content as a NEW revision (gen only moves
+    // forward). If-Match anchors on the current head.
+    @post(path = "/restore")
+    MutationResult restore(
+        @header @rename("If-Match") @optional string if_match,
+        in RestoreBody body
+    );
+
+    // Literal (case-sensitive UTF-8 substring) or FTS (tokenized) search.
+    @get(path = "/search")
+    SearchPage search(
+        @query string q,
+        @query @rename("mode") @optional string mode,
+        @query @optional string prefix,
+        @query @optional int64 limit,
+        @query @optional string cursor
+    );
+
+    // Wiki-link graph induced by [[links]] in stored text.
+    @get(path = "/links")
+    LinkPage links(
+        @query string path,
+        @query @rename("direction") @optional string direction,
+        @query @optional int64 limit,
+        @query @optional string cursor
+    );
+
+    // Copy: create target from a source revision; source stays live.
+    @post(path = "/copy")
+    TransferResult copy(in TransferBody body);
+
+    // Move: copy + trash source; partial outcomes are reported, never hidden.
+    @post(path = "/move")
+    TransferResult move(in TransferBody body);
+
+    // Unified diff between two revisions of one path.
+    @get(path = "/diff")
+    DiffResult diff(
+        @query string path,
+        @query string from,
+        @query @optional string to
+    );
+
+    // Paged index rebuild from authoritative storage (safe anytime).
+    @post(path = "/maintenance/reindex")
+    ReindexPage reindex(in ReindexRequest body);
+};
+
+// Session exchange for browser flows: token -> signed cookie + CSRF token.
+// API agents can ignore this interface and use bearer tokens throughout.
+@no_security
+interface Session {
+    @post(path = "/session")
+    Session login(
+        @header string authorization,
+        @header @rename("X-CSRF-Token") @optional string csrf_token
+    );
+
+    @get(path = "/session")
+    Session current();
+
+    @delete(path = "/session")
+    OkResult logout();
+};
+
+};

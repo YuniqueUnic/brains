@@ -15,6 +15,7 @@ members = [
     "apps/server",
     "apps/worker",
     "apps/cli",
+    "sdk/rust",
 ]
 
 [workspace.package]

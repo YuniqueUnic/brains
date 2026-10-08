@@ -43,6 +43,16 @@ pub async fn api_not_found() -> Response {
         .into_response()
 }
 
+/// Liveness probe, identical on both runtimes: no auth, JSON, before the
+/// local-profile SPA fallback (which would otherwise swallow the path).
+pub async fn healthz() -> Response {
+    (
+        StatusCode::OK,
+        axum::Json(serde_json::json!({ "ok": true })),
+    )
+        .into_response()
+}
+
 pub fn build_router<H: Head, R: Rev, B: Blob, I: Idx>(state: SharedState<H, R, B, I>) -> Router {
     let api = Router::new()
         .route("/capabilities", get(files::capabilities))
@@ -92,6 +102,7 @@ pub fn build_router<H: Head, R: Rev, B: Blob, I: Idx>(state: SharedState<H, R, B
         // never the SPA shell (§5.1).
         .route("/api", any(api_not_found))
         .route("/api/{*rest}", any(api_not_found))
+        .route("/healthz", get(healthz))
         .with_state(state.clone());
     // SPA fallback is local-profile only (§9.2); the Worker serves assets via
     // the ASSETS binding and never sees non-API paths.

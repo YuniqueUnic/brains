@@ -50,10 +50,7 @@ async fn copy_records_provenance_and_keeps_source() {
         .await
         .unwrap();
     assert_eq!(history.items.len(), 1);
-    assert_eq!(
-        history.items[0].action,
-        brains_domain::RevisionAction::Copy
-    );
+    assert_eq!(history.items[0].action, brains_domain::RevisionAction::Copy);
     assert_eq!(
         history.items[0].copied_from.as_ref().unwrap().path,
         "src.md"
@@ -132,10 +129,7 @@ async fn move_trashes_source_and_target_keeps_own_history() {
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(
-        source_head.head.state,
-        brains_domain::HeadState::Trashed
-    );
+    assert_eq!(source_head.head.state, brains_domain::HeadState::Trashed);
     let target_content = vault
         .read_file(&owner, &VaultPath::new("new/name.md").unwrap())
         .await

@@ -15,7 +15,7 @@ struct Args {
     vault: String,
     #[arg(long, default_value = "127.0.0.1")]
     bind: String,
-    #[arg(long, default_value_t = 8787)]
+    #[arg(long, default_value_t = 45800)]
     port: u16,
     /// Register (or replace) a whole-vault root token instead of generating
     /// one. Also read from BRAINS_TOKEN. Printed once when generated.
@@ -45,6 +45,7 @@ fn main() {
         token: args.token.or_else(|| std::env::var("BRAINS_TOKEN").ok()),
         web_dist: args.web_dist,
         allowed_origins: args.origin,
+        seed_templates: true,
     };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

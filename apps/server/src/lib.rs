@@ -1,7 +1,7 @@
-//! brain-server library: the local-rust runtime profile (design §5.3, §9.2)
-//! — filesystem + SQLite adapters and the file-backed security store, wired
-//! into the shared axum layer from `brains-api-http`. Exposed so
-//! integration tests can boot the exact production stack in-process.
+//! brains-server library: the local-rust runtime profile — filesystem +
+//! SQLite adapters and the file-backed security store, wired into the shared
+//! axum layer from `brains-api-http`. Exposed so integration tests can boot
+//! the exact production stack in-process.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -26,6 +26,9 @@ pub struct ServerConfig {
     pub token: Option<String>,
     pub web_dist: Option<PathBuf>,
     pub allowed_origins: Vec<String>,
+    /// Lay down the template notes when the vault is completely empty.
+    /// Contract tests that need a pristine corpus turn this off.
+    pub seed_templates: bool,
 }
 
 impl ServerConfig {
@@ -34,10 +37,11 @@ impl ServerConfig {
             data_dir: data_dir.into(),
             vault: "default".into(),
             bind: "127.0.0.1".into(),
-            port: 8787,
+            port: 45800,
             token: None,
             web_dist: None,
             allowed_origins: Vec::new(),
+            seed_templates: true,
         }
     }
 }
@@ -101,13 +105,17 @@ where
     let (state, plaintext, token_new) = build_state(&config)?;
     // First boot on a completely empty vault: lay down the template notes so
     // humans and AI agents start from guide content, not a blank screen.
-    match brains_application::seed::seed_if_empty(&state.vault).await {
-        Ok(0) => {}
-        Ok(count) => eprintln!("brains-server: seeded {count} template notes into the empty vault."),
-        Err(e) => eprintln!("brains-server: template seeding failed (continuing): {e}"),
+    if config.seed_templates {
+        match brains_application::seed::seed_if_empty(&state.vault).await {
+            Ok(0) => {}
+            Ok(count) => {
+                eprintln!("brains-server: seeded {count} template notes into the empty vault.")
+            }
+            Err(e) => eprintln!("brains-server: template seeding failed (continuing): {e}"),
+        }
     }
     // build_router owns the body limit (from limits) and the JSON fallbacks;
-    // here we only attach the outer JSON 404 for the no-SPA profile (§5.1).
+    // here we only attach the outer JSON 404 for the no-SPA profile.
     let router = routes::build_router(state);
     let router = match config.web_dist {
         Some(_) => router,

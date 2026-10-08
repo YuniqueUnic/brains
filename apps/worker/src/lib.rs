@@ -127,12 +127,9 @@ fn build_state(env: &Env) -> StateResult {
 #[worker::event(fetch)]
 async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<FetchResponse, worker::Error> {
     let path = req.uri().path().to_owned();
-    if path == "/healthz" {
-        return Ok(axum::Json(serde_json::json!({ "ok": true })).into_response());
-    }
-    if !path.starts_with("/api/") && path != "/api" {
-        // Only /api, /api/* and /healthz reach the worker (wrangler.toml);
-        // anything else belongs to Static Assets.
+    // /api, /api/* and /healthz are answered by the shared axum router
+    // (healthz lives there too); anything else belongs to Static Assets.
+    if !path.starts_with("/api/") && path != "/api" && path != "/healthz" {
         return Ok(axum::http::StatusCode::NOT_FOUND.into_response());
     }
     let state = match build_state(&env) {

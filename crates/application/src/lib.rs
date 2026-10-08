@@ -159,9 +159,7 @@ where
             }
             return Ok(SizeClass::Text);
         }
-        if brains_domain::detect_kind(path.as_str(), content)
-            == brains_domain::FileKind::Binary
-        {
+        if brains_domain::detect_kind(path.as_str(), content) == brains_domain::FileKind::Binary {
             Ok(SizeClass::Binary)
         } else {
             Ok(SizeClass::Text)

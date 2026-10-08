@@ -33,6 +33,24 @@ jobs:
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
 
+  api-codegen:
+    name: SDK codegen drift (api/brains.idl ↔ sdk/)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install xidlc
+        run: cargo install xidlc --locked --version 0.95.0 --features cli,fmt
+      - name: Regenerate committed SDK artifacts
+        run: bash scripts/gen-api.sh
+      - name: Fail on any drift
+        run: |
+          git diff --exit-code -- sdk
+          untracked=$(git ls-files --others --exclude-standard -- sdk)
+          if [ -n "$untracked" ]; then
+            echo "generated files missing from git: $untracked"
+            exit 1
+          fi
+
   web:
     name: Web build + typecheck
     runs-on: ubuntu-latest

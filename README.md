@@ -2,7 +2,7 @@
 
 **A human-readable, migration-safe knowledge store — plain files in, plain files out, every revision kept.**
 
-[中文文档](README.zh.md) · [Design spec (CN)](brainstore-design/Brains-Architecture-v1.md) · [Runbook](docs/runbook.md) · [Verification log](docs/verification.md)
+[中文文档](README.zh.md) · [Architecture](docs/architecture.md) · [Runbook](docs/runbook.md) · [Verification log](docs/verification.md)
 
 [![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
 
@@ -34,7 +34,7 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 ## Quickstart (local profile)
 
 ```bash
-cargo build -p brains-server -p bsx
+cargo build -p brains-server -p brains-cli
 pnpm --dir apps/web build
 
 # boot the whole stack (API + web UI, same origin)
@@ -42,13 +42,13 @@ pnpm --dir apps/web build
   --data-dir ./brain-data \
   --token "$MY_TOKEN" \
   --web-dist apps/web/dist
-# → http://127.0.0.1:8787  (paste your token into the login screen)
+# → http://127.0.0.1:45800  (paste your token into the login screen)
 ```
 
 CLI against the same server:
 
 ```bash
-./target/debug/bsx profile add local --url http://127.0.0.1:8787 --token "$MY_TOKEN"
+./target/debug/bsx profile add local --url http://127.0.0.1:45800 --token "$MY_TOKEN"
 ./target/debug/bsx ls ""
 echo "# hello" > /tmp/hello.md
 ./target/debug/bsx put notes/hello.md --from /tmp/hello.md --create
@@ -80,7 +80,7 @@ Validated acceptance (local workerd): the **full 12-scenario browser E2E suite p
 Browser ──/ (static)──▶ Workers Static Assets │ native Axum + web dist
 CLI / curl ──/api/v1/*──┐
                         ▼
-        shared axum layer (crates/api-http): routes · §11.3 errors · §15 auth
+        shared axum layer (crates/api-http): routes · error mapping · auth
                         │
       ┌─────────────────┴──────────────────┐
       ▼ local-rust profile                 ▼ cloudflare-rust profile
@@ -93,18 +93,18 @@ CLI / curl ──/api/v1/*──┐
 |---|---|
 | `crates/domain` | paths, HEAD/Revision, error taxonomy, capability report |
 | `crates/format` | bounded frontmatter/Markdown parsing, link extraction |
-| `crates/ports` | store traits — CAS heads, create-only blobs/revisions, index (Send-free by design §9.4) |
+| `crates/ports` | store traits — CAS heads, create-only blobs/revisions, index (deliberately `Send`-free; the Worker bridges its `!Send` futures) |
 | `crates/application` | the whole business orchestration: commit pipeline, search, restore, patch, copy/move, reindex |
 | `crates/api-http` | shared HTTP layer (routing, error mapping, auth) for both runtimes |
 | `crates/adapter-fs` / `adapter-sqlite` | local profile adapters |
 | `crates/adapter-r2` / `adapter-d1` | Worker profile adapters (same key layout, same SQL) |
 | `crates/client` | typed Rust HTTP client (CLI): conditional writes, two-phase export |
-| `apps/web` | React + CodeMirror editor state machine (design §13.2) |
+| `apps/web` | React + CodeMirror editor (explicit load/clean/dirty/saving/conflict state machine) |
 | `apps/server` · `apps/worker` | thin runtime wiring per profile |
 
 ## Testing
 
-- **76 Rust tests** — domain, format, adapters, 24 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
+- **79 Rust tests** — domain, format, adapters, 27 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
 - **12 browser E2E** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
 - **Worker business smoke** — the same acceptance list executed against workerd (`tests/worker-smoke.sh`).
 
@@ -119,7 +119,7 @@ bash tests/worker-smoke.sh                                               # again
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · 76 tests · wasm check · web build · screenplay E2E (native **and** Worker) · workerd business smoke |
+| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · 79 tests · SDK codegen drift check · wasm check · web build · screenplay E2E (native **and** Worker) · workerd business smoke |
 | [release.yml](.github/workflows/release.yml) | tag `v*` **or** manual dispatch | builds CLI+server (macOS arm64/x64, Linux musl), web dist, Worker bundle → publishes a GitHub release with SHA-256s. One click: *Actions → Release → Run workflow → version* |
 | [deploy.yml](.github/workflows/deploy.yml) | manual dispatch | builds the Worker and deploys to Cloudflare (`wrangler deploy` + remote D1 migrations). Requires `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets and the one-time provisioning documented in the file header |
 | dependabot | weekly | cargo · npm · actions updates |
@@ -127,7 +127,7 @@ bash tests/worker-smoke.sh                                               # again
 ## Status & honest limits
 
 - local-rust profile: **complete and verified** (P0 + patch/copy/move/diff/export; the four unsupported capabilities answer `501` and report `false`).
-- cloudflare-rust profile: **implemented and verified under local workerd**; real-account deployment, real R2/D1 behavior and the free-tier CPU budget (§16) remain to be validated with credentials.
+- cloudflare-rust profile: **implemented and verified under local workerd**; real-account deployment, real R2/D1 behavior and the free-tier CPU budget remain to be validated with credentials.
 - Windows and non-Chromium browsers are untested; no long-running concurrency soak yet.
 
 ## License

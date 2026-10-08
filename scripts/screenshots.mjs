@@ -88,7 +88,7 @@ await page.waitForSelector('[data-testid="conflict-view"] .cm-changedLine');
 await page.screenshot({ path: `${OUT}/04-conflict.png` });
 
 // 5. Dark theme (explicit toggle), same note open.
-await page.evaluate(() => localStorage.setItem("brainstore-theme", "dark"));
+await page.evaluate(() => localStorage.setItem("brains-theme", "dark"));
 await page.reload();
 await page.getByTestId("file-list").waitFor();
 await page.locator(".file-path", { hasText: "rust-ci-cache.md" }).first().click();

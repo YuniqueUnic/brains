@@ -18,7 +18,7 @@ embeddings, no context assembly.
 ## Connection
 
 ```bash
-BASE="http://127.0.0.1:8787"          # local server, or your deployed Worker URL
+BASE="http://127.0.0.1:45800"          # local server, or your deployed Worker URL
 TOKEN="..."                            # root token (server prints it on first boot)
 AUTH="Authorization: Bearer $TOKEN"
 ```

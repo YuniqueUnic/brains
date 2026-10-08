@@ -877,10 +877,8 @@ fn seed_template(client: &BrainClient) -> ClientResult<i32> {
 fn edit(client: &BrainClient, path: &str, if_revision: &str) -> ClientResult<i32> {
     let (bytes, _etag) = client.get_raw(path)?;
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".into());
-    let temp = std::env::temp_dir().join(format!(
-        "brain-edit-{}",
-        brains_domain::HexId::generate()
-    ));
+    let temp =
+        std::env::temp_dir().join(format!("brain-edit-{}", brains_domain::HexId::generate()));
     std::fs::write(&temp, &bytes).map_err(|e| ClientError::transport(e.to_string()))?;
     let status = std::process::Command::new(&editor)
         .arg(&temp)

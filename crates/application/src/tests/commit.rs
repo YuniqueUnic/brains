@@ -16,8 +16,7 @@ async fn two_clients_same_base_exactly_one_wins() {
     let first = put_text(&vault, &owner, "doc.md", "base", Precondition::Create)
         .await
         .unwrap();
-    let base =
-        Precondition::IfRevision(brains_domain::HexId::from_hex(&first.revision).unwrap());
+    let base = Precondition::IfRevision(brains_domain::HexId::from_hex(&first.revision).unwrap());
 
     // Two agents read revision R1 and both try to write. Exactly one
     // outcome is Ok(committed); the other is a revision conflict.
@@ -143,9 +142,7 @@ async fn trash_tombstone_and_recreate_from_exact_revision() {
         .trash_file(
             &owner,
             &path,
-            Precondition::IfRevision(
-                brains_domain::HexId::from_hex(&created.revision).unwrap(),
-            ),
+            Precondition::IfRevision(brains_domain::HexId::from_hex(&created.revision).unwrap()),
             owner.actor.clone(),
             brains_domain::HexId::generate(),
         )
@@ -180,9 +177,7 @@ async fn trash_tombstone_and_recreate_from_exact_revision() {
         .trash_file(
             &owner,
             &path,
-            Precondition::IfRevision(
-                brains_domain::HexId::from_hex(&trashed.revision).unwrap(),
-            ),
+            Precondition::IfRevision(brains_domain::HexId::from_hex(&trashed.revision).unwrap()),
             owner.actor.clone(),
             brains_domain::HexId::generate(),
         )
@@ -299,10 +294,7 @@ async fn text_limits_reject_non_utf8_and_demote_oversize() {
         .unwrap();
     assert_eq!(stored.size, 300 * 1024);
     let content = vault
-        .read_file(
-            &owner,
-            &brains_domain::VaultPath::new("big.md").unwrap(),
-        )
+        .read_file(&owner, &brains_domain::VaultPath::new("big.md").unwrap())
         .await
         .unwrap();
     assert_eq!(content.bytes.len(), 300 * 1024);
@@ -390,8 +382,7 @@ async fn retry_after_lost_response_does_not_double_append() {
     let first = put_text(&vault, &owner, "log.md", "line1", Precondition::Create)
         .await
         .unwrap();
-    let base =
-        Precondition::IfRevision(brains_domain::HexId::from_hex(&first.revision).unwrap());
+    let base = Precondition::IfRevision(brains_domain::HexId::from_hex(&first.revision).unwrap());
 
     let winner = put_text(&vault, &owner, "log.md", "line1\nline2", base.clone())
         .await

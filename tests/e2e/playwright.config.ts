@@ -9,7 +9,7 @@ const DATA_DIR = process.env.BRAINS_E2E_DATA_DIR ?? "/tmp/brains-e2e-data";
 
 /**
  * Browser E2E for Brains's local stack (design §18 M3): the real
- * brain-server (Rust) serves the built web app, so every scenario exercises
+ * brains-server (Rust) serves the built web app, so every scenario exercises
  * the production HTTP contract end to end.
  */
 const config: Config = {

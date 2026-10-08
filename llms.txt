@@ -15,8 +15,8 @@ on-disk layout IS the backup; search indexes are rebuildable projections.
   [Runbook](https://github.com/unic/brains/blob/main/docs/runbook.md) ·
   [AI integration (agent API reference)](https://github.com/unic/brains/blob/main/docs/ai-integration.md) ·
   [Verification log](https://github.com/unic/brains/blob/main/docs/verification.md)
-- Design spec (CN): brainstore-design/Brains-Architecture-v1.md
-- Quickstart: `cargo build -p brains-server -p bsx` then
+- Architecture: https://github.com/unic/brains/blob/main/docs/architecture.md
+- Quickstart: `cargo build -p brains-server -p brains-cli` then
   `./target/debug/brains-server --data-dir ./brain-data --token "$TOKEN" --web-dist apps/web/dist`
   (first boot seeds template notes into the empty vault)
 - CLI: `bsx ls | put | cat | rm | history | restore | search |

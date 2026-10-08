@@ -38,8 +38,5 @@ async fn reading_missing_blob_is_not_found() {
         .get("vaults/default/blobs/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/gone.md")
         .await
         .unwrap_err();
-    assert!(matches!(
-        err,
-        brains_domain::DomainError::NotFound { .. }
-    ));
+    assert!(matches!(err, brains_domain::DomainError::NotFound { .. }));
 }

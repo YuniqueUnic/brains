@@ -57,7 +57,7 @@ jobs:
           DIR="brains-${VERSION}-${{ matrix.id }}"
           mkdir -p "$DIR"
           cp "target/${{ matrix.target }}/release/brains-server" \
-             "target/${{ matrix.target }}/release/brainstore-cli" "$DIR/"
+             "target/${{ matrix.target }}/release/bsx" "$DIR/"
           cp README.md docs/runbook.md "$DIR/" 2>/dev/null || cp README.md "$DIR/"
           tar czf "$DIR.tar.gz" "$DIR"
           shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
@@ -93,6 +93,15 @@ jobs:
           worker-build --release
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+      - name: Generate OpenAPI document
+        run: |
+          cargo install xidlc --locked --version 0.95.0 --features cli,fmt
+          bash scripts/gen-api.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: brains-openapi
+          path: sdk/openapi/brains-openapi.json
+          retention-days: 7
       - name: Package web dist
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
