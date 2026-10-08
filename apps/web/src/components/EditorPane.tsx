@@ -26,9 +26,8 @@ import { createFindPanel, type FindPanelLabels } from "./editor/find-panel";
 import { Toggle } from "@base-ui-components/react/toggle";
 import { ToggleGroup } from "@base-ui-components/react/toggle-group";
 import { Switch } from "@base-ui-components/react/switch";
-import { Slider } from "@base-ui-components/react/slider";
 import { Popover } from "@base-ui-components/react/popover";
-import { Settings2, RotateCcw } from "lucide-react";
+import { Settings2 } from "lucide-react";
 import {
   CopyPlus,
   Eye,
@@ -43,6 +42,7 @@ import {
   SquarePen,
   Trash2,
   Undo2,
+  WrapText,
 } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
@@ -52,6 +52,7 @@ import { Button } from "./ui/button";
 import { SaveIndicator, type SaveTone } from "./SaveIndicator";
 import { Tooltip } from "./ui/tooltip";
 import { menuItemClass, menuPopupClass } from "./ui/menu";
+import { SliderRow } from "./ui/slider-row";
 import {
   Dialog,
   DialogContent,
@@ -136,6 +137,83 @@ function saveEditorSettings(settings: EditorSettings) {
   }
 }
 
+/* --- Unsaved-buffer drafts (crash/refresh safety) ------------------------- */
+/* Every dirty buffer is debounce-persisted to localStorage keyed by path;
+ * reopening the file adopts the draft as dirty content with a discard
+ * action. Cleared when the buffer returns to clean (save, revert, take
+ * remote). Best-effort only — quota errors are swallowed. */
+
+const DRAFT_PREFIX = "brains-draft:";
+const DRAFT_LIMIT = 500_000;
+
+interface EditorDraft {
+  text: string;
+  at: number;
+}
+
+const draftPending = new Map<string, { text: string; timer: number }>();
+
+function writeDraft(path: string, text: string) {
+  const pending = draftPending.get(path);
+  if (pending) window.clearTimeout(pending.timer);
+  const timer = window.setTimeout(() => {
+    draftPending.delete(path);
+    try {
+      if (text.length <= DRAFT_LIMIT) {
+        localStorage.setItem(
+          DRAFT_PREFIX + path,
+          JSON.stringify({ text, at: Date.now() } satisfies EditorDraft),
+        );
+      }
+    } catch {
+      /* quota or unavailable — drafts are best-effort */
+    }
+  }, 600);
+  draftPending.set(path, { text, timer });
+}
+
+function clearDraft(path: string) {
+  const pending = draftPending.get(path);
+  if (pending) {
+    window.clearTimeout(pending.timer);
+    draftPending.delete(path);
+  }
+  try {
+    localStorage.removeItem(DRAFT_PREFIX + path);
+  } catch {
+    /* ignore */
+  }
+}
+
+function readDraft(path: string): EditorDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_PREFIX + path);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as EditorDraft;
+    return typeof parsed?.text === "string" && typeof parsed?.at === "number" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Flush debounce-pending drafts synchronously (unload / tab hide). */
+function flushDrafts() {
+  for (const [path, pending] of draftPending) {
+    window.clearTimeout(pending.timer);
+    try {
+      if (pending.text.length <= DRAFT_LIMIT) {
+        localStorage.setItem(
+          DRAFT_PREFIX + path,
+          JSON.stringify({ text: pending.text, at: Date.now() } satisfies EditorDraft),
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  draftPending.clear();
+}
+
 /* Markdown highlighting (DESIGN.md §31): near-monochrome, quiet accents. */
 const markdownHighlights = HighlightStyle.define([
   { tag: tags.heading1, fontWeight: "650", fontSize: "1.7em", lineHeight: "1.4" },
@@ -179,7 +257,8 @@ function baseExtensions(
   return [
     markdown({ base: markdownLanguage }),
     syntaxHighlighting(markdownHighlights),
-    EditorView.lineWrapping,
+    // Wrapping is owned by wrapComp (the preference must be able to turn it
+    // off) — no static EditorView.lineWrapping here.
     history(),
     search({ top: true, createPanel: (view) => createFindPanel(findLabels())(view) }),
     highlightSelectionMatches(),
@@ -232,7 +311,6 @@ export default function EditorPane({
   const diffCompartment = useRef(new Compartment());
   const lineNumComp = useRef(new Compartment());
   const wrapComp = useRef(new Compartment());
-  const sizeComp = useRef(new Compartment());
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -245,6 +323,8 @@ export default function EditorPane({
           text,
           message: undefined,
         };
+        if (next.kind === "dirty") writeDraft(current.path, text);
+        else clearDraft(current.path);
         // Sync the ref BEFORE notifying React: Ctrl+S must see the
         // freshest buffer even if the keystroke and the hotkey land in
         // the same frame, before the re-render catches up.
@@ -273,16 +353,19 @@ export default function EditorPane({
           diffCompartment.current.of([]),
           lineNumComp.current.of(initialSettings.lineNumbers ? lineNumbers() : []),
           wrapComp.current.of(initialSettings.wrap ? EditorView.lineWrapping : []),
-          sizeComp.current.of(
-            EditorView.theme({
-              "&": { fontSize: `${Math.round(15 * initialSettings.scale) / 100}px` },
-            }),
-          ),
         ],
       }),
     });
     viewRef.current = view;
-    return () => view.destroy();
+    // Unsaved buffers survive tab close and crashes through their drafts.
+    const flush = () => flushDrafts();
+    window.addEventListener("beforeunload", flush);
+    document.addEventListener("visibilitychange", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      document.removeEventListener("visibilitychange", flush);
+      view.destroy();
+    };
     // Editor instance lives across file switches; doc is swapped below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -352,6 +435,66 @@ export default function EditorPane({
       onChange(adopted);
       return;
     }
+    // Crash/refresh safety: a clean buffer adopts a stored draft as dirty
+    // content (with a discard toast); a clean buffer without one drops any
+    // stale draft — save/revert elsewhere already made it obsolete.
+    if (state.kind === "clean") {
+      const draft = readDraft(state.path);
+      if (draft && draft.text !== state.text && draft.text.length <= DRAFT_LIMIT) {
+        const adopted: EditorState = { ...state, text: draft.text, kind: "dirty" };
+        stateRef.current = adopted;
+        onChange(adopted);
+        const rebinding = viewRef.current;
+        if (rebinding) {
+          rebinding.dispatch({
+            changes: { from: 0, to: rebinding.state.doc.length, insert: draft.text },
+          });
+        }
+        const minutes = Math.max(0, Math.floor((Date.now() - draft.at) / 60_000));
+        const when =
+          minutes < 1
+            ? t("draftJustNow")
+            : minutes < 60
+              ? t("draftMinAgo", { n: minutes })
+              : t("draftHourAgo", { n: Math.floor(minutes / 60) });
+        toast.info(t("draftRestored", { when }), {
+          action: {
+            label: t("draftDrop"),
+            onClick: () => {
+              clearDraft(state.path);
+              const cur = stateRef.current;
+              if (
+                cur.kind === "dirty" &&
+                cur.path === state.path &&
+                cur.text === draft.text
+              ) {
+                const reverted: EditorState = {
+                  kind: "clean",
+                  path: state.path,
+                  text: state.text,
+                  baseText: state.baseText,
+                  baseRevision: state.baseRevision,
+                };
+                stateRef.current = reverted;
+                onChange(reverted);
+                const reverting = viewRef.current;
+                if (reverting) {
+                  reverting.dispatch({
+                    changes: {
+                      from: 0,
+                      to: reverting.state.doc.length,
+                      insert: state.text,
+                    },
+                  });
+                }
+              }
+            },
+          },
+        });
+        return;
+      }
+      clearDraft(state.path);
+    }
     const doc = currentDoc(state);
     if (view.state.doc.toString() !== doc) {
       view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc } });
@@ -360,7 +503,8 @@ export default function EditorPane({
   }, [state]);
 
   // Apply preference changes through compartments: no view rebuild, no
-  // buffer churn.
+  // buffer churn. Scale flows through the --editor-scale CSS variable on the
+  // host (styles.css consumes it), so source AND preview follow one value.
   useEffect(() => {
     const view = viewRef.current;
     if (!view) return;
@@ -368,12 +512,9 @@ export default function EditorPane({
       effects: [
         lineNumComp.current.reconfigure(settings.lineNumbers ? lineNumbers() : []),
         wrapComp.current.reconfigure(settings.wrap ? EditorView.lineWrapping : []),
-        sizeComp.current.reconfigure(
-          EditorView.theme({ "&": { fontSize: `${Math.round(15 * settings.scale) / 100}px` } }),
-        ),
       ],
     });
-  }, [settings.lineNumbers, settings.wrap, settings.scale]);
+  }, [settings.lineNumbers, settings.wrap]);
 
   const save = useCallback(async () => {
     const current = stateRef.current;
@@ -675,7 +816,11 @@ export default function EditorPane({
         )}
       </div>
 
-      <div className="relative min-h-0 flex-1" data-editor-font={settings.font}>
+      <div
+        className="relative min-h-0 flex-1"
+        data-editor-font={settings.font}
+        style={{ "--editor-scale": settings.scale / 100 } as React.CSSProperties}
+      >
         {inConflict && (
           <ConflictView
             state={state}
@@ -685,7 +830,7 @@ export default function EditorPane({
           />
         )}
         <div
-          className={`absolute inset-0 overflow-auto${inConflict || viewMode === "preview" ? " invisible" : ""}`}
+          className={`absolute inset-0${inConflict || viewMode === "preview" ? " invisible" : ""}`}
           data-testid="codemirror-host"
           ref={hostRef}
         />
@@ -718,53 +863,28 @@ export default function EditorPane({
         <span className="flex-1" />
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-2">
-            <Slider.Root
+            <SliderRow
+              ariaLabel={t("scaleLabel")}
               value={settings.scale}
-              onValueChange={(value) => updateSettings({ scale: typeof value === "number" ? value : (value[0] ?? settings.scale) })}
               min={80}
               max={160}
               step={5}
-              aria-label={t("scaleLabel")}
-              className="flex h-4 w-24 items-center"
-            >
-              <Slider.Control className="flex h-4 w-full items-center rounded">
-                <Slider.Track className="h-1 w-full rounded-full bg-muted">
-                  <Slider.Indicator className="rounded-full bg-primary/60" />
-                </Slider.Track>
-                <Slider.Thumb className="size-3 cursor-pointer rounded-full border border-border bg-card shadow-menu" />
-              </Slider.Control>
-            </Slider.Root>
-            <button
-              type="button"
-              aria-label={t("scaleReset")}
-              title={t("scaleReset")}
-              className="cursor-pointer rounded p-0.5 hover:bg-muted hover:text-foreground"
-              onClick={() => updateSettings({ scale: 100 })}
-            >
-              <RotateCcw className="size-3.5 stroke-[1.5]" />
-            </button>
-            <ToggleGroup
-              value={[settings.wrap ? "wrap" : "overflow"]}
-              onValueChange={(groupValue) =>
-                updateSettings({ wrap: (groupValue[groupValue.length - 1] ?? "wrap") === "wrap" })
-              }
-              className="flex items-center gap-0.5 rounded-md border p-0.5"
-            >
+              suffix="%"
+              resetLabel={t("scaleReset")}
+              onChange={(scale) => updateSettings({ scale })}
+              onReset={() => updateSettings({ scale: 100 })}
+              className="w-40"
+            />
+            <Tooltip content={settings.wrap ? t("wrapLabel") : t("overflowLabel")}>
               <Toggle
-                value="wrap"
-                aria-label={t("wrapLabel")}
-                className="cursor-pointer rounded px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
+                pressed={settings.wrap}
+                onPressedChange={(pressed) => updateSettings({ wrap: pressed === true })}
+                aria-label={settings.wrap ? t("wrapLabel") : t("overflowLabel")}
+                className="flex size-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
               >
-                {t("wrapLabel")}
+                <WrapText className="size-3.5 stroke-[1.5]" />
               </Toggle>
-              <Toggle
-                value="overflow"
-                aria-label={t("overflowLabel")}
-                className="cursor-pointer rounded px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-              >
-                {t("overflowLabel")}
-              </Toggle>
-            </ToggleGroup>
+            </Tooltip>
           </div>
         )}
         <span className="font-mono">
@@ -874,35 +994,18 @@ function EditorSettingsPopover({
                 ))}
               </ToggleGroup>
             </div>
-            <div className="flex items-center gap-2 py-1.5">
-              <span className="shrink-0">{t("scaleLabel")}</span>
-              <Slider.Root
+            <div className="py-1.5">
+              <SliderRow
+                label={t("scaleLabel")}
                 value={settings.scale}
-                onValueChange={(value) =>
-                  onChange({ scale: typeof value === "number" ? value : (value[0] ?? settings.scale) })
-                }
                 min={80}
                 max={160}
                 step={5}
-                aria-label={t("scaleLabel")}
-                className="flex h-4 flex-1 items-center"
-              >
-                <Slider.Control className="flex h-4 w-full items-center rounded">
-                  <Slider.Track className="h-1 w-full rounded-full bg-muted">
-                    <Slider.Indicator className="rounded-full bg-primary/60" />
-                  </Slider.Track>
-                  <Slider.Thumb className="size-3 cursor-pointer rounded-full border border-border bg-card shadow-menu" />
-                </Slider.Control>
-              </Slider.Root>
-              <span className="w-10 shrink-0 text-right font-mono text-[11px]">{settings.scale}%</span>
-              <button
-                type="button"
-                aria-label={t("scaleReset")}
-                className="cursor-pointer rounded p-0.5 hover:bg-muted hover:text-foreground"
-                onClick={() => onChange({ scale: 100 })}
-              >
-                <RotateCcw className="size-3.5 stroke-[1.5]" />
-              </button>
+                suffix="%"
+                resetLabel={t("scaleReset")}
+                onChange={(scale) => onChange({ scale })}
+                onReset={() => onChange({ scale: 100 })}
+              />
             </div>
           </Popover.Popup>
         </Popover.Positioner>
@@ -965,6 +1068,7 @@ function ConflictView({
           doc: state.localText,
           extensions: [
             ...baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
+            EditorView.lineWrapping,
             unifiedMergeView({
               original: state.remoteText,
               mergeControls: true,
@@ -989,7 +1093,10 @@ function ConflictView({
       },
       b: {
         doc: state.localText,
-        extensions: baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
+        extensions: [
+          ...baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
+          EditorView.lineWrapping,
+        ],
       },
       parent,
       highlightChanges: true,

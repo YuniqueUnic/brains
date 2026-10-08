@@ -158,7 +158,7 @@ export function useUpload({
               ? ({ mode: "update", baseRevision: row.existing.revision } as const)
               : ({ mode: "create" } as const);
           if (file.text !== null) {
-            await api.saveText(target, file.text, precondition, "text/markdown; charset=utf-8");
+            await api.saveText(target, file.text, precondition);
           } else if (file.bytes) {
             await api.saveBinary(target, file.bytes, precondition, file.mediaType);
           }
@@ -181,7 +181,11 @@ export function useUpload({
   );
 
   const begin = useCallback(
-    async (picked: File[] | DataTransferItemList, kind: "flat" | "tree") => {
+    async (
+      picked: File[] | DataTransferItemList,
+      kind: "flat" | "tree",
+      options?: { autoConfirm?: boolean },
+    ) => {
       const runId = runIdRef.current + 1;
       runIdRef.current = runId;
       try {
@@ -195,7 +199,9 @@ export function useUpload({
         }
         if (incoming.length === 0) return;
         const plan = buildUploadPlan(incoming, files);
-        if (plan.hasConflicts) {
+        // Paste/clipboard imports use synthetic names (unnamed.md …): the
+        // rename decision is ours, not the user's, so land it silently.
+        if (plan.hasConflicts && !options?.autoConfirm) {
           if (runIdRef.current === runId) setConflict({ plan, existing: files });
           return;
         }

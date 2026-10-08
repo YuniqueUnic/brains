@@ -19,7 +19,7 @@ describe("Brains login", () => {
   it("admits the owner token into the workbench", async ({ actor }) => {
     await actor.attemptsTo(SignIn());
     await actor.attemptsTo(
-      Click.on(Workbench.utilityMenuButton()),
+      Click.on(Workbench.accountMenuButton()),
       Ensure.eventually(Text.of(Workbench.logoutButton()), equals("退出")),
     );
   });

@@ -136,7 +136,8 @@
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
-    font-size: 13px;
+    /* Settings → 界面字号 writes this var; 13px is the design default. */
+    font-size: var(--ui-font-size, 13px);
     -webkit-font-smoothing: antialiased;
   }
   ::selection {
@@ -163,10 +164,14 @@
 
 /* --- CodeMirror: the document editor ------------------------------------- */
 /* Document typography (DESIGN.md §32-33): 860px measure, generous top/bottom
-   padding, 15px/1.75 body, headings sized via the markdown highlight style. */
+   padding, 15px/1.75 body, headings sized via the markdown highlight style.
+   The editor pane owns --editor-scale (settings scale ÷ 100): source and
+   preview share it. height:100% keeps the scroller (not the host) as the
+   scroll container, so the find panel stays pinned under the header. */
 .cm-editor {
   background: transparent;
-  font-size: 15px;
+  height: 100%;
+  font-size: calc(15px * var(--editor-scale, 1));
 }
 .cm-editor.cm-focused {
   outline: none;
@@ -191,7 +196,7 @@
   padding-bottom: 8px;
 }
 .cm-mergeView .cm-editor {
-  font-size: 13px;
+  font-size: calc(13px * var(--editor-scale, 1));
 }
 .cm-cursor,
 .cm-dropCursor {
@@ -392,11 +397,12 @@
 }
 
 /* Markdown preview (editor preview mode): document typography on the 860px
-   measure, same scale as the source-mode highlight sizes. */
+   measure, same scale as the source-mode highlight sizes — --editor-scale
+   keeps both modes in lockstep. */
 .markdown-preview {
   background: var(--card);
   color: var(--foreground);
-  font-size: 15px;
+  font-size: calc(15px * var(--editor-scale, 1));
   line-height: 1.75;
   padding: 48px 24px 120px;
 }

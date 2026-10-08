@@ -24,6 +24,13 @@ import { cn } from "../../lib/utils";
 import { menuItemClass, menuPopupClass, MenuShortcut } from "../ui/menu";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import {
+  checkState,
+  collapseToRoots,
+  invertSelection,
+  selectAllFiles,
+  togglePath,
+} from "./selection";
 
 /*
  * File tree (DESIGN.md §9-15, §57): React Aria owns keyboard navigation,
@@ -159,20 +166,11 @@ export function FileTree({
     });
   };
 
-  // Batch selection covers folder rows too: toggling a folder selects
-  // (or deselects) every live file beneath it, so the checkboxes and the
-  // delete-confirm count reflect real targets.
+  // Batch selection (tree/selection.ts): the set holds file paths only; a
+  // folder row derives its all/partial/none state from the files beneath it,
+  // so nested folders light up without folder rows ever being stored.
   const toggleSelect = (path: string, isFolder: boolean) => {
-    const group = isFolder
-      ? [path, ...allPaths.filter((one) => one.startsWith(`${path}/`))]
-      : [path];
-    const allSelected = group.every((one) => selected.has(one));
-    const next = new Set(selected);
-    for (const one of group) {
-      if (allSelected) next.delete(one);
-      else next.add(one);
-    }
-    onSelectionChange(next);
+    onSelectionChange(togglePath(allPaths, path, isFolder, selected));
   };
 
   // Plain mouse clicks land on our row div (Base UI's context-menu trigger
@@ -191,7 +189,8 @@ export function FileTree({
   };
 
   // Drag & drop move (DESIGN.md §58): drag a file or folder onto a folder.
-  // The payload is the row plus the whole live selection when it is member.
+  // The payload is the row plus the whole live selection when it is member,
+  // collapsed to top-level entries so a batch-selected folder rides once.
   const dragPaths = (path: string, isFolder: boolean): { path: string; isFolder: boolean }[] => {
     const entry: { path: string; isFolder: boolean } = {
       path: isFolder ? `${path}/` : path,
@@ -205,8 +204,9 @@ export function FileTree({
       const fileEntries = others
         .filter((one) => allPaths.includes(one))
         .map((one) => ({ path: one, isFolder: false }));
-      return [entry, ...fileEntries, ...folderEntries];
+      return collapseToRoots([entry, ...fileEntries, ...folderEntries]);
     }
+    if (isFolder) return collapseToRoots([entry]);
     return [entry];
   };
 
@@ -229,6 +229,7 @@ export function FileTree({
     nodes.map((node) => {
       if (node.type === "folder") {
         const isExpanded = !collapsed.has(node.path);
+        const folderState = checkState(allPaths, node.path, true, selected);
         return (
           <TreeItem
             key={node.path}
@@ -245,6 +246,14 @@ export function FileTree({
                   <ContextMenu.Trigger
                     render={
                       <div
+                        draggable={!selecting}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData(
+                            "application/x-brains-paths",
+                            JSON.stringify(dragPaths(node.path, true)),
+                          );
+                        }}
                         onClick={rowClick(node.path, true)}
                         onDragOver={(event) => {
                           event.preventDefault();
@@ -255,7 +264,7 @@ export function FileTree({
                         onDrop={handleDrop(node.path)}
                         className={cn(
                           "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-[13px] transition-colors",
-                          selecting && selected.has(node.path) && "bg-selected",
+                          selecting && folderState !== "none" && "bg-selected",
                           dropTarget === node.path && "ring-2 ring-inset ring-primary/50",
                           !selecting && "cursor-pointer hover:bg-muted",
                         )}
@@ -276,7 +285,7 @@ export function FileTree({
                     {selecting && (
                       <RowCheckbox
                         label={t("selectOne", { path: node.path })}
-                        checked={selected.has(node.path)}
+                        state={folderState}
                         onToggle={() => toggleSelect(node.path, true)}
                       />
                     )}
@@ -348,7 +357,7 @@ export function FileTree({
                   {selecting && (
                     <RowCheckbox
                       label={t("selectOne", { path: entry.path })}
-                      checked={selected.has(entry.path)}
+                      state={selected.has(entry.path) ? "all" : "none"}
                       onToggle={() => toggleSelect(entry.path, false)}
                     />
                   )}
@@ -434,16 +443,14 @@ export function FileTree({
           <button
             type="button"
             className="cursor-pointer rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-            onClick={() => onSelectionChange(new Set(allPaths))}
+            onClick={() => onSelectionChange(selectAllFiles(allPaths))}
           >
             {t("selectAll")}
           </button>
           <button
             type="button"
             className="cursor-pointer rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-            onClick={() =>
-              onSelectionChange(new Set(allPaths.filter((path) => !selected.has(path))))
-            }
+            onClick={() => onSelectionChange(invertSelection(allPaths, selected))}
           >
             {t("invertSelection")}
           </button>
@@ -541,21 +548,27 @@ function FolderChevron({
   );
 }
 
+/** Native checkbox with the full all/partial/none tri-state (partial renders
+ * as the browser's indeterminate dash; aria-checked follows). */
 function RowCheckbox({
   label,
-  checked,
+  state,
   onToggle,
 }: {
   label: string;
-  checked: boolean;
+  state: "all" | "partial" | "none";
   onToggle: () => void;
 }) {
   return (
     <input
       type="checkbox"
       aria-label={label}
+      aria-checked={state === "partial" ? "mixed" : state === "all"}
       className="size-3.5 shrink-0 accent-[var(--primary)]"
-      checked={checked}
+      checked={state === "all"}
+      ref={(element) => {
+        if (element) element.indeterminate = state === "partial";
+      }}
       onClick={(event) => event.stopPropagation()}
       onChange={onToggle}
     />
@@ -584,7 +597,7 @@ function RowMenu({
         render={
           <button
             aria-label={t("rowMenu", { path })}
-            className="pointer-events-none ml-auto size-5 shrink-0 cursor-pointer items-center justify-center rounded text-faint opacity-0 hover:bg-selected hover:text-foreground group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-visible:outline-2 focus-visible:outline-ring/70"
+            className="pointer-events-none ml-auto size-5 shrink-0 cursor-pointer items-center justify-center rounded text-faint opacity-0 hover:bg-selected hover:text-foreground group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring/70"
             onClick={(event) => event.stopPropagation()}
           />
         }

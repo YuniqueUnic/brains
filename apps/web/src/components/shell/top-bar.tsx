@@ -1,19 +1,10 @@
-import {
-  FilePlus2,
-  Folder,
-  LogOut,
-  MoreHorizontal,
-  PanelLeft,
-  Search,
-  Settings2,
-  Upload,
-  UserRound,
-} from "lucide-react";
+import { Folder, LogOut, PanelLeft, Search, Settings2, Upload } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
 import type { SessionInfo } from "../../api/client";
 import { Button } from "../ui/button";
-import { menuPopupClass, menuItemClass } from "../ui/menu";
+import { HoverMenu } from "../ui/hover-menu";
+import { menuItemClass, MenuShortcut } from "../ui/menu";
 import { Tooltip } from "../ui/tooltip";
 import { BrandMark } from "../brand";
 
@@ -28,10 +19,10 @@ function GitHubMark() {
 export type UploadIntent = "files" | "folder" | "clipboard";
 
 /**
- * Top bar (DESIGN.md §4-8): 52px, three first-level actions only —
- * New (primary menu), Upload (secondary menu), ··· (utility). Search lives
- * next to the wordmark as the ⌘K palette trigger. Trash is sidebar
- * navigation, not a header state.
+ * Top bar (DESIGN.md §4-8): 52px, quiet chrome. 新建 is a direct button (it
+ * has exactly one meaning); Upload is a hover-open / click-to-pin menu;
+ * the account chip sits at the far right with logout one hover away. Search
+ * lives next to the wordmark as the ⌘K palette trigger.
  */
 const REPO_URL = "https://github.com/unic/brains";
 
@@ -88,70 +79,48 @@ export function TopBar({
       </button>
 
       <div className="ml-auto flex items-center gap-1.5">
-        <Menu.Root>
-          <Menu.Trigger
-            render={
-              <Button variant="default" data-testid="new-file" aria-label={tCommon("newFile")}>
-                <FilePlus2 />
-                {tCommon("newFile")}
-              </Button>
-            }
-          />
-          <Menu.Portal>
-            <Menu.Positioner sideOffset={6} align="start">
-              <Menu.Popup className={menuPopupClass}>
-                <Menu.Item
-                  className={menuItemClass()}
-                  onClick={onNewDocument}
-                  data-testid="new-document"
-                >
-                  <FilePlus2 className="size-4 stroke-[1.5] text-muted-foreground" />
-                  {t("newDocument")}
-                </Menu.Item>
-              </Menu.Popup>
-            </Menu.Positioner>
-          </Menu.Portal>
-        </Menu.Root>
+        <Button
+          variant="default"
+          data-testid="new-file"
+          aria-label={tCommon("newFile")}
+          onClick={onNewDocument}
+        >
+          {tCommon("newFile")}
+          <MenuShortcut>⌘N</MenuShortcut>
+        </Button>
 
-        <Menu.Root>
-          <Menu.Trigger
-            render={
-              <Button variant="outline" aria-label={tCommon("upload")}>
-                <Upload />
-                {tCommon("upload")}
-              </Button>
-            }
-          />
-          <Menu.Portal>
-            <Menu.Positioner sideOffset={6} align="start">
-              <Menu.Popup className={menuPopupClass}>
-                <Menu.Item
-                  className={menuItemClass()}
-                  onClick={() => onUpload("files")}
-                  data-testid="upload-files"
-                >
-                  <Upload className="size-4 stroke-[1.5] text-muted-foreground" />
-                  {t("uploadFiles")}
-                </Menu.Item>
-                <Menu.Item
-                  className={menuItemClass()}
-                  onClick={() => onUpload("folder")}
-                  data-testid="upload-folder"
-                >
-                  <Folder className="size-4 stroke-[1.5] text-muted-foreground" />
-                  {t("uploadFolder")}
-                </Menu.Item>
-                <Menu.Item
-                  className={menuItemClass()}
-                  onClick={() => onUpload("clipboard")}
-                  data-testid="upload-clipboard"
-                >
-                  {t("uploadClipboard")}
-                </Menu.Item>
-              </Menu.Popup>
-            </Menu.Positioner>
-          </Menu.Portal>
-        </Menu.Root>
+        <HoverMenu
+          trigger={
+            <Button variant="outline" aria-label={tCommon("upload")}>
+              <Upload />
+              {tCommon("upload")}
+            </Button>
+          }
+        >
+          <Menu.Item
+            className={menuItemClass()}
+            onClick={() => onUpload("files")}
+            data-testid="upload-files"
+          >
+            <Upload className="size-4 stroke-[1.5] text-muted-foreground" />
+            {t("uploadFiles")}
+          </Menu.Item>
+          <Menu.Item
+            className={menuItemClass()}
+            onClick={() => onUpload("folder")}
+            data-testid="upload-folder"
+          >
+            <Folder className="size-4 stroke-[1.5] text-muted-foreground" />
+            {t("uploadFolder")}
+          </Menu.Item>
+          <Menu.Item
+            className={menuItemClass()}
+            onClick={() => onUpload("clipboard")}
+            data-testid="upload-clipboard"
+          >
+            {t("uploadClipboard")}
+          </Menu.Item>
+        </HoverMenu>
 
         <Tooltip content={t("openSettings")}>
           <Button
@@ -176,33 +145,34 @@ export function TopBar({
           </a>
         </Tooltip>
 
-        <Menu.Root>
-          <Menu.Trigger
-            render={
-              <Button size="icon" aria-label={t("utilityMenu")} data-testid="utility-menu">
-                <MoreHorizontal />
-              </Button>
-            }
-          />
-          <Menu.Portal>
-            <Menu.Positioner sideOffset={6} align="end">
-              <Menu.Popup className={menuPopupClass}>
-                <div className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
-                  <UserRound className="size-3.5 stroke-[1.5]" />
-                  <span className="min-w-0 flex-1 truncate">{session.actor}</span>
-                </div>
-                <Menu.Item
-                  className={menuItemClass({ danger: true })}
-                  onClick={onLogout}
-                  data-testid="logout"
-                >
-                  <LogOut className="size-4 stroke-[1.5]" />
-                  {tCommon("logout")}
-                </Menu.Item>
-              </Menu.Popup>
-            </Menu.Positioner>
-          </Menu.Portal>
-        </Menu.Root>
+        {/* Account chip, far right: hover reveals logout. */}
+        <HoverMenu
+          align="end"
+          trigger={
+            <button
+              data-testid="account-button"
+              aria-label={t("accountMenu")}
+              className="flex h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-[7px] pl-1 pr-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring/70"
+            >
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+                {session.actor.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0 max-w-[140px] truncate">{session.actor}</span>
+            </button>
+          }
+        >
+          <div className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
+            <span className="min-w-0 flex-1 truncate">{session.actor}</span>
+          </div>
+          <Menu.Item
+            className={menuItemClass({ danger: true })}
+            onClick={onLogout}
+            data-testid="logout"
+          >
+            <LogOut className="size-4 stroke-[1.5]" />
+            {tCommon("logout")}
+          </Menu.Item>
+        </HoverMenu>
       </div>
     </header>
   );

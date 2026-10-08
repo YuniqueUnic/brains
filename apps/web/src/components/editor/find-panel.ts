@@ -196,6 +196,10 @@ export function createFindPanel(labels: FindPanelLabels): (view: EditorView) => 
 
     return {
       dom,
+      // Custom panels carry their own placement: without this the panel
+      // mounts at the bottom — search()'s `top` config only drives the
+      // built-in default panel.
+      top: true,
       mount() {
         findInput.focus();
         findInput.select();

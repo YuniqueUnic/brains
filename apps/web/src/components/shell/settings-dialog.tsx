@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import i18n, { LANGUAGES } from "../../i18n";
-import { Toggle } from "@base-ui-components/react/toggle";
-import { ToggleGroup } from "@base-ui-components/react/toggle-group";
-import { Slider } from "@base-ui-components/react/slider";
 import { useTheme, type Theme } from "../../theme/ThemeProvider";
 import {
   Dialog,
@@ -12,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "../ui/dialog";
+import { SliderRow } from "../ui/slider-row";
 import { ToggleGroupSection } from "./toggle-section";
 
 /*
@@ -97,54 +95,27 @@ export function SettingsDialog({
 
         <div className="mt-4 flex flex-col gap-4">
           <SettingRow label={t("settingsFont")}>
-            <ToggleGroup
-              value={[settings.font]}
-              onValueChange={(groupValue) =>
-                update({ font: (groupValue[groupValue.length - 1] ?? "system") as UiSettings["font"] })
-              }
-              className="flex items-center gap-0.5 rounded-md border p-0.5"
-            >
-              {(
-                [
-                  ["system", t("fontSystem")],
-                  ["serif", t("fontSerif")],
-                  ["mono", t("fontMono")],
-                ] as const
-              ).map(([value, label]) => (
-                <Toggle
-                  key={value}
-                  value={value}
-                  aria-label={label}
-                  className="cursor-pointer rounded px-2 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-                >
-                  {label}
-                </Toggle>
-              ))}
-            </ToggleGroup>
+            <ToggleGroupSection
+              value={settings.font}
+              onChange={(next) => update({ font: next as UiSettings["font"] })}
+              options={[
+                { value: "system", label: t("fontSystem") },
+                { value: "serif", label: t("fontSerif") },
+                { value: "mono", label: t("fontMono") },
+              ]}
+            />
           </SettingRow>
 
           <SettingRow label={t("settingsFontSize")}>
-            <div className="flex items-center gap-2">
-              <Slider.Root
-                value={settings.fontSize}
-                onValueChange={(value: number | number[]) =>
-                  update({ fontSize: typeof value === "number" ? value : (value[0] ?? settings.fontSize) })
-                }
-                min={12}
-                max={15}
-                step={0.5}
-                aria-label={t("settingsFontSize")}
-                className="flex h-4 w-28 items-center"
-              >
-                <Slider.Control className="flex h-4 w-full items-center rounded">
-                  <Slider.Track className="h-1 w-full rounded-full bg-muted">
-                    <Slider.Indicator className="rounded-full bg-primary/60" />
-                  </Slider.Track>
-                  <Slider.Thumb className="size-3 cursor-pointer rounded-full border border-border bg-card shadow-menu" />
-                </Slider.Control>
-              </Slider.Root>
-              <span className="w-10 text-right font-mono text-[11px]">{settings.fontSize}px</span>
-            </div>
+            <SliderRow
+              value={settings.fontSize}
+              min={12}
+              max={15}
+              step={0.5}
+              suffix="px"
+              onChange={(fontSize) => update({ fontSize })}
+              className="w-40"
+            />
           </SettingRow>
 
           <SettingRow label={t("settingsTheme")}>
@@ -160,30 +131,16 @@ export function SettingsDialog({
           </SettingRow>
 
           <SettingRow label={t("settingsLanguage")}>
-            <ToggleGroup
-              value={[currentLanguage]}
-              onValueChange={(groupValue) => {
-                const next = groupValue[groupValue.length - 1];
-                if (next && next !== i18n.language) void i18n.changeLanguage(next);
+            <ToggleGroupSection
+              value={currentLanguage}
+              onChange={(next) => {
+                if (next !== i18n.language) void i18n.changeLanguage(next);
               }}
-              className="flex items-center gap-0.5 rounded-md border p-0.5"
-            >
-              {(
-                [
-                  ["zh-CN", "中文"],
-                  ["en", "English"],
-                ] as const
-              ).map(([value, label]) => (
-                <Toggle
-                  key={value}
-                  value={value}
-                  aria-label={label}
-                  className="cursor-pointer rounded px-2 py-1 text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-                >
-                  {label}
-                </Toggle>
-              ))}
-            </ToggleGroup>
+              options={[
+                { value: "zh-CN", label: "中文" },
+                { value: "en", label: "English" },
+              ]}
+            />
           </SettingRow>
         </div>
       </DialogContent>

@@ -1,7 +1,7 @@
 import { describe, it } from "@serenity-js/playwright-test";
 import { Ensure, includes, equals, not } from "@serenity-js/assertions";
 import { Duration } from "@serenity-js/core";
-import { Enter, Text } from "@serenity-js/web";
+import { By, Click, Enter, PageElement, Text } from "@serenity-js/web";
 
 import { CreateNote, SignIn, StartNewNote } from "../screenplay/tasks/Authoring";
 import { Navigate } from "@serenity-js/web";
@@ -50,10 +50,18 @@ describe("note authoring", () => {
       Ensure.that(EditorStatus(), equals("未保存修改")),
     );
 
-    // Reloading discards the unsaved buffer: the server never saw it.
+    // The server never auto-saves (P0). Locally the draft restores so a
+    // crash or refresh cannot lose typing; discarding it reverts to the
+    // server base — proving the unsaved text never reached the server.
     await actor.attemptsTo(
       Navigate.to(Instance.baseUrl),
       OpenNote(path),
+      Ensure.eventually(Text.of(EditorArea.content()), includes("appended"))
+        .timeoutAfter(Duration.ofSeconds(10)),
+      Ensure.that(EditorStatus(), equals("未保存修改")),
+      Click.on(
+        PageElement.located(By.css('button:has-text("丢弃")')).describedAs("discard draft"),
+      ),
       Ensure.eventually(Text.of(EditorArea.content()), not(includes("appended")))
         .timeoutAfter(Duration.ofSeconds(10)),
     );

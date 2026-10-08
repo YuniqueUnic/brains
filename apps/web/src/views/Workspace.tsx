@@ -94,12 +94,12 @@ export default function Workspace({
   const sidebarPanel = useRef<PanelImperativeHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
-  const uploadIntent = useRef<UploadIntent>("files");
   const editorRef = useRef(editor);
   editorRef.current = editor;
   const [banner, setBanner] = useState<string | null>(null);
 
   const folders = useMemo(() => collectFolders(liveFiles), [liveFiles]);
+  const folderSet = useMemo(() => new Set(folders), [folders]);
   const shownFiles = mode === "workspace" ? liveFiles : trashedFiles;
 
   const fail = (error: unknown) => {
@@ -181,29 +181,72 @@ export default function Workspace({
     }
   };
 
-  const openUploadIntent = (intent: UploadIntent) => {
-    uploadIntent.current = intent;
-    if (intent === "files") fileInputRef.current?.click();
-    else if (intent === "folder") folderInputRef.current?.click();
-    else void navigator.clipboard
-      .read()
-      .then(async (items) => {
-        const files: File[] = [];
-        for (const item of items) {
-          const type = item.types.find((candidate) => candidate.startsWith("image/"));
-          if (type) {
-            const blob = await item.getType(type);
-            const ext = type.split("/")[1] ?? "bin";
-            files.push(new File([blob], `pasted-${Date.now()}.${ext}`, { type }));
+  // Clipboard intake (paste anywhere, or the 上传 menu item): images land as
+  // unnamed.png (+N), text as unnamed.md. The names are synthetic, so the
+  // rename plan lands silently — real files picked or dropped keep the
+  // conflict dialog.
+  const importFromClipboard = async () => {
+    try {
+      const items = await navigator.clipboard.read();
+      const files: File[] = [];
+      for (const item of items) {
+        const imageType = item.types.find((candidate) => candidate.startsWith("image/"));
+        if (imageType) {
+          const blob = await item.getType(imageType);
+          const ext = imageType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "png";
+          files.push(new File([blob], `unnamed.${ext}`, { type: imageType }));
+          continue;
+        }
+        if (item.types.includes("text/plain")) {
+          const text = await (await item.getType("text/plain")).text();
+          if (text.trim()) {
+            files.push(new File([text], "unnamed.md", { type: "text/markdown" }));
           }
         }
-        if (files.length === 0) {
-          toast.info(t("clipboardEmpty"));
-          return undefined;
-        }
-        return runUpload(await upload.begin(files, "flat"));
-      })
-      .catch(() => toast.error(t("clipboardUnavailable")));
+      }
+      if (files.length === 0) {
+        toast.info(t("clipboardEmpty"));
+        return;
+      }
+      runUpload(await upload.begin(files, "flat", { autoConfirm: true }));
+    } catch {
+      toast.error(t("clipboardUnavailable"));
+    }
+  };
+
+  // Paste anywhere outside a text field imports the clipboard: files via the
+  // normal conflict pipeline, bare text as a new unnamed.md note.
+  const importRef = useRef<(files: File[], autoConfirm: boolean) => void>(() => undefined);
+  importRef.current = (files, autoConfirm) => {
+    void upload.begin(files, "flat", { autoConfirm }).then(runUpload);
+  };
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if (modeRef.current !== "workspace") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, [contenteditable=true], .cm-content")) return;
+      const files = Array.from(event.clipboardData?.files ?? []);
+      if (files.length > 0) {
+        event.preventDefault();
+        importRef.current(files, false);
+        return;
+      }
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (text.trim()) {
+        event.preventDefault();
+        importRef.current([new File([text], "unnamed.md", { type: "text/markdown" })], true);
+      }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
+
+  const openUploadIntent = (intent: UploadIntent) => {
+    if (intent === "files") fileInputRef.current?.click();
+    else if (intent === "folder") folderInputRef.current?.click();
+    else void importFromClipboard();
   };
 
   // ---- Open / guard ------------------------------------------------------
@@ -287,11 +330,17 @@ export default function Workspace({
     return liveFiles.find((entry) => entry.path === path)?.revision;
   };
 
-  const expandPrefix = (raw: string): string[] => {
-    if (!raw.endsWith("/")) return [raw];
-    return liveFiles
-      .filter((entry) => entry.path.startsWith(raw))
-      .map((entry) => entry.path);
+  // A batch target is either a file or a folder path (with or without the
+  // trailing slash the context menus pass): folders expand to every file
+  // beneath them so tombstone calls always address real entries.
+  const expandEntry = (raw: string): string[] => {
+    const path = raw.replace(/\/+$/, "");
+    const self = liveFiles.some((entry) => entry.path === path) ? [path] : [];
+    if (!folderSet.has(path)) return self.length > 0 ? self : [raw];
+    return [
+      ...self,
+      ...liveFiles.filter((entry) => entry.path.startsWith(`${path}/`)).map((entry) => entry.path),
+    ];
   };
 
   const treeActions: TreeActions = {
@@ -310,6 +359,17 @@ export default function Workspace({
           await api.move(from, to, revision);
           toast.success(t("renameDone", { from, to }));
           await refreshFiles();
+          // Batch selection follows the rename (whole subtree for folders),
+          // or a subsequent Delete would target dead paths.
+          setSelected((prev) => {
+            const next = new Set<string>();
+            for (const one of prev) {
+              if (one === from) next.add(to);
+              else if (one.startsWith(`${from}/`)) next.add(`${to}/${one.slice(from.length + 1)}`);
+              else next.add(one);
+            }
+            return next;
+          });
           const current = editorRef.current;
           if (current.kind !== "empty" && current.kind !== "loading" && current.path === from) {
             // Dirty/saving buffers must not be silently reloaded from disk:
@@ -322,7 +382,7 @@ export default function Workspace({
       })();
     },
     onTrash: (paths) => {
-      const expanded = [...new Set(paths.flatMap(expandPrefix))];
+      const expanded = [...new Set(paths.flatMap(expandEntry))];
       if (expanded.length === 0) return;
       setDialog({ type: "trash", paths: expanded });
     },
@@ -361,87 +421,114 @@ export default function Workspace({
       setNewFilePath(folder ? `${folder}/` : "");
       setDialog({ type: "new-folder", folder });
     },
-    onDropMove: (entries, into) => {
-      void (async () => {
-        setBatchRunning(true);
-        const failed: string[] = [];
-        let done = 0;
-        for (const entry of entries) {
-          if (entry.isFolder) {
-            const prefix = entry.path.endsWith("/") ? entry.path : `${entry.path}/`;
-            const name = prefix.slice(0, -1).split("/").pop() ?? prefix;
-            const destBase = into ? `${into}/${name}` : name;
-            const moves: { source: string; target: string }[] = [];
-            for (const file of liveFiles.filter((one) => one.path.startsWith(prefix))) {
-              const target = `${destBase}/${file.path.slice(prefix.length)}`;
-              if (target !== file.path) moves.push({ source: file.path, target });
-            }
-            for (const move of moves) {
-              const revision = entryRevision(move.source);
-              if (!revision) {
-                failed.push(move.source);
-                continue;
-              }
-              try {
-                const result = await api.move(move.source, move.target, revision);
-                if (result.error || result.partial) {
-                  failed.push(move.source);
-                  continue;
-                }
-                done += 1;
-              } catch {
-                failed.push(move.source);
-              }
-            }
-          } else {
-            const name = entry.path.split("/").pop() ?? entry.path;
-            const target = into ? `${into}/${name}` : name;
-            if (target === entry.path) continue;
-            const revision = entryRevision(entry.path);
-            if (!revision) {
-              failed.push(entry.path);
-              continue;
-            }
-            try {
-              const result = await api.move(entry.path, target, revision);
-              if (result.error || result.partial) {
-                failed.push(entry.path);
-                continue;
-              }
-              done += 1;
-              const current = editorRef.current;
-              if (current.kind !== "empty" && current.kind !== "loading" && current.path === entry.path) {
-                requestOpen(target);
-              }
-            } catch {
-              failed.push(entry.path);
-            }
-          }
-        }
-        setBatchRunning(false);
-        try {
-          await refreshFiles();
-        } catch (error) {
-          fail(error);
-        }
-        if (failed.length > 0) {
-          toast.warning(
-            t("batchPartial", {
-              done,
-              failed: failed.length,
-              detail: failed.slice(0, 3).join("、"),
-            }),
-          );
-        } else if (done > 0) {
-          toast.success(t("moveDone", { count: done, destination: into === "" ? "/" : into }));
-        }
-      })();
-    },
+    onDropMove: (entries, into) => moveBatch(entries, into),
     onProperties: (path) => openProperties(path),
     onMove: (targets) => {
       setMoveDestination("");
       setDialog({ type: "move", targets });
     },
+  };
+
+  // One mover for drag&drop and the move dialog: folders travel as folders
+  // (children keep their relative structure), files travel one by one. The
+  // editor reopens the moved document only after the listing refreshes.
+  const moveBatch = (entries: { path: string; isFolder: boolean }[], into: string) => {
+    // Moving a folder into itself or a descendant would nest it inside its
+    // own content — refused up front, like every OS file manager.
+    const movable = entries.filter((entry) => {
+      if (!entry.isFolder) return true;
+      const plain = entry.path.replace(/\/+$/, "");
+      return into !== plain && !into.startsWith(`${plain}/`);
+    });
+    const refused = entries.length - movable.length;
+    if (movable.length === 0) {
+      if (refused > 0) toast.warning(t("moveIntoSelf"));
+      return;
+    }
+    void (async () => {
+      setBatchRunning(true);
+      setSelected(new Set());
+      const failed: string[] = [];
+      let done = 0;
+      let movedOpenTarget: string | null = null;
+      for (const entry of movable) {
+        if (entry.isFolder) {
+          const prefix = entry.path.endsWith("/") ? entry.path : `${entry.path}/`;
+          const name = prefix.slice(0, -1).split("/").pop() ?? prefix;
+          const destBase = into ? `${into}/${name}` : name;
+          const moves: { source: string; target: string }[] = [];
+          for (const file of liveFiles.filter((one) => one.path.startsWith(prefix))) {
+            const target = `${destBase}/${file.path.slice(prefix.length)}`;
+            if (target !== file.path) moves.push({ source: file.path, target });
+          }
+          for (const move of moves) {
+            const revision = entryRevision(move.source);
+            if (!revision) {
+              failed.push(move.source);
+              continue;
+            }
+            try {
+              const result = await api.move(move.source, move.target, revision);
+              if (result.error || result.partial) {
+                failed.push(move.source);
+                continue;
+              }
+              done += 1;
+              const current = editorRef.current;
+              if (current.kind !== "empty" && current.kind !== "loading" && current.path === move.source) {
+                movedOpenTarget = move.target;
+              }
+            } catch {
+              failed.push(move.source);
+            }
+          }
+        } else {
+          const name = entry.path.split("/").pop() ?? entry.path;
+          const target = into ? `${into}/${name}` : name;
+          if (target === entry.path) continue;
+          const revision = entryRevision(entry.path);
+          if (!revision) {
+            failed.push(entry.path);
+            continue;
+          }
+          try {
+            const result = await api.move(entry.path, target, revision);
+            if (result.error || result.partial) {
+              failed.push(entry.path);
+              continue;
+            }
+            done += 1;
+            const current = editorRef.current;
+            if (current.kind !== "empty" && current.kind !== "loading" && current.path === entry.path) {
+              movedOpenTarget = target;
+            }
+          } catch {
+            failed.push(entry.path);
+          }
+        }
+      }
+      setBatchRunning(false);
+      try {
+        await refreshFiles();
+      } catch (error) {
+        fail(error);
+      }
+      if (movedOpenTarget) requestOpen(movedOpenTarget);
+      if (failed.length > 0) {
+        toast.warning(
+          t("batchPartial", {
+            done,
+            failed: failed.length,
+            detail: failed.slice(0, 3).join("、"),
+          }),
+        );
+      } else if (done > 0 || refused > 0) {
+        if (refused > 0) toast.warning(t("moveIntoSelf"));
+        if (done > 0) {
+          toast.success(t("moveDone", { count: done, destination: into === "" ? "/" : into }));
+        }
+      }
+    })();
   };
 
   // ---- Trash flow ----------------------------------------------------------
@@ -585,56 +672,18 @@ export default function Workspace({
     }
   };
 
-  const moveTargets = (dialog?.type === "move" ? dialog.targets : []).flatMap(expandPrefix);
-  const confirmMove = async () => {
+  const moveEntryCount = dialog?.type === "move" ? dialog.targets.length : 0;
+  const confirmMove = () => {
     const destination = moveDestination.trim().replace(/\/+$/, "");
-    if (!destination) return;
+    if (!destination || moveEntryCount === 0) return;
     setDialog(null);
-    setBatchRunning(true);
-    const failed: string[] = [];
-    let done = 0;
-    let movedOpenPath: string | null = null;
-    let movedOpenTarget: string | null = null;
-    for (const source of moveTargets) {
-      try {
-        const revision = entryRevision(source);
-        if (!revision) throw new Error("missing revision");
-        const name = source.includes("/") ? source.slice(source.lastIndexOf("/") + 1) : source;
-        const target = destination ? `${destination}/${name}` : name;
-        const result = await api.move(source, target, revision);
-        if (result.error || result.partial) {
-          failed.push(source);
-          continue;
-        }
-        done += 1;
-        const current = editorRef.current;
-        if (
-          current.kind !== "empty" && current.kind !== "loading" &&
-          (current.path === source || (source.endsWith("/") && current.path.startsWith(source)))
-        ) {
-          movedOpenPath = current.path;
-          movedOpenTarget = source.endsWith("/")
-            ? `${target}/${current.path.slice(source.length)}`
-            : target;
-        }
-      } catch {
-        failed.push(source);
-      }
-    }
-    setBatchRunning(false);
-    try {
-      await refreshFiles();
-    } catch (error) {
-      fail(error);
-    }
-    if (movedOpenPath && movedOpenTarget) {
-      requestOpen(movedOpenTarget);
-    }
-    if (failed.length > 0) {
-      toast.warning(t("batchPartial", { done, failed: failed.length, detail: failed.slice(0, 3).join("、") }));
-    } else {
-      toast.success(t("moveDone", { count: done, destination }));
-    }
+    // Dialog targets are file paths or "folder/" entries; anything that is a
+    // known folder prefix moves as a folder so children keep their structure.
+    const entries = (dialog?.type === "move" ? dialog.targets : []).map((raw) => ({
+      path: raw,
+      isFolder: raw.endsWith("/") || folderSet.has(raw.replace(/\/+$/, "")),
+    }));
+    moveBatch(entries, destination);
   };
 
   // ---- Properties / restore revision --------------------------------------
@@ -679,9 +728,12 @@ export default function Workspace({
         event.preventDefault();
         setNewFilePath("");
         setDialog({ type: "new-document", folder: "" });
-      } else if (event.key === "Delete" && selected.size > 0) {
-        // Batch trash from the keyboard — but never while typing in the
-        // editor or a form field.
+      } else if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selected.size > 0
+      ) {
+        // Batch trash from the keyboard (Backspace = the macOS delete key) —
+        // but never while typing in the editor or a form field.
         const target = event.target as HTMLElement | null;
         const typing =
           target?.isContentEditable ||
@@ -691,9 +743,18 @@ export default function Workspace({
           event.preventDefault();
           treeActions.onTrash([...selected]);
         }
-      } else if (event.key === "Escape") {
-        setPanel({ type: "none" });
-        setSelected(new Set());
+      } else if (event.key === "Escape" && !event.defaultPrevented) {
+        // Esc belongs to the layer that consumed it first (find panel,
+        // palette, menus all preventDefault); only a "free" Esc closes the
+        // properties panel and clears the batch selection.
+        const target = event.target as HTMLElement | null;
+        const inChrome =
+          target?.isContentEditable ||
+          target?.closest("input, textarea, .cm-content, .cm-panel") != null;
+        if (!inChrome) {
+          setPanel({ type: "none" });
+          setSelected(new Set());
+        }
       }
     };
     window.addEventListener("keydown", handler);
@@ -738,7 +799,15 @@ export default function Workspace({
         if (mode !== "workspace") return;
         if (!event.dataTransfer.types.includes("Files")) return;
         event.preventDefault();
-        void upload.begin(event.dataTransfer.items, "tree").then(runUpload);
+        const transfer = event.dataTransfer;
+        void upload.begin(transfer.items, "tree").then((summary) => {
+          // Some drop sources expose plain files but no entry objects —
+          // fall back to the flat file list before giving up.
+          if (summary === undefined && transfer.files.length > 0) {
+            return upload.begin(Array.from(transfer.files), "tree");
+          }
+          return summary;
+        }).then(runUpload);
       }}
     >
       <TopBar
@@ -1040,7 +1109,7 @@ export default function Workspace({
           <DialogHeader>
             <DialogTitle>{t("moveTitle")}</DialogTitle>
             <DialogDescription>
-              {t("moveDescription", { count: moveTargets.length })}
+              {t("moveDescription", { count: moveEntryCount })}
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5 pt-4">

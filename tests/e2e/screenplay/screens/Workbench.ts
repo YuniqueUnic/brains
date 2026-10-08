@@ -44,13 +44,9 @@ export const Workbench = {
     PageElement.located(By.css('[data-testid="palette-trigger"]')).describedAs(
       "command palette trigger",
     ),
-  newDocumentItem: () =>
-    PageElement.located(By.css('[data-testid="new-document"]')).describedAs(
-      "new document menu item",
-    ),
-  utilityMenuButton: () =>
-    PageElement.located(By.css('[data-testid="utility-menu"]')).describedAs(
-      "utility menu trigger",
+  accountMenuButton: () =>
+    PageElement.located(By.css('[data-testid="account-button"]')).describedAs(
+      "account menu trigger",
     ),
   editorMenuButton: () =>
     PageElement.located(By.css('[data-testid="editor-menu"]')).describedAs(
