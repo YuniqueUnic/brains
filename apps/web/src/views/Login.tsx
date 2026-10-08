@@ -39,18 +39,18 @@ export default function Login({
   return (
     <div className="flex h-full items-center justify-center bg-background p-6">
       <form
-        className="w-[22rem] rounded-2xl border border-border/80 bg-card/95 p-6 shadow-card"
+        className="w-[22rem] rounded-[12px] border bg-card p-6 shadow-overlay"
         onSubmit={submit}
       >
         <div className="mb-5 flex flex-col items-center gap-2 text-center">
-          <span className="flex size-11 items-center justify-center rounded-xl bg-primary/12 text-primary">
-            <Brain className="size-6" />
+          <span className="flex size-10 items-center justify-center rounded-[10px] bg-primary/10 text-primary">
+            <Brain className="size-5 stroke-[1.5]" />
           </span>
-          <h1 className="text-base font-semibold text-foreground">Brains</h1>
+          <h1 className="text-[15px] font-semibold tracking-tight text-foreground">Brains</h1>
           <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="relative">
-          <KeyRound className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+          <KeyRound className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 stroke-[1.5] -translate-y-1/2 text-muted-foreground" />
           <Input
             data-testid="token-input"
             type="password"
@@ -64,6 +64,7 @@ export default function Login({
         <Button
           data-testid="login-button"
           type="submit"
+          variant="default"
           className="mt-3 h-9 w-full text-sm"
           disabled={busy || !token.trim()}
         >

@@ -29,6 +29,7 @@ export const Visit = () => Task.where("#actor visits the app", OpenApp());
 export const StartNewNote = (path: string) =>
   Task.where(`#actor starts a new note at ${path}`,
     Click.on(Workbench.newFileButton()),
+    Click.on(Workbench.newDocumentItem()),
     Enter.theValue(path).into(Workbench.newFilePathInput()),
     Click.on(Workbench.newFileConfirm()),
     Ensure.eventually(Text.of(EditorArea.path()), includes(path))

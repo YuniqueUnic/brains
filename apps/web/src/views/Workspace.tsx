@@ -1,42 +1,26 @@
-import {
-  ArchiveRestore,
-  Brain,
-  ChevronRight,
-  FileText,
-  Folder,
-  FolderOpen,
-  Languages,
-  ListChecks,
-  LoaderCircle,
-  LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  Search,
-  Trash2,
-  TriangleAlert,
-  Upload,
-  X,
-} from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Group,
-  Panel,
-  Separator,
-  type PanelImperativeHandle,
-} from "react-resizable-panels";
+import { toast } from "sonner";
+import { Group, Panel, Separator, type PanelImperativeHandle } from "react-resizable-panels";
 import {
   api,
   ApiError,
   isTextMedia,
   type Entry,
-  type SearchHit,
   type SessionInfo,
 } from "../api/client";
+import { TopBar, type UploadIntent } from "../components/shell/top-bar";
+import { Sidebar, type WorkspaceMode } from "../components/shell/sidebar";
+import { FileTree, collectFolders, type TreeActions } from "../components/tree/file-tree";
+import { CommandPalette } from "../components/search/command-palette";
 import EditorPane, { type EditorState } from "../components/EditorPane";
-import InfoPanel from "../components/InfoPanel";
-import { ThemeToggle } from "../components/ThemeToggle";
+import { PropertiesPanel } from "../components/properties/properties-panel";
+import { TrashView } from "../components/trash/trash-view";
+import {
+  UploadConflictDialog,
+} from "../components/upload/upload-conflict-dialog";
+import { UploadProgress } from "../components/upload/upload-progress";
+import { useUpload, type UploadSummary } from "../components/upload/use-upload";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,8 +29,6 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogTitle,
-  alertActionClass,
-  alertCancelClass,
 } from "../components/ui/alert-dialog";
 import { Button } from "../components/ui/button";
 import {
@@ -58,71 +40,22 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
-import { Tooltip } from "../components/ui/tooltip";
-import { cycleLanguage } from "../i18n";
-import { cn } from "../lib/utils";
+import { TriangleAlert, X, FolderInput } from "lucide-react";
 
-/**
- * Main workspace (design §13.1) in the workbench shell shape: one header row,
- * then a resizable three-column group — file tree, editor, info panel. Tight
- * 6px gutters; each column is its own card on a quiet canvas.
+/*
+ * Workspace orchestrator (DESIGN.md §61-62): explicit state unions instead of
+ * boolean soup — mode (workspace/trash), dialog (discriminated), selection
+ * (Set), the on-demand properties panel and the ⌘K palette. All business
+ * mutations flow through the conditional-write API client.
  */
 
-type FileNode =
-  | { type: "folder"; name: string; path: string; children: FileNode[] }
-  | { type: "file"; entry: Entry };
-
-type FlatRow =
-  | { kind: "folder"; node: Extract<FileNode, { type: "folder" }>; depth: number }
-  | { kind: "file"; entry: Entry; depth: number };
-
-function buildTree(files: Entry[]): FileNode[] {
-  const root: Extract<FileNode, { type: "folder" }> = { type: "folder", name: "", path: "", children: [] };
-  const folders = new Map<string, Extract<FileNode, { type: "folder" }>>([["", root]]);
-  const folderOf = (dir: string) => {
-    const found = folders.get(dir);
-    if (found) return found;
-    const segments = dir.split("/");
-    const name = segments[segments.length - 1];
-    const parentDir = segments.slice(0, -1).join("/");
-    const parent = folderOf(parentDir);
-    const node: Extract<FileNode, { type: "folder" }> = { type: "folder", name, path: dir, children: [] };
-    folders.set(dir, node);
-    parent.children.push(node);
-    return node;
-  };
-  for (const file of files) {
-    const segments = file.path.split("/");
-    const dir = segments.slice(0, -1).join("/");
-    folderOf(dir).children.push({ type: "file", entry: file });
-  }
-  const sortNodes = (nodes: FileNode[]) => {
-    nodes.sort((a, b) => {
-      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
-      return (a.type === "folder" ? a.name : a.entry.path).localeCompare(
-        b.type === "folder" ? b.name : b.entry.path,
-      );
-    });
-    for (const node of nodes) {
-      if (node.type === "folder") sortNodes(node.children);
-    }
-  };
-  sortNodes(root.children);
-  return root.children;
-}
-
-function flattenTree(nodes: FileNode[], collapsed: Set<string>, depth = 0, out: FlatRow[] = []): FlatRow[] {
-  for (const node of nodes) {
-    if (node.type === "folder") {
-      out.push({ kind: "folder", node, depth });
-      // Folders start expanded; only explicitly collapsed ones hide children.
-      if (!collapsed.has(node.path)) flattenTree(node.children, collapsed, depth + 1, out);
-    } else {
-      out.push({ kind: "file", entry: node.entry, depth });
-    }
-  }
-  return out;
-}
+type DialogState =
+  | null
+  | { type: "new-document"; folder: string }
+  | { type: "new-folder"; folder: string }
+  | { type: "trash"; paths: string[] }
+  | { type: "discard-open"; path: string }
+  | { type: "move"; targets: string[] };
 
 export default function Workspace({
   session,
@@ -133,84 +66,56 @@ export default function Workspace({
 }) {
   const { t } = useTranslation("workspace");
   const { t: tCommon } = useTranslation("common");
-  const [files, setFiles] = useState<Entry[]>([]);
+  const [mode, setMode] = useState<WorkspaceMode>("workspace");
+  const [liveFiles, setLiveFiles] = useState<Entry[]>([]);
+  const [trashedFiles, setTrashedFiles] = useState<Entry[]>([]);
   const [filesTruncated, setFilesTruncated] = useState(false);
-  const [showTrash, setShowTrash] = useState(false);
   const [editor, setEditor] = useState<EditorState>({ kind: "empty" });
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchMode, setSearchMode] = useState<"literal" | "fts">("literal");
-  const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
-  const [searchIncomplete, setSearchIncomplete] = useState(false);
-  const [searchBuilding, setSearchBuilding] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [banner, setBanner] = useState<string | null>(null);
-  const [showNewFile, setShowNewFile] = useState(false);
-  const [newFilePath, setNewFilePath] = useState("");
-  const [showTrashConfirm, setShowTrashConfirm] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const sidebarPanel = useRef<PanelImperativeHandle | null>(null);
-  // Batch selection: entering selection mode shows checkboxes; row clicks
-  // toggle instead of opening. Batch actions run sequentially per file.
-  const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [propertiesPath, setPropertiesPath] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [searchMode, setSearchMode] = useState<"literal" | "fts">("literal");
+  const [dialog, setDialog] = useState<DialogState>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [newFilePath, setNewFilePath] = useState("");
+  const [moveDestination, setMoveDestination] = useState("");
   const [batchRunning, setBatchRunning] = useState(false);
-  // Folders are expanded unless explicitly collapsed (new folders appear open).
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
-  // Opening another file with unsaved/conflicting text in the editor requires
-  // an explicit discard — the confirm dialog reuses the trash pattern.
-  const [pendingOpen, setPendingOpen] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const sidebarPanel = useRef<PanelImperativeHandle | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadIntent = useRef<UploadIntent>("files");
   const editorRef = useRef(editor);
   editorRef.current = editor;
+  const [banner, setBanner] = useState<string | null>(null);
 
-  const treeRows = useMemo(
-    () => flattenTree(buildTree(files), collapsedFolders),
-    [files, collapsedFolders],
-  );
+  const folders = useMemo(() => collectFolders(liveFiles), [liveFiles]);
+  const shownFiles = mode === "workspace" ? liveFiles : trashedFiles;
 
-  const toggleSidebar = () => {
-    const panel = sidebarPanel.current;
-    if (!panel) return;
-    if (panel.isCollapsed()) {
-      panel.expand();
-      setSidebarCollapsed(false);
-    } else {
-      panel.collapse();
-      setSidebarCollapsed(true);
+  const fail = (error: unknown) => {
+    // An expired session has no in-page recovery: back to login.
+    if (error instanceof ApiError && error.status === 401) {
+      setBanner(t("bannerAuthLost"));
+      onLogout();
+      return;
     }
+    setBanner(error instanceof Error ? error.message : String(error));
   };
 
-  const toggleFolder = (path: string) => {
-    setCollapsedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(path)) next.delete(path);
-      else next.add(path);
-      return next;
-    });
-  };
-
-  const fail = useCallback(
-    (error: unknown) => {
-      // An expired session has no in-page recovery: back to login.
-      if (error instanceof ApiError && error.status === 401) {
-        setBanner(t("bannerAuthLost"));
-        onLogout();
-        return;
-      }
-      setBanner(error instanceof Error ? error.message : String(error));
-    },
-    [onLogout, t],
-  );
-
-  const refreshFiles = useCallback(async () => {
-    // Walk pages up to a sane bound; anything left is surfaced as truncated
-    // instead of silently hiding files (design §11.1: no fake completion).
+  const refreshFiles = async () => {
+    // One walk with tombstones included: the tree shows live entries, the
+    // trash view shows tombstones. Anything past the sane page bound is
+    // surfaced as truncated, never silently hidden (design §11.1).
     let items: Entry[] = [];
     let cursor: string | null = null;
     let guard = 0;
     do {
       const page = await api.listFiles({
         source: "store",
-        include_deleted: showTrash,
+        include_deleted: true,
         limit: 100,
         cursor,
       });
@@ -218,43 +123,76 @@ export default function Workspace({
       cursor = page.next_cursor;
       guard += 1;
     } while (cursor && guard < 20);
-    setFiles(items);
+    setLiveFiles(items.filter((item) => item.state === "live"));
+    setTrashedFiles(items.filter((item) => item.state === "trashed"));
     setFilesTruncated(Boolean(cursor));
-  }, [showTrash]);
-
-  useEffect(() => {
-    void refreshFiles();
-  }, [refreshFiles]);
-
-  // Leaving trash view (or the selection mode) resets stale selections.
-  useEffect(() => {
-    setSelected(new Set());
-  }, [showTrash]);
-
-  const requestOpen = (path: string) => {
-    if (selecting) {
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(path)) next.delete(path);
-        else next.add(path);
-        return next;
-      });
-      return;
-    }
-    const current = editorRef.current;
-    // `saving` counts too: keystrokes typed during the flight have not been
-    // sent yet and would be dropped without a word.
-    if (
-      current.kind === "dirty" ||
-      current.kind === "conflict" ||
-      current.kind === "error" ||
-      current.kind === "saving"
-    ) {
-      setPendingOpen(path);
-      return;
-    }
-    void openFile(path);
   };
+
+  useEffect(() => {
+    void refreshFiles().catch(fail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const upload = useUpload({
+    files: useMemo(
+      () =>
+        liveFiles.map((entry) => ({
+          path: entry.path,
+          revision: entry.revision,
+          sha256: entry.sha256,
+        })),
+      [liveFiles],
+    ),
+    refresh: refreshFiles,
+    onFail: fail,
+  });
+
+  const runUpload = async (summary: UploadSummary | undefined) => {
+    if (!summary) return;
+    if (summary.failed.length > 0) {
+      toast.warning(
+        t("uploadPartial", {
+          done: summary.done,
+          failed: summary.failed.length,
+          detail: summary.failed.slice(0, 3).join("、"),
+        }),
+      );
+    } else {
+      const skipped = summary.skipped + summary.identical;
+      toast.success(
+        skipped > 0
+          ? t("uploadDoneToastSkipped", { done: summary.done, skipped })
+          : t("uploadDoneToast", { done: summary.done }),
+      );
+    }
+  };
+
+  const openUploadIntent = (intent: UploadIntent) => {
+    uploadIntent.current = intent;
+    if (intent === "files") fileInputRef.current?.click();
+    else if (intent === "folder") folderInputRef.current?.click();
+    else void navigator.clipboard
+      .read()
+      .then(async (items) => {
+        const files: File[] = [];
+        for (const item of items) {
+          const type = item.types.find((candidate) => candidate.startsWith("image/"));
+          if (type) {
+            const blob = await item.getType(type);
+            const ext = type.split("/")[1] ?? "bin";
+            files.push(new File([blob], `pasted-${Date.now()}.${ext}`, { type }));
+          }
+        }
+        if (files.length === 0) {
+          toast.info(t("clipboardEmpty"));
+          return undefined;
+        }
+        return runUpload(await upload.begin(files, "flat"));
+      })
+      .catch(() => toast.error(t("clipboardUnavailable")));
+  };
+
+  // ---- Open / guard ------------------------------------------------------
 
   const openFile = async (path: string) => {
     setEditor({ kind: "loading", path });
@@ -268,8 +206,8 @@ export default function Workspace({
         return;
       }
       const { text, etag } = await api.readText(path);
-      // The two calls are separate: if the file moved between them (e.g. a
-      // rival replaced it with binary bytes), reopen once against the truth.
+      // The two calls are separate: if the file moved between them, reopen
+      // once against the truth.
       const latest = await api.readMeta(path);
       if (latest.revision !== etag) {
         if (!isTextMedia(latest.media_type)) {
@@ -293,78 +231,196 @@ export default function Workspace({
     }
   };
 
-  const newFile = async () => {
-    const path = newFilePath.trim();
-    if (!path) return;
+  const requestOpen = (path: string) => {
     const current = editorRef.current;
-    if (current.kind === "dirty" || current.kind === "conflict" || current.kind === "error") {
-      setBanner(t("blockedNewFile"));
+    // `saving` counts too: keystrokes typed during the flight have not been
+    // sent yet and would be dropped without a word.
+    if (
+      current.kind === "dirty" ||
+      current.kind === "conflict" ||
+      current.kind === "error" ||
+      current.kind === "saving"
+    ) {
+      setDialog({ type: "discard-open", path });
       return;
     }
-    try {
-      const result = await api.saveText(path, "", { mode: "create" });
-      setNewFilePath("");
-      setShowNewFile(false);
-      await refreshFiles();
-      setEditor({ kind: "clean", path: result.path, text: "", baseText: "", baseRevision: result.revision });
-    } catch (error) {
-      fail(error);
-    }
+    void openFile(path);
   };
 
-  const trashCurrent = async () => {
-    const current = editorRef.current;
-    if (current.kind !== "clean" && current.kind !== "dirty") return;
-    setShowTrashConfirm(false);
-    try {
-      await api.trash(current.path, current.baseRevision);
-      setEditor({ kind: "empty" });
-      await refreshFiles();
-    } catch (error) {
-      fail(error);
-    }
+  // ---- Tree actions ------------------------------------------------------
+
+  const entryRevision = (path: string) =>
+    liveFiles.find((entry) => entry.path === path)?.revision;
+
+  const expandPrefix = (raw: string): string[] => {
+    if (!raw.endsWith("/")) return [raw];
+    return liveFiles
+      .filter((entry) => entry.path.startsWith(raw))
+      .map((entry) => entry.path);
   };
 
-  const uploadAttachment = async (file: File) => {
-    const path = `attachments/${file.name}`;
-    try {
-      const buffer = await file.arrayBuffer();
-      await api.saveBinary(
-        path,
-        buffer,
-        { mode: "create" },
-        file.type || "application/octet-stream",
-      );
-      setBanner(t("bannerUploaded", { path }));
-      await refreshFiles();
-    } catch (error) {
-      fail(error);
-    }
+  const treeActions: TreeActions = {
+    onOpen: requestOpen,
+    onStartRename: (path) => setRenaming(path || null),
+    onCancelRename: () => setRenaming(null),
+    onCommitRename: (from, to) => {
+      setRenaming(null);
+      void (async () => {
+        const revision = entryRevision(from);
+        if (!revision) {
+          toast.error(t("renameFailed", { path: from }));
+          return;
+        }
+        try {
+          await api.move(from, to, revision);
+          toast.success(t("renameDone", { from, to }));
+          await refreshFiles();
+          if (editorRef.current.kind !== "empty" && editorRef.current.kind !== "loading" && editorRef.current.path === from) {
+            void openFile(to);
+          }
+        } catch (error) {
+          fail(error);
+        }
+      })();
+    },
+    onTrash: (paths) => {
+      const expanded = [...new Set(paths.flatMap(expandPrefix))];
+      if (expanded.length === 0) return;
+      setDialog({ type: "trash", paths: expanded });
+    },
+    onDuplicate: (path) => {
+      void (async () => {
+        const revision = entryRevision(path);
+        if (!revision) return;
+        const slash = path.lastIndexOf("/");
+        const dir = slash >= 0 ? path.slice(0, slash + 1) : "";
+        const name = slash >= 0 ? path.slice(slash + 1) : path;
+        const dot = name.lastIndexOf(".");
+        const stem = dot > 0 ? name.slice(0, dot) : name;
+        const ext = dot > 0 ? name.slice(dot) : "";
+        const taken = new Set(liveFiles.map((entry) => entry.path));
+        let target = `${dir}${stem}-copy${ext}`;
+        for (let i = 1; taken.has(target); i += 1) {
+          target = `${dir}${stem}-copy-${i}${ext}`;
+        }
+        try {
+          await api.copy(path, target, revision);
+          toast.success(t("duplicateDone", { target }));
+          await refreshFiles();
+        } catch (error) {
+          fail(error);
+        }
+      })();
+    },
+    onCopyPath: (path) => {
+      void navigator.clipboard.writeText(path).then(() => toast.success(t("copyPathDone")));
+    },
+    onNewDocumentIn: (folder) => {
+      setNewFilePath(folder ? `${folder}/` : "");
+      setDialog({ type: "new-document", folder });
+    },
+    onCreateFolderIn: (folder) => {
+      setNewFilePath(folder ? `${folder}/` : "");
+      setDialog({ type: "new-folder", folder });
+    },
+    onDropMove: (entries, into) => {
+      void (async () => {
+        setBatchRunning(true);
+        const failed: string[] = [];
+        let done = 0;
+        for (const entry of entries) {
+          if (entry.isFolder) {
+            const prefix = entry.path.endsWith("/") ? entry.path : `${entry.path}/`;
+            const name = prefix.slice(0, -1).split("/").pop() ?? prefix;
+            const destBase = into ? `${into}/${name}` : name;
+            for (const file of liveFiles.filter((one) => one.path.startsWith(prefix))) {
+              const target = `${destBase}/${file.path.slice(prefix.length)}`;
+              try {
+                await api.move(file.path, target, file.revision);
+                done += 1;
+              } catch {
+                failed.push(file.path);
+              }
+            }
+          } else {
+            const name = entry.path.split("/").pop() ?? entry.path;
+            const target = into ? `${into}/${name}` : name;
+            if (target === entry.path) continue;
+            const revision = liveFiles.find((one) => one.path === entry.path)?.revision;
+            if (!revision) {
+              failed.push(entry.path);
+              continue;
+            }
+            try {
+              await api.move(entry.path, target, revision);
+              done += 1;
+              const current = editorRef.current;
+              if (current.kind !== "empty" && current.kind !== "loading" && current.path === entry.path) {
+                void openFile(target);
+              }
+            } catch {
+              failed.push(entry.path);
+            }
+          }
+        }
+        setBatchRunning(false);
+        await refreshFiles();
+        if (failed.length > 0) {
+          toast.warning(
+            t("batchPartial", {
+              done,
+              failed: failed.length,
+              detail: failed.slice(0, 3).join("、"),
+            }),
+          );
+        } else if (done > 0) {
+          toast.success(t("moveDone", { count: done, destination: into === "" ? "/" : into }));
+        }
+      })();
+    },
+    onProperties: (path) => {
+      setPropertiesPath(path);
+      setPropertiesOpen(true);
+    },
+    onMove: (targets) => {
+      setMoveDestination("");
+      setDialog({ type: "move", targets });
+    },
   };
 
-  const runSearch = async () => {
-    if (!searchQuery.trim()) return;
-    setSearching(true);
-    try {
-      const page = await api.search({ q: searchQuery, mode: searchMode });
-      let items = page.items;
-      let cursor = page.next_cursor;
-      // The UI walks literal windows for the user up to a sane bound; any
-      // remaining cursor is surfaced as "未翻完" instead of faking completion.
-      let guard = 0;
-      while (cursor && guard < 20) {
-        const next = await api.search({ q: searchQuery, mode: searchMode, cursor });
-        items = items.concat(next.items);
-        cursor = next.next_cursor;
-        guard += 1;
+  // ---- Trash flow ----------------------------------------------------------
+
+  const trashPaths = async (paths: string[]) => {
+    setDialog(null);
+    setBatchRunning(true);
+    const failed: string[] = [];
+    let done = 0;
+    for (const path of paths) {
+      try {
+        const revision = entryRevision(path);
+        if (!revision) throw new Error("missing revision");
+        await api.trash(path, revision);
+        done += 1;
+      } catch {
+        failed.push(path);
       }
-      setSearchResults(items);
-      setSearchIncomplete(Boolean(cursor) || !page.complete);
-      setSearchBuilding(page.index_state === "building");
-    } catch (error) {
-      fail(error);
-    } finally {
-      setSearching(false);
+    }
+    setBatchRunning(false);
+    setSelected(new Set());
+    await refreshFiles();
+    if (editorRef.current.kind !== "empty" && editorRef.current.kind !== "loading" && paths.includes(editorRef.current.path)) {
+      setEditor({ kind: "empty" });
+    }
+    if (failed.length > 0) {
+      toast.warning(
+        t("batchPartial", {
+          done,
+          failed: failed.length,
+          detail: failed.slice(0, 3).join("、"),
+        }),
+      );
+    } else {
+      toast.success(t("batchTrashDone", { count: done }));
     }
   };
 
@@ -405,491 +461,426 @@ export default function Workspace({
     }
   };
 
-  const exitSelecting = () => {
-    setSelecting(false);
-    setSelected(new Set());
+  const [restoringAll, setRestoringAll] = useState(false);
+  const batchRestore = async () => {
+    if (restoringAll || trashedFiles.length === 0) return;
+    setRestoringAll(true);
+    const failed: string[] = [];
+    let done = 0;
+    for (const item of trashedFiles) {
+      try {
+        if (await restoreOne(item.path)) done += 1;
+        else failed.push(item.path);
+      } catch {
+        failed.push(item.path);
+      }
+    }
+    setRestoringAll(false);
+    await refreshFiles();
+    if (failed.length > 0) {
+      toast.warning(t("batchPartial", { done, failed: failed.length, detail: failed.slice(0, 3).join("、") }));
+    } else {
+      toast.success(t("batchRestoreDone", { count: done }));
+    }
   };
 
-  const runBatch = async (kind: "trash" | "restore") => {
-    if (selected.size === 0 || batchRunning) return;
+  // ---- New document / move confirm ---------------------------------------
+
+  const newFile = async () => {
+    const path = newFilePath.trim();
+    if (!path) return;
+    const current = editorRef.current;
+    if (current.kind === "dirty" || current.kind === "conflict" || current.kind === "error") {
+      setBanner(t("blockedNewFile"));
+      return;
+    }
+    try {
+      const result = await api.saveText(path, "", { mode: "create" });
+      setDialog(null);
+      setNewFilePath("");
+      await refreshFiles();
+      setEditor({ kind: "clean", path: result.path, text: "", baseText: "", baseRevision: result.revision });
+    } catch (error) {
+      fail(error);
+    }
+  };
+
+  const createFolder = async () => {
+    const raw = newFilePath.trim().replace(/\/+/g, "/").replace(/\/+$/, "");
+    if (!raw) return;
+    try {
+      await api.saveText(`${raw}/.keep`, "", { mode: "create" });
+      setDialog(null);
+      setNewFilePath("");
+      await refreshFiles();
+      toast.success(t("folderCreated", { path: raw }));
+    } catch (error) {
+      fail(error);
+    }
+  };
+
+  const moveTargets = (dialog?.type === "move" ? dialog.targets : []).flatMap(expandPrefix);
+  const confirmMove = async () => {
+    const destination = moveDestination.trim().replace(/\/+$/, "");
+    if (!destination) return;
+    setDialog(null);
     setBatchRunning(true);
-    let done = 0;
     const failed: string[] = [];
-    for (const path of selected) {
+    let done = 0;
+    for (const source of moveTargets) {
       try {
-        if (kind === "trash") {
-          const meta = await api.readMeta(path);
-          await api.trash(path, meta.revision);
-        } else {
-          const ok = await restoreOne(path);
-          if (!ok) throw new Error(t("bannerNoHistory", { path }));
-        }
+        const revision = entryRevision(source);
+        if (!revision) throw new Error("missing revision");
+        const name = source.includes("/") ? source.slice(source.lastIndexOf("/") + 1) : source;
+        await api.move(source, destination ? `${destination}/${name}` : name, revision);
         done += 1;
       } catch {
-        failed.push(path);
+        failed.push(source);
       }
     }
     setBatchRunning(false);
-    setSelected(new Set());
-    setSelecting(false);
     await refreshFiles();
     if (failed.length > 0) {
-      setBanner(
-        t("batchPartial", {
-          done,
-          failed: failed.length,
-          detail: failed.slice(0, 3).join("、"),
-        }),
-      );
+      toast.warning(t("batchPartial", { done, failed: failed.length, detail: failed.slice(0, 3).join("、") }));
     } else {
-      setBanner(
-        kind === "trash"
-          ? t("batchTrashDone", { count: done })
-          : t("batchRestoreDone", { count: done }),
-      );
+      toast.success(t("moveDone", { count: done, destination }));
     }
   };
 
-  const allSelected = selected.size > 0 && selected.size === files.length;
+  // ---- Properties / restore revision --------------------------------------
+
+  const activeEditorPath =
+    editor.kind === "empty" || editor.kind === "loading" ? null : editor.path;
+
+  useEffect(() => {
+    if (propertiesOpen && propertiesPath === null && activeEditorPath) {
+      setPropertiesPath(activeEditorPath);
+    }
+  }, [propertiesOpen, propertiesPath, activeEditorPath]);
+
+  const restoreRevision = (path: string, revision: string, baseRevision: string) => {
+    if (editorRef.current.kind !== "clean") {
+      setBanner(t("blockedRestore"));
+      return;
+    }
+    void (async () => {
+      try {
+        await api.restore(path, revision, baseRevision);
+        const { text, etag } = await api.readText(path);
+        setEditor({ kind: "clean", path, text, baseText: text, baseRevision: etag });
+        setBanner(t("bannerRestoredShort"));
+        await refreshFiles();
+      } catch (error) {
+        fail(error);
+      }
+    })();
+  };
+
+  // ---- Global shortcuts ----------------------------------------------------
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const meta = event.metaKey || event.ctrlKey;
+      if (meta && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      } else if (meta && event.key.toLowerCase() === "i") {
+        event.preventDefault();
+        setPropertiesPath(activeEditorPath);
+        setPropertiesOpen((open) => !open);
+      } else if (event.key === "Escape") {
+        setPropertiesOpen(false);
+        setSelected(new Set());
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [activeEditorPath]);
+
+  const toggleSidebar = () => {
+    const panel = sidebarPanel.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) {
+      panel.expand();
+      setSidebarCollapsed(false);
+    } else {
+      panel.collapse();
+      setSidebarCollapsed(true);
+    }
+  };
 
   const canTrash = editor.kind === "clean" || editor.kind === "dirty";
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-1.5 bg-background p-1.5">
-      <header className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2 shadow-card">
-        <span className="flex items-center gap-1.5 pl-1 pr-0.5 text-sm font-semibold">
-          <Brain className="size-4 text-primary" />
-          Brains
-        </span>
-        <Tooltip content={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-pressed={sidebarCollapsed}
-            onClick={toggleSidebar}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
-          </Button>
-        </Tooltip>
+    <div
+      className="flex h-full min-h-0 flex-col bg-background"
+      onDragOver={(event) => {
+        if (mode !== "workspace") return;
+        event.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(event) => {
+        if (event.currentTarget === event.target) setDragging(false);
+      }}
+      onDrop={(event) => {
+        if (mode !== "workspace") return;
+        event.preventDefault();
+        setDragging(false);
+        void upload.begin(event.dataTransfer.items, "tree").then(runUpload);
+      }}
+    >
+      <TopBar
+        session={session}
+        sidebarCollapsed={sidebarCollapsed}
+        onToggleSidebar={toggleSidebar}
+        onOpenPalette={() => setPaletteOpen(true)}
+        onNewDocument={() => treeActions.onNewDocumentIn("")}
+        onUpload={openUploadIntent}
+        onLogout={onLogout}
+      />
 
-        <div className="relative ml-0.5 w-full max-w-md">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            data-testid="search-box"
-            placeholder={t("searchPlaceholder")}
-            className="h-8 pr-16 pl-8"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void runSearch();
+      <Group orientation="horizontal" className="min-h-0 flex-1">
+        <Panel
+          panelRef={sidebarPanel}
+          collapsible
+          collapsedSize="0"
+          defaultSize="20"
+          minSize="16"
+          maxSize="32"
+        >
+          <Sidebar
+            mode={mode}
+            onModeChange={(next) => {
+              setMode(next);
+              setSelected(new Set());
+              setRenaming(null);
             }}
-          />
-          <div className="absolute right-1 top-1/2 flex -translate-y-1/2" role="group">
-            <ModeButton
-              active={searchMode === "literal"}
-              testid="mode-literal"
-              onClick={() => setSearchMode("literal")}
-            >
-              {t("modeLiteral")}
-            </ModeButton>
-            <ModeButton
-              active={searchMode === "fts"}
-              testid="mode-fts"
-              onClick={() => setSearchMode("fts")}
-            >
-              {t("modeFts")}
-            </ModeButton>
-          </div>
-        </div>
+            fileCount={shownFiles.length}
+            truncated={filesTruncated}
+          >
+            <FileTree
+              files={liveFiles}
+              selected={selected}
+              activePath={activeEditorPath}
+              renamingPath={renaming}
+              selecting={selecting}
+              onToggleSelecting={() => {
+                setSelecting((value) => !value);
+                setSelected(new Set());
+              }}
+              actions={treeActions}
+              onSelectionChange={setSelected}
+            />
+          </Sidebar>
+        </Panel>
 
-        <div className="ml-auto flex items-center gap-1">
-          <Button data-testid="new-file" onClick={() => setShowNewFile(true)}>
-            <Plus />
-            {tCommon("newFile")}
-          </Button>
-          <label>
-            <Button variant="outline" className="cursor-pointer">
-              <Upload />
-              {tCommon("upload")}
-              <input
-                type="file"
-                data-testid="upload-input"
-                hidden
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void uploadAttachment(file);
-                  e.target.value = "";
+        <Separator className="w-px bg-border transition-colors hover:bg-primary/40 data-[state=dragging]:bg-primary/60" />
+
+        <Panel minSize="35">
+          {mode === "workspace" ? (
+            <div className="h-full min-h-0">
+              <EditorPane
+                state={editor}
+                onChange={setEditor}
+                onStateChange={setEditor}
+                onAuthLost={() => {
+                  setBanner(t("bannerAuthLost"));
+                  onLogout();
+                }}
+                canTrash={canTrash}
+                onTrashCurrent={() => {
+                  const current = editorRef.current;
+                  if (current.kind === "clean" || current.kind === "dirty") {
+                    setDialog({ type: "trash", paths: [current.path] });
+                  }
                 }}
               />
-            </Button>
-          </label>
-          <Button
-            variant={showTrash ? "secondary" : "outline"}
-            aria-pressed={showTrash}
-            data-testid="toggle-trash"
-            onClick={() => setShowTrash((value) => !value)}
-          >
-            {showTrash ? <ArchiveRestore /> : <Trash2 />}
-            {showTrash ? tCommon("exitTrash") : tCommon("trash")}
-          </Button>
-          <ThemeToggle />
-          <Tooltip content={tCommon("languageLabel")}>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="language"
-              onClick={() => cycleLanguage()}
-            >
-              <Languages />
-            </Button>
-          </Tooltip>
-          <span className="ml-0.5 rounded-full bg-muted px-2 py-1 text-[10.5px] text-muted-foreground">
-            {session.actor}
-          </span>
-          <Button variant="ghost" data-testid="logout" onClick={onLogout}>
-            <LogOut />
-            {tCommon("logout")}
-          </Button>
+            </div>
+          ) : (
+            <TrashView
+              items={trashedFiles}
+              onRestore={(path) => void restoreFromTrash(path)}
+              onBatchRestore={() => void batchRestore()}
+              onCopyPath={treeActions.onCopyPath}
+              restoringAll={restoringAll}
+            />
+          )}
+        </Panel>
+
+        {propertiesOpen && (
+          <>
+            <Separator className="w-px bg-border transition-colors hover:bg-primary/40 data-[state=dragging]:bg-primary/60" />
+            <Panel defaultSize="24" minSize="16" maxSize="40">
+              <PropertiesPanel
+                path={propertiesPath}
+                revision={
+                  propertiesPath && propertiesPath === activeEditorPath
+                    ? (editor.kind !== "empty" && editor.kind !== "loading" && editor.kind !== "conflict"
+                      ? editor.baseRevision
+                      : null)
+                    : null
+                }
+                onRestore={(revision) => {
+                  if (propertiesPath && propertiesPath === activeEditorPath && editor.kind !== "empty" && editor.kind !== "loading" && editor.kind !== "conflict") {
+                    restoreRevision(propertiesPath, revision, editor.baseRevision);
+                  } else if (propertiesPath) {
+                    // Properties of a non-open file: restore against its HEAD.
+                    void (async () => {
+                      try {
+                        const meta = await api.readMeta(propertiesPath);
+                        await api.restore(propertiesPath, revision, meta.revision);
+                        toast.success(t("bannerRestoredShort"));
+                        await refreshFiles();
+                      } catch (error) {
+                        fail(error);
+                      }
+                    })();
+                  }
+                }}
+                onClose={() => setPropertiesOpen(false)}
+              />
+            </Panel>
+          </>
+        )}
+      </Group>
+
+      {dragging && mode === "workspace" && (
+        <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-primary/4">
+          <div className="rounded-[12px] border border-dashed border-primary/50 px-8 py-6 text-[13px] font-medium text-primary">
+            {t("dropHere")}
+          </div>
         </div>
-      </header>
+      )}
 
       {banner && (
         <div className="pointer-events-none fixed inset-x-0 top-14 z-40 flex justify-center px-4">
           <div
-            className="pointer-events-auto flex max-w-xl items-start gap-2 rounded-lg border bg-card px-3 py-2 text-xs shadow-lg"
+            className="pointer-events-auto flex max-w-xl items-start gap-2 rounded-[8px] border bg-card px-3 py-2 text-xs shadow-overlay"
             data-testid="banner"
             role="status"
           >
-            <TriangleAlert className="mt-0.5 size-3.5 shrink-0 text-warning" />
+            <TriangleAlert className="mt-0.5 size-3.5 shrink-0 stroke-[1.5] text-warning" />
             <span className="min-w-0 flex-1 leading-relaxed">{banner}</span>
             <button
               onClick={() => setBanner(null)}
               aria-label={tCommon("close")}
-              className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="cursor-pointer rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
-              <X className="size-3.5" />
+              <X className="size-3.5 stroke-[1.5]" />
             </button>
           </div>
         </div>
       )}
 
-      <Group orientation="horizontal" className="min-h-0 flex-1 gap-1.5">
-        <Panel
-          panelRef={sidebarPanel}
-          collapsible
-          collapsedSize="0"
-          defaultSize="24"
-          minSize="16"
-          maxSize="45"
-        >
-          <div className="flex h-full min-h-0 flex-col gap-1.5">
-            {searchResults && (
-              <div
-                className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card shadow-card"
-                data-testid="search-results"
-              >
-                <div className="flex items-center gap-2 border-b px-2.5 py-1.5">
-                  <Search className="size-3.5 shrink-0 text-muted-foreground" />
-                  <h3 className="min-w-0 flex-1 truncate text-xs font-semibold">
-                    {t("searchResultsTitle", {
-                      query: searchQuery,
-                      count: searchResults.length,
-                    })}
-                    {searchIncomplete && (
-                      <span className="font-normal text-destructive">
-                        {t("searchIncomplete")}
-                      </span>
-                    )}
-                    {searchBuilding && (
-                      <span className="font-normal text-muted-foreground">
-                        {t("searchBuilding")}
-                      </span>
-                    )}
-                  </h3>
-                  {searching && (
-                    <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-                  )}
-                  <button
-                    aria-label={t("closeSearch")}
-                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={() => setSearchResults(null)}
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-                <ul className="min-h-0 flex-1 overflow-auto p-1">
-                  {searchResults.map((hit) => (
-                    <li key={hit.path + hit.indexed_revision} className="rounded-md p-1 hover:bg-muted/70">
-                      <button
-                        className="w-full truncate text-left font-mono text-xs hover:text-primary"
-                        onClick={() => requestOpen(hit.path)}
-                        title={hit.path}
-                      >
-                        {hit.path}
-                      </button>
-                      <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
-                        {hit.snippet.slice(0, 160)}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        files={liveFiles}
+        searchMode={searchMode}
+        onSearchModeChange={setSearchMode}
+        onOpenFile={requestOpen}
+        onNewDocument={() => treeActions.onNewDocumentIn("")}
+        onUpload={openUploadIntent}
+      />
 
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card shadow-card">
-              <div className="flex items-center gap-1.5 border-b px-2.5 py-1.5">
-                <h2 className="flex-1 text-xs font-semibold">
-                  {showTrash ? t("panelTrash") : t("panelFiles")}
-                  <span className="ml-1.5 font-normal text-muted-foreground">
-                    {files.length}
-                  </span>
-                </h2>
-                {filesTruncated && (
-                  <span
-                    className="text-[10.5px] text-muted-foreground"
-                    data-testid="files-truncated"
-                  >
-                    {t("truncated")}
-                  </span>
-                )}
-                {files.length > 0 && !batchRunning && (
-                  <Tooltip content={selecting ? t("exitSelect") : t("select")}>
-                    <Button
-                      variant={selecting ? "secondary" : "ghost"}
-                      size="iconSm"
-                      aria-pressed={selecting}
-                      onClick={() => (selecting ? exitSelecting() : setSelecting(true))}
-                    >
-                      {selecting ? <X /> : <ListChecks />}
-                    </Button>
-                  </Tooltip>
-                )}
-              </div>
+      {upload.conflict && (
+        <UploadConflictDialog
+          plan={upload.conflict.plan}
+          existing={upload.conflict.existing}
+          running={upload.running}
+          onCancel={upload.cancel}
+          onConfirm={(plan) => void upload.confirm(plan).then(runUpload)}
+        />
+      )}
+      {upload.progress && (
+        <UploadProgress items={upload.progress} onDismiss={upload.dismissProgress} />
+      )}
 
-              {selecting && (
-                <div className="flex items-center gap-2 border-b bg-muted/30 px-2.5 py-1.5">
-                  <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <input
-                      type="checkbox"
-                      className="size-3.5 accent-[var(--primary)]"
-                      checked={allSelected}
-                      onChange={() => {
-                        setSelected(
-                          allSelected ? new Set() : new Set(files.map((f) => f.path)),
-                        );
-                      }}
-                    />
-                    {t("selectAll")}
-                  </label>
-                  <span className="text-[11px] text-muted-foreground">
-                    {t("selectedCount", { count: selected.size })}
-                  </span>
-                  <div className="ml-auto flex items-center gap-1">
-                    {batchRunning && (
-                      <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
-                    )}
-                    <Button
-                      size="sm"
-                      variant={showTrash ? "default" : "destructive"}
-                      disabled={selected.size === 0 || batchRunning}
-                      onClick={() => void runBatch(showTrash ? "restore" : "trash")}
-                    >
-                      {showTrash ? <ArchiveRestore /> : <Trash2 />}
-                      {showTrash ? t("batchRestore") : t("batchTrash")}
-                    </Button>
-                  </div>
-                </div>
-              )}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        hidden
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          if (files.length > 0) void upload.begin(files, "flat").then(runUpload);
+          event.target.value = "";
+        }}
+      />
+      <input
+        ref={folderInputRef}
+        type="file"
+        multiple
+        hidden
+        {...({ webkitdirectory: "true", directory: "true" } as Record<string, string>)}
+        onChange={(event) => {
+          const files = Array.from(event.target.files ?? []);
+          if (files.length > 0) void upload.begin(files, "tree").then(runUpload);
+          event.target.value = "";
+        }}
+      />
 
-              <div className="min-h-0 flex-1 overflow-auto p-1" data-testid="file-list">
-                {files.length === 0 && (
-                  <div className="flex flex-col items-center gap-2 px-3 py-8 text-muted-foreground">
-                    <FolderOpen className="size-5 opacity-60" />
-                    <p className="text-xs">{t("noFiles")}</p>
-                  </div>
-                )}
-                <ul className="space-y-px">
-                  {treeRows.map((row) =>
-                    row.kind === "folder" ? (
-                      <li key={`dir:${row.node.path}`}>
-                        <button
-                          className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/70"
-                          style={{ paddingLeft: `${row.depth * 12 + 6}px` }}
-                          onClick={() => toggleFolder(row.node.path)}
-                          aria-expanded={!collapsedFolders.has(row.node.path)}
-                          title={t(
-                            collapsedFolders.has(row.node.path)
-                              ? "folderExpand"
-                              : "folderCollapse",
-                            { name: row.node.name },
-                          )}
-                        >
-                          <ChevronRight
-                            className={cn(
-                              "size-3 shrink-0 text-muted-foreground transition-transform",
-                              !collapsedFolders.has(row.node.path) && "rotate-90",
-                            )}
-                          />
-                          {!collapsedFolders.has(row.node.path) ? (
-                            <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
-                          ) : (
-                            <Folder className="size-3.5 shrink-0 text-muted-foreground" />
-                          )}
-                          <span className="min-w-0 flex-1 truncate text-xs font-medium">
-                            {row.node.name}
-                          </span>
-                        </button>
-                      </li>
-                    ) : (
-                      <li key={row.entry.path} className="group relative">
-                        <button
-                          className={cn(
-                            "flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors",
-                            selected.has(row.entry.path)
-                              ? "bg-primary/13"
-                              : "hover:bg-primary/9",
-                            "focus-visible:outline-2 focus-visible:outline-ring",
-                          )}
-                          style={{ paddingLeft: `${row.depth * 12 + 6}px` }}
-                          onClick={() => requestOpen(row.entry.path)}
-                          title={row.entry.path}
-                        >
-                          {selecting && (
-                            <input
-                              type="checkbox"
-                              className="size-3.5 shrink-0 accent-[var(--primary)]"
-                              checked={selected.has(row.entry.path)}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={() => requestOpen(row.entry.path)}
-                            />
-                          )}
-                          <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                          <span className="file-path min-w-0 flex-1 truncate font-mono text-xs">
-                            {selecting
-                              ? row.entry.path.split("/").pop()
-                              : row.entry.path}
-                          </span>
-                          {row.entry.state === "trashed" && (
-                            <span className="shrink-0 rounded-full bg-warning/12 px-1.5 py-0.5 text-[9.5px] text-warning">
-                              {t("trashedBadge")}
-                            </span>
-                          )}
-                        </button>
-                        {row.entry.state === "trashed" && !selecting && (
-                          <button
-                            className="restore-button absolute bottom-1/2 right-1.5 translate-y-1/2 rounded-md bg-card/95 p-1 text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100"
-                            aria-label={t("restoreAria", { path: row.entry.path })}
-                            title={t("restoreTooltip")}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void restoreFromTrash(row.entry.path);
-                            }}
-                          >
-                            <ArchiveRestore className="size-3.5" />
-                          </button>
-                        )}
-                      </li>
-                    ),
-                  )}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </Panel>
+      {/* ---- Dialogs ---- */}
 
-        <ResizeSeparator />
-
-        <Panel minSize="35">
-          <EditorPane
-            state={editor}
-            onChange={setEditor}
-            onStateChange={setEditor}
-            onAuthLost={() => {
-              setBanner(t("bannerAuthLost"));
-              onLogout();
-            }}
-            canTrash={canTrash}
-            onTrashCurrent={() => setShowTrashConfirm(true)}
-          />
-        </Panel>
-
-        <ResizeSeparator />
-
-        <Panel defaultSize="22" minSize="15" maxSize="40">
-          <InfoPanel
-            path={infoPath(editor)}
-            revision={infoRevision(editor)}
-            onRestore={(revision) => {
-              // Restoring replaces the buffer: only a clean editor may lose it
-              // silently; dirty/conflict editors must resolve first.
-              if (editor.kind !== "clean") {
-                setBanner(t("blockedRestore"));
-                return;
-              }
-              void (async () => {
-                try {
-                  const result = await api.restore(editor.path, revision, editor.baseRevision);
-                  const { text, etag } = await api.readText(editor.path);
-                  void result;
-                  setEditor({
-                    kind: "clean",
-                    path: editor.path,
-                    text,
-                    baseText: text,
-                    baseRevision: etag,
-                  });
-                  setBanner(t("bannerRestoredShort"));
-                  await refreshFiles();
-                } catch (error) {
-                  fail(error);
-                }
-              })();
-            }}
-          />
-        </Panel>
-      </Group>
-
-      <Dialog open={showNewFile} onOpenChange={setShowNewFile}>
+      <Dialog
+        open={dialog?.type === "new-document" || dialog?.type === "new-folder"}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
         <DialogContent data-testid="new-file-dialog">
           <DialogHeader>
-            <DialogTitle>{t("newFileDialogTitle")}</DialogTitle>
-            <DialogDescription>{t("newFileDialogHint")}</DialogDescription>
+            <DialogTitle>
+              {dialog?.type === "new-folder" ? t("newFolderDialogTitle") : t("newFileDialogTitle")}
+            </DialogTitle>
+            <DialogDescription>
+              {dialog?.type === "new-folder" ? t("newFolderDialogHint") : t("newFileDialogHint")}
+            </DialogDescription>
           </DialogHeader>
-          <div className="px-5 pt-4">
+          <div className="pt-4">
             <Input
               data-testid="new-file-path"
-              placeholder={t("newFilePlaceholder")}
+              placeholder={dialog?.type === "new-folder" ? t("newFolderPlaceholder") : t("newFilePlaceholder")}
               value={newFilePath}
-              onChange={(e) => setNewFilePath(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void newFile();
+              onChange={(event) => setNewFilePath(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void (dialog?.type === "new-folder" ? createFolder() : newFile());
+                }
               }}
               autoFocus
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowNewFile(false)}>
+            <Button variant="outline" onClick={() => setDialog(null)}>
               {tCommon("cancel")}
             </Button>
-            <Button data-testid="new-file-confirm" onClick={() => void newFile()}>
+            <Button
+              variant="default"
+              data-testid="new-file-confirm"
+              onClick={() => void (dialog?.type === "new-folder" ? createFolder() : newFile())}
+            >
               {tCommon("create")}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={showTrashConfirm} onOpenChange={setShowTrashConfirm}>
+      <AlertDialog
+        open={dialog?.type === "trash"}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
         <AlertDialogContent data-testid="trash-confirm">
           <AlertDialogTitle>{t("trashConfirmTitle")}</AlertDialogTitle>
-          <AlertDialogDescription>{t("trashConfirmBody")}</AlertDialogDescription>
+          <AlertDialogDescription>
+            {dialog?.type === "trash" ? t("trashConfirmBody", { count: dialog.paths.length }) : ""}
+          </AlertDialogDescription>
           <AlertDialogFooter>
-            <AlertDialogCancel className={alertCancelClass()}>
-              {tCommon("cancel")}
-            </AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               data-testid="trash-confirm-yes"
-              className={alertActionClass("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
-              onClick={() => void trashCurrent()}
+              disabled={batchRunning}
+              onClick={() => {
+                if (dialog?.type === "trash") void trashPaths(dialog.paths);
+              }}
             >
               {t("trashConfirmAction")}
             </AlertDialogAction>
@@ -897,23 +888,25 @@ export default function Workspace({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={pendingOpen !== null} onOpenChange={(open) => !open && setPendingOpen(null)}>
+      <AlertDialog
+        open={dialog?.type === "discard-open"}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
         <AlertDialogContent data-testid="open-confirm">
           <AlertDialogTitle>{t("openConfirmTitle")}</AlertDialogTitle>
           <AlertDialogDescription>
-            {t("openConfirmBody", { path: pendingOpen ?? "" })}
+            {dialog?.type === "discard-open"
+              ? t("openConfirmBody", { path: dialog.path })
+              : ""}
           </AlertDialogDescription>
           <AlertDialogFooter>
-            <AlertDialogCancel className={alertCancelClass()}>
-              {tCommon("cancel")}
-            </AlertDialogCancel>
+            <AlertDialogCancel>{tCommon("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               data-testid="open-confirm-yes"
-              className={alertActionClass("bg-destructive text-destructive-foreground hover:bg-destructive/90")}
               onClick={() => {
-                const path = pendingOpen;
-                setPendingOpen(null);
-                if (path) void openFile(path);
+                const target = dialog?.type === "discard-open" ? dialog.path : null;
+                setDialog(null);
+                if (target) void openFile(target);
               }}
             >
               {t("openConfirmAction")}
@@ -921,56 +914,53 @@ export default function Workspace({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={dialog?.type === "move"}
+        onOpenChange={(open) => !open && setDialog(null)}
+      >
+        <DialogContent data-testid="move-dialog">
+          <DialogHeader>
+            <DialogTitle>{t("moveTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("moveDescription", { count: moveTargets.length })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-1.5 pt-4">
+            <Input
+              data-testid="move-destination"
+              placeholder={t("movePlaceholder")}
+              value={moveDestination}
+              onChange={(event) => setMoveDestination(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void confirmMove();
+              }}
+              autoFocus
+            />
+            <div className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+              {folders.map((folder) => (
+                <button
+                  key={folder}
+                  type="button"
+                  onClick={() => setMoveDestination(folder)}
+                  className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-left font-mono text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                >
+                  <FolderInput className="size-3.5 shrink-0 stroke-[1.5]" />
+                  {folder === "" ? t("conflictRoot") : `${folder}/`}
+                </button>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialog(null)}>
+              {tCommon("cancel")}
+            </Button>
+            <Button variant="default" disabled={batchRunning} onClick={() => void confirmMove()}>
+              {t("moveAction")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-}
-
-function ModeButton({
-  active,
-  testid,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  testid: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      data-testid={testid}
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "rounded-md px-2 py-1 text-[10.5px] font-medium transition-colors",
-        active
-          ? "bg-primary/12 text-primary ring-1 ring-primary/30"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-function ResizeSeparator() {
-  return (
-    <Separator className="w-0.5 rounded-full bg-transparent transition-colors hover:bg-primary/40 data-[state=dragging]:bg-primary/60" />
-  );
-}
-
-function infoPath(state: EditorState): string | null {
-  return state.kind === "empty" || state.kind === "loading" ? null : state.path;
-}
-
-function infoRevision(state: EditorState): string | null {
-  switch (state.kind) {
-    case "clean":
-    case "dirty":
-    case "error":
-    case "saving":
-      return state.baseRevision;
-    default:
-      return null;
-  }
 }

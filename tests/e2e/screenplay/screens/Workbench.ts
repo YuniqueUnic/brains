@@ -38,8 +38,24 @@ export const Workbench = {
     PageElement.located(By.css('[data-testid="search-results"]')).describedAs("search results"),
   searchHitPaths: () =>
     PageElements.located(
-      By.css('[data-testid="search-results"] ul button'),
+      By.css('[data-testid="search-results"] [data-testid="search-hit"]'),
     ).describedAs("search hit paths"),
+  paletteTrigger: () =>
+    PageElement.located(By.css('[data-testid="palette-trigger"]')).describedAs(
+      "command palette trigger",
+    ),
+  newDocumentItem: () =>
+    PageElement.located(By.css('[data-testid="new-document"]')).describedAs(
+      "new document menu item",
+    ),
+  utilityMenuButton: () =>
+    PageElement.located(By.css('[data-testid="utility-menu"]')).describedAs(
+      "utility menu trigger",
+    ),
+  editorMenuButton: () =>
+    PageElement.located(By.css('[data-testid="editor-menu"]')).describedAs(
+      "editor more-actions trigger",
+    ),
   fileItems: () =>
     PageElements.located(
       By.css('[data-testid="file-list"] .file-path'),

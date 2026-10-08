@@ -64,6 +64,16 @@ export interface SearchPage {
   index_state: "available" | "building";
 }
 
+export interface TransferResult {
+  copied: boolean;
+  source_trashed: boolean;
+  partial: boolean;
+  operation_id: string;
+  target_revision?: string;
+  source_revision?: string;
+  error?: { code: string; message: string; current_revision?: string };
+}
+
 export interface LinkItem {
   source: string;
   target: string;
@@ -303,6 +313,42 @@ export const api = {
 
   async links(path: string, direction: "outbound" | "backlinks"): Promise<{ items: LinkItem[] }> {
     return request(`/links?path=${encodeURIComponent(path)}&direction=${direction}`, {});
+  },
+
+  /** Server-side copy (duplicate): the source keeps its revision. */
+  async copy(
+    source: string,
+    target: string,
+    expectedSourceRevision: string,
+  ): Promise<TransferResult> {
+    return request<TransferResult>("/copy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source,
+        target,
+        expected_source_revision: expectedSourceRevision,
+        operation_id: randomOperationId(),
+      }),
+    });
+  },
+
+  /** Server-side move — rename is a move whose target path differs. */
+  async move(
+    source: string,
+    target: string,
+    expectedSourceRevision: string,
+  ): Promise<TransferResult> {
+    return request<TransferResult>("/move", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source,
+        target,
+        expected_source_revision: expectedSourceRevision,
+        operation_id: randomOperationId(),
+      }),
+    });
   },
 };
 

@@ -30,6 +30,7 @@ describe("trash and restore", () => {
       SignIn(),
       CreateNote(path, "要被误删的内容 缓存"),
       Ensure.eventually(EditorStatus(), SAVED).timeoutAfter(Duration.ofSeconds(10)),
+      Click.on(Workbench.editorMenuButton()),
       Click.on(EditorArea.trashCurrentButton()),
       Click.on(Workbench.trashConfirmYes()),
       Ensure.eventually(ListedFiles(), not(containAtLeastOneItemThat(includes(path))))

@@ -11,6 +11,7 @@ export const OpenNote = (path: string) =>
 /** Search and wait for the results panel via the mode selector. */
 export const SearchFor = (query: string, mode: "literal" | "fts" = "literal") =>
   Task.where(`#actor searches for "${query}" (${mode})`,
+    Click.on(Workbench.paletteTrigger()),
     Click.on(mode === "fts" ? Workbench.modeFtsButton() : Workbench.modeLiteralButton()),
     Enter.theValue(query).into(Workbench.searchBox()),
     Press.the("Enter").in(Workbench.searchBox()),

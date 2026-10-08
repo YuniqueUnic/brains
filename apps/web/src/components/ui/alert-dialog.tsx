@@ -1,58 +1,80 @@
-import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
-import type { ComponentProps } from "react";
+import { AlertDialog as AlertDialogPrimitive } from "@base-ui-components/react/alert-dialog";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "../../lib/utils";
 import { buttonVariants } from "./button";
 
+/*
+ * Danger confirmation (DESIGN.md §17, §55-④): small Linear-style dialog,
+ * destructive action button only when the act is truly irreversible.
+ * Controlled usage: <AlertDialog open onOpenChange><AlertDialogContent …>.
+ */
 export const AlertDialog = AlertDialogPrimitive.Root;
 
 export function AlertDialogContent({
   className,
+  children,
   ...props
-}: ComponentProps<typeof AlertDialogPrimitive.Content>) {
+}: ComponentProps<typeof AlertDialogPrimitive.Popup> & { children: ReactNode }) {
   return (
     <AlertDialogPrimitive.Portal>
-      <AlertDialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" />
-      <AlertDialogPrimitive.Content
+      <AlertDialogPrimitive.Backdrop className="fixed inset-0 z-40 bg-black/35 backdrop-blur-[2px] fade-in" />
+      <AlertDialogPrimitive.Popup
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[min(100vw-1.5rem,26rem)] -translate-x-1/2 -translate-y-1/2",
-          "rounded-2xl border border-border/80 bg-card/95 shadow-lg backdrop-blur-xl",
+          "fixed left-1/2 top-1/2 z-50 flex w-[min(24rem,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-1.5",
+          "rounded-[12px] border bg-card p-5 text-foreground shadow-overlay overlay-in",
           className,
         )}
         {...props}
-      />
+      >
+        {children}
+      </AlertDialogPrimitive.Popup>
     </AlertDialogPrimitive.Portal>
   );
 }
 
-export function AlertDialogTitle({
-  className,
-  ...props
-}: ComponentProps<typeof AlertDialogPrimitive.Title>) {
+export function AlertDialogTitle({ className, ...props }: ComponentProps<"h2">) {
   return (
-    <AlertDialogPrimitive.Title
-      className={cn("px-5 pt-5 text-sm font-semibold text-foreground", className)}
+    <h2
+      className={cn("text-[15px] font-semibold leading-snug tracking-tight", className)}
       {...props}
     />
   );
 }
 
-export function AlertDialogDescription({
-  className,
-  ...props
-}: ComponentProps<typeof AlertDialogPrimitive.Description>) {
+export function AlertDialogDescription({ className, ...props }: ComponentProps<"p">) {
   return (
-    <AlertDialogPrimitive.Description
-      className={cn("px-5 pt-1.5 text-xs text-muted-foreground", className)}
-      {...props}
-    />
+    <p className={cn("text-[12.5px] leading-relaxed text-muted-foreground", className)} {...props} />
   );
 }
 
 export function AlertDialogFooter({ className, ...props }: ComponentProps<"div">) {
   return (
-    <div
+    <div className={cn("mt-4 flex items-center justify-end gap-2", className)} {...props} />
+  );
+}
+
+export function AlertDialogCancel({
+  className,
+  ...props
+}: ComponentProps<typeof AlertDialogPrimitive.Close>) {
+  return (
+    <AlertDialogPrimitive.Close
+      autoFocus
+      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "cursor-pointer", className)}
+      {...props}
+    />
+  );
+}
+
+export function AlertDialogAction({
+  className,
+  ...props
+}: ComponentProps<"button">) {
+  return (
+    <button
       className={cn(
-        "mt-5 flex justify-end gap-2.5 border-t bg-muted/25 px-5 py-3.5 rounded-b-2xl",
+        buttonVariants({ variant: "destructive", size: "sm" }),
+        "cursor-pointer",
         className,
       )}
       {...props}
@@ -60,13 +82,6 @@ export function AlertDialogFooter({ className, ...props }: ComponentProps<"div">
   );
 }
 
-export const AlertDialogAction = AlertDialogPrimitive.Action;
-export const AlertDialogCancel = AlertDialogPrimitive.Cancel;
-
-export function alertActionClass(className?: string) {
-  return cn(buttonVariants({ variant: "default" }), className);
-}
-
-export function alertCancelClass(className?: string) {
-  return cn(buttonVariants({ variant: "outline" }), className);
-}
+/** Pre-styled danger/cancel pair matching DESIGN.md §17. */
+export const alertActionClass = (extra: string) => extra;
+export const alertCancelClass = () => "";

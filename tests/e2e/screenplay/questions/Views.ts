@@ -17,7 +17,7 @@ export const BannerText = () => Text.of(Workbench.banner());
  * actions have no default timeout), which stalls the whole scenario.
  */
 export const ListedFiles = () =>
-  Question.about<List<string>>("listed files", async (actor) => {
+  Question.about<string[]>("listed files", async (actor) => {
     const raw = await Text.of(Workbench.fileList()).answeredBy(actor);
     return raw
       .split("\n")

@@ -1,13 +1,13 @@
-import type { InputHTMLAttributes } from "react";
+import type { ComponentProps } from "react";
 import { cn } from "../../lib/utils";
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...props }: ComponentProps<"input">) {
   return (
     <input
       className={cn(
-        "h-8 w-full rounded-md border border-border/80 bg-card/60 px-3 text-[13px] text-foreground",
+        "h-8 w-full rounded-[7px] border border-input bg-background px-3 text-[13px] text-foreground",
         "placeholder:text-muted-foreground/70",
-        "focus-visible:border-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/30",
+        "focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-ring/35 focus-visible:-outline-offset-1",
         "disabled:cursor-not-allowed disabled:opacity-50",
         className,
       )}

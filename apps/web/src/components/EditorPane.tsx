@@ -1,7 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compartment, EditorState as CodeMirrorState } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  redo,
+  redoDepth,
+  undo,
+  undoDepth,
+} from "@codemirror/commands";
 import {
   highlightSelectionMatches,
   openSearchPanel,
@@ -9,18 +20,38 @@ import {
   searchKeymap,
 } from "@codemirror/search";
 import { MergeView, unifiedMergeView } from "@codemirror/merge";
-import { CopyPlus, FileDiff, GitMerge, Save, Search, Trash2 } from "lucide-react";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
+import { createFindPanel, type FindPanelLabels } from "./editor/find-panel";
+import {
+  CopyPlus,
+  Eye,
+  FileDiff,
+  GitMerge,
+  MoreHorizontal,
+  Redo2,
+  Save,
+  Search,
+  Sparkles,
+  SquarePen,
+  Trash2,
+  Undo2,
+} from "lucide-react";
+import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import { Button } from "./ui/button";
 import { SaveIndicator, type SaveTone } from "./SaveIndicator";
 import { Tooltip } from "./ui/tooltip";
+import { menuItemClass, menuPopupClass } from "./ui/menu";
 import { cn } from "../lib/utils";
 
-/**
- * Editor state machine (design §13.2):
- * loading → clean → dirty → saving → clean | conflict | error.
- * One save in flight; keystrokes during a save buffer and re-dirty after.
+/*
+ * Editor (DESIGN.md §26-34): the document is the star — 860px measure (CSS),
+ * document typography, restrained markdown highlighting. Chrome is one quiet
+ * toolbar: undo/redo, find, diff, save; everything else lives in ⋯.
+ * State machine unchanged (design §13.2): loading → clean → dirty → saving
+ * → clean | conflict | error.
  */
 export type EditorState =
   | { kind: "empty" }
@@ -57,15 +88,57 @@ function freshEditorState(path: string, text: string, baseRevision: string): Edi
   return { kind: "clean", path, text, baseText: text, baseRevision };
 }
 
-function baseExtensions(onDocChange: (text: string) => void) {
+/* Markdown highlighting (DESIGN.md §31): near-monochrome, quiet accents. */
+const markdownHighlights = HighlightStyle.define([
+  { tag: tags.heading1, fontWeight: "650", fontSize: "1.7em", lineHeight: "1.4" },
+  { tag: tags.heading2, fontWeight: "630", fontSize: "1.35em", lineHeight: "1.45" },
+  { tag: tags.heading3, fontWeight: "600", fontSize: "1.12em" },
+  { tag: tags.heading4, fontWeight: "600" },
+  { tag: tags.strong, fontWeight: "620" },
+  { tag: tags.emphasis, fontStyle: "italic" },
+  { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--muted-foreground)" },
+  { tag: tags.link, color: "var(--primary)", textDecoration: "underline" },
+  { tag: tags.url, color: "var(--muted-foreground)" },
+  { tag: tags.monospace, class: "cm-md-code" },
+  { tag: tags.quote, color: "var(--muted-foreground)", fontStyle: "italic" },
+  { tag: tags.processingInstruction, color: "var(--faint-foreground)" },
+  { tag: tags.meta, color: "var(--faint-foreground)" },
+  { tag: [tags.keyword, tags.atom, tags.bool], color: "var(--primary)" },
+  { tag: tags.comment, color: "var(--faint-foreground)" },
+  { tag: [tags.string, tags.number], color: "color-mix(in srgb, var(--foreground) 78%, var(--primary))" },
+]);
+
+function findPanelLabels(t: (key: string) => string): FindPanelLabels {
+  return {
+    find: t("findPlaceholder"),
+    replace: t("replacePlaceholder"),
+    replaceButton: t("replaceAction"),
+    replaceAllButton: t("replaceAllAction"),
+    previous: t("findPrevious"),
+    next: t("findNext"),
+    close: t("close"),
+    caseSensitive: t("matchCase"),
+    useRegex: t("useRegex"),
+    toggleReplace: t("toggleReplace"),
+  };
+}
+
+function baseExtensions(
+  onDocChange: (text: string) => void,
+  onHistoryChange: (canUndo: boolean, canRedo: boolean) => void,
+  findLabels: () => FindPanelLabels,
+) {
   return [
     markdown({ base: markdownLanguage }),
+    syntaxHighlighting(markdownHighlights),
     EditorView.lineWrapping,
-    search({ top: true }),
+    history(),
+    search({ top: true, createPanel: (view) => createFindPanel(findLabels())(view) }),
     highlightSelectionMatches(),
-    keymap.of(searchKeymap),
+    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) onDocChange(update.state.doc.toString());
+      onHistoryChange?.(undoDepth(update.state) > 0, redoDepth(update.state) > 0);
     }),
   ];
 }
@@ -93,6 +166,9 @@ export default function EditorPane({
   const stateRef = useRef<EditorState>(state);
   stateRef.current = state;
   const [diffOpen, setDiffOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"source" | "preview">("source");
+  const [undoPossible, setUndoPossible] = useState(false);
+  const [redoPossible, setRedoPossible] = useState(false);
   // Swap the inline diff extension without rebuilding the editor.
   const diffCompartment = useRef(new Compartment());
 
@@ -117,12 +193,18 @@ export default function EditorPane({
         current.text = text;
       }
     };
+    // Push history depth to React state only when the affordance flips, so
+    // keystrokes don't re-render the pane per character.
+    const onHistoryChange = (canUndo: boolean, canRedo: boolean) => {
+      setUndoPossible((prev) => (prev === canUndo ? prev : canUndo));
+      setRedoPossible((prev) => (prev === canRedo ? prev : canRedo));
+    };
     const view = new EditorView({
       parent: hostRef.current,
       state: CodeMirrorState.create({
         doc: currentDoc(stateRef.current),
         extensions: [
-          ...baseExtensions(onDocChange),
+          ...baseExtensions(onDocChange, onHistoryChange, () => findPanelLabels(t)),
           // The inline diff extension is swapped in/out via this compartment;
           // the doc listener above runs in every state (saves buffer typing).
           diffCompartment.current.of([]),
@@ -175,7 +257,10 @@ export default function EditorPane({
     const previous = lastDocRef.current;
     if (key === previous.key) return;
     lastDocRef.current = { key, state };
-    if (state.kind === "conflict") setDiffOpen(false);
+    if (state.kind === "conflict") {
+      setDiffOpen(false);
+      setViewMode("source");
+    }
 
     // Text typed while NO file was bound to the editor (the 新建 dialog is
     // still committing) belongs to the user, not to the state replacing it:
@@ -295,7 +380,7 @@ export default function EditorPane({
     }
   }, [onStateChange, onAuthLost, t]);
 
-  // Ctrl+S saves; P0 keeps saving explicit (design §13.2).
+  // Ctrl+S saves; saving stays explicit (design §13.2).
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
@@ -325,6 +410,15 @@ export default function EditorPane({
     if (view && state.kind !== "conflict") openSearchPanel(view);
   };
 
+  const runUndo = () => {
+    const view = viewRef.current;
+    if (view) undo(view);
+  };
+  const runRedo = () => {
+    const view = viewRef.current;
+    if (view) redo(view);
+  };
+
   // The CodeMirror host must stay mounted through EVERY state — including
   // conflict, which renders its panel as a sibling and hides (never unmounts)
   // the editor. Unmounting would orphan the one EditorView created on mount
@@ -338,15 +432,19 @@ export default function EditorPane({
   };
   const canDiff =
     (state.kind === "dirty" || state.kind === "error") && state.text !== state.baseText;
+  const previewHtml = useMemo(() => {
+    if (viewMode !== "preview" || buffer === "") return "";
+    return DOMPurify.sanitize(marked.parse(buffer, { async: false }) as string);
+  }, [viewMode, buffer]);
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card shadow-card"
+      className="flex h-full min-h-0 flex-col bg-card"
       data-testid="editor-pane"
     >
-      <div className="flex h-11 min-h-11 shrink-0 items-center gap-1 border-b bg-card px-2.5">
+      <div className="flex h-11 shrink-0 items-center gap-1 border-b px-2.5">
         <span
-          className="min-w-0 flex-1 truncate font-mono text-[13px] font-semibold text-foreground"
+          className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
           data-testid="editor-path"
           title={state.kind === "empty" ? undefined : state.path}
         >
@@ -360,8 +458,41 @@ export default function EditorPane({
         />
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-0.5">
+            <div className="mr-1 flex items-center gap-0.5 rounded-[7px] border p-0.5">
+              <ModeChip active={viewMode === "source"} onClick={() => setViewMode("source")}>
+                <SquarePen className="size-3.5 stroke-[1.5]" />
+                {t("modeSource")}
+              </ModeChip>
+              <ModeChip active={viewMode === "preview"} onClick={() => setViewMode("preview")}>
+                <Eye className="size-3.5 stroke-[1.5]" />
+                {t("modePreview")}
+              </ModeChip>
+            </div>
+            {viewMode === "source" && (
+              <>
+            <Tooltip content={t("undoTooltip")}>
+              <Button
+                size="icon"
+                aria-label={t("undoTooltip")}
+                disabled={!undoPossible}
+                onClick={runUndo}
+              >
+                <Undo2 />
+              </Button>
+            </Tooltip>
+            <Tooltip content={t("redoTooltip")}>
+              <Button
+                size="icon"
+                aria-label={t("redoTooltip")}
+                disabled={!redoPossible}
+                onClick={runRedo}
+              >
+                <Redo2 />
+              </Button>
+            </Tooltip>
+            <span className="mx-1 h-4 w-px bg-border" />
             <Tooltip content={t("searchTooltip")}>
-              <Button variant="ghost" size="icon" onClick={openFind}>
+              <Button size="icon" onClick={openFind}>
                 <Search />
               </Button>
             </Tooltip>
@@ -376,36 +507,49 @@ export default function EditorPane({
                 <FileDiff />
               </Button>
             </Tooltip>
-            <Tooltip content={t("saveTooltip")}>
-              <Button
-                size="sm"
-                className="ml-1"
-                disabled={state.kind !== "dirty" && state.kind !== "error"}
-                onClick={() => void save()}
+            </>
+            )}
+            <Button
+              variant="secondary"
+              data-testid="save-button"
+              className="ml-1"
+              disabled={state.kind !== "dirty" && state.kind !== "error"}
+              onClick={() => void save()}
+            >
+              <Save />
+              {t("save")}
+            </Button>
+            <Menu.Root>
+              <Menu.Trigger
+                render={
+                  <Button size="icon" aria-label={t("editorMenu")} data-testid="editor-menu" />
+                }
               >
-                <Save />
-                {t("save")}
-              </Button>
-            </Tooltip>
-            {state.kind === "clean" || state.kind === "dirty" ? (
-              <Tooltip content={t("saveAs")}>
-                <Button variant="ghost" size="icon" onClick={() => void createSave()}>
-                  <CopyPlus />
-                </Button>
-              </Tooltip>
-            ) : null}
-            {canTrash ? (
-              <Tooltip content={t("trashTooltip")}>
-                <Button
-                  variant="dangerGhost"
-                  size="icon"
-                  data-testid="trash-current"
-                  onClick={onTrashCurrent}
-                >
-                  <Trash2 />
-                </Button>
-              </Tooltip>
-            ) : null}
+                <MoreHorizontal />
+              </Menu.Trigger>
+              <Menu.Portal>
+                <Menu.Positioner sideOffset={4} align="end">
+                  <Menu.Popup className={menuPopupClass}>
+                    {state.kind === "clean" || state.kind === "dirty" ? (
+                      <Menu.Item className={menuItemClass()} onClick={() => void createSave()}>
+                        <CopyPlus className="size-4 stroke-[1.5] text-muted-foreground" />
+                        {t("saveAs")}
+                      </Menu.Item>
+                    ) : null}
+                    {canTrash ? (
+                      <Menu.Item
+                        className={menuItemClass({ danger: true })}
+                        onClick={onTrashCurrent}
+                        data-testid="trash-current"
+                      >
+                        <Trash2 className="size-4 stroke-[1.5]" />
+                        {t("trashTooltip")}
+                      </Menu.Item>
+                    ) : null}
+                  </Menu.Popup>
+                </Menu.Positioner>
+              </Menu.Portal>
+            </Menu.Root>
           </div>
         )}
       </div>
@@ -413,30 +557,29 @@ export default function EditorPane({
       <div className="relative min-h-0 flex-1">
         {inConflict && <ConflictView state={state} stateRef={stateRef} onChange={onChange} />}
         <div
-          className={`absolute inset-0 overflow-auto py-2${inConflict ? " invisible" : ""}`}
+          className={`absolute inset-0 overflow-auto${inConflict || viewMode === "preview" ? " invisible" : ""}`}
           data-testid="codemirror-host"
           ref={hostRef}
         />
+        {!inConflict && viewMode === "preview" && (
+          <div
+            className="markdown-preview absolute inset-0 overflow-auto"
+            data-testid="markdown-preview"
+            dangerouslySetInnerHTML={{ __html: previewHtml }}
+          />
+        )}
         {state.kind === "empty" && (
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-muted-foreground">
-            <svg
-              aria-hidden
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              className="size-8 opacity-60"
-            >
-              <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21z" />
-              <path d="M4 5.5v13" />
-              <path d="M9 8h7M9 11.5h5" strokeLinecap="round" />
-            </svg>
-            <p className="text-xs">{t("emptyState")}</p>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+            <Sparkles className="size-6 stroke-[1.25] opacity-50" />
+            <div className="text-center">
+              <p className="text-[13px] text-foreground/80">{t("emptyTitle")}</p>
+              <p className="mt-1 text-xs">{t("emptyState")}</p>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-between border-t bg-muted/20 px-2.5 py-1 text-[11px] text-muted-foreground">
+      <div className="flex shrink-0 items-center justify-between border-t px-3 py-1 text-[11px] text-faint">
         <span className="font-mono">
           {t("stats", {
             chars: stats.chars,
@@ -505,7 +648,7 @@ function ConflictView({
         state: CodeMirrorState.create({
           doc: state.localText,
           extensions: [
-            ...baseExtensions(onDocChange),
+            ...baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
             unifiedMergeView({
               original: state.remoteText,
               mergeControls: true,
@@ -530,7 +673,7 @@ function ConflictView({
       },
       b: {
         doc: state.localText,
-        extensions: baseExtensions(onDocChange),
+        extensions: baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
       },
       parent,
       highlightChanges: true,
@@ -603,7 +746,7 @@ function ConflictView({
       }}
     >
       <div className="flex items-start gap-2 px-3 pt-2.5">
-        <GitMerge className="mt-0.5 size-4 shrink-0" style={{ color: "var(--warning)" }} />
+        <GitMerge className="mt-0.5 size-4 shrink-0 stroke-[1.5]" style={{ color: "var(--warning)" }} />
         <div className="min-w-0 flex-1">
           <p className="text-[12.5px] font-semibold">{t("conflictTitle")}</p>
           <p className="mt-0.5 text-[11.5px] text-muted-foreground">
@@ -638,7 +781,7 @@ function ConflictView({
         />
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2 px-3 py-2">
-        <Button data-testid="conflict-keep-local" onClick={() => void saveWithRemoteBase()}>
+        <Button variant="secondary" data-testid="conflict-keep-local" onClick={() => void saveWithRemoteBase()}>
           {t("conflictKeepLocal")}
         </Button>
         <Button
@@ -669,7 +812,7 @@ function ModeChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "rounded px-2 py-1 text-[10.5px] font-medium transition-colors",
+        "cursor-pointer rounded px-2 py-1 text-[10.5px] font-medium transition-colors",
         active
           ? "bg-primary/12 text-primary ring-1 ring-primary/30"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
