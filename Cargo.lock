@@ -331,6 +331,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "brainstore-api-types",
+ "brainstore-application",
  "brainstore-client",
  "brainstore-domain",
  "brainstore-server",

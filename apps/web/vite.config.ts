@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: {
     // CodeMirror + marked + i18next account for the bundle; local-first app.
-    chunkSizeWarningLimit: 1000,
+    chunkSizeWarningLimit: 1100,
   },
   server: {
     proxy: {

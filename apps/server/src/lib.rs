@@ -99,6 +99,13 @@ where
     SqliteIndex: Idx,
 {
     let (state, plaintext, token_new) = build_state(&config)?;
+    // First boot on a completely empty vault: lay down the template notes so
+    // humans and AI agents start from guide content, not a blank screen.
+    match brainstore_application::seed::seed_if_empty(&state.vault).await {
+        Ok(0) => {}
+        Ok(count) => eprintln!("brain-server: seeded {count} template notes into the empty vault."),
+        Err(e) => eprintln!("brain-server: template seeding failed (continuing): {e}"),
+    }
     // build_router owns the body limit (from limits) and the JSON fallbacks;
     // here we only attach the outer JSON 404 for the no-SPA profile (§5.1).
     let router = routes::build_router(state);

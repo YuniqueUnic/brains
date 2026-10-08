@@ -166,8 +166,12 @@ fn put_cat_search_rm_exit_code_contract() {
     assert_eq!(output.status.code().unwrap(), 3);
 
     // Search over a trash-only vault still finds the tombstone's old body? No:
-    // the index row is deleted, so this is a complete miss → exit 1.
-    let output = brain(&server).args(["search", "缓存"]).output().unwrap();
+    // the index row is deleted, so this is a complete miss → exit 1. The term
+    // comes from the trashed file's own body; template notes must not match.
+    let output = brain(&server)
+        .args(["search", "缓存策略v2"])
+        .output()
+        .unwrap();
     assert_eq!(output.status.code().unwrap(), 1);
 }
 
@@ -221,7 +225,8 @@ fn export_produces_a_readable_working_tree() {
     .unwrap();
     assert_eq!(manifest["format"], "brainstore-working-tree");
     assert_eq!(manifest["consistency"], "per_file");
-    assert_eq!(manifest["entries"].as_array().unwrap().len(), 1);
+    // The four first-boot template notes plus this test's file.
+    assert_eq!(manifest["entries"].as_array().unwrap().len(), 5);
 
     // Exporting onto an existing directory fails instead of merging.
     let output = brain(&server)

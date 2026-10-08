@@ -11,7 +11,7 @@ BrainStore **不是** AI memory framework：没有召回引擎、没有向量库
 | 登录 | 工作台 |
 |---|---|
 | ![登录](docs/screenshots/01-login.png) | ![工作台](docs/screenshots/02-workspace.png) |
-| *全库搜索* | *三栏冲突视图——绝不自动覆盖* |
+| *全库搜索* | *冲突工作台——分栏/内联 diff，绝不自动覆盖* |
 | ![搜索](docs/screenshots/03-search.png) | ![冲突](docs/screenshots/04-conflict.png) |
 | *暗色主题* | |
 | ![暗色](docs/screenshots/05-dark.png) | |
@@ -20,8 +20,12 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 
 ## 核心性质
 
+- **开箱即有内容，不是空白屏。** 首次启动空库自动播种四篇模板笔记——欢迎页、使用规则、**AI 协作守则**与收件箱，人和 agent 都从可用的约定开始（云端实例用 `brainstore-cli seed`）。
+- **对 AI 天然友好。** [docs/ai-integration.md](docs/ai-integration.md) 是面向机器的 API 参考（端点、CAS 礼仪、错误模型），`llms.txt` 为爬虫/agent 提供项目索引，且每个库内部自带精简守则（`docs/ai-guide.md`）。
+
 - **不可变修订 + 唯一原子提交点。** 每次保存写入内容寻址的 blob 与修订记录，再以 CAS（compare-and-swap）原子替换该路径的 HEAD。两个客户端基于同一版本并发保存：恰好一个成功，另一个收到携带当前版本的 `412`——不存在静默覆盖。
-- **冲突是一等公民。** 编辑器并排展示基线 / 本地 / 远端三个版本，"以本地保存"或"采用远端"必须由人决定；决策期间远端再变会再次冲突，绝不自动重试。
+- **冲突是一等公民。** 冲突工作台提供 VSCode 式 **分栏**（远端 vs 本地并排、差异块双侧同步高亮）与 **内联**（逐块 Accept/Reject）两种 diff 视图，均可编辑；"以本地保存"或"采用远端"必须由人决定；决策期间远端再变会再次冲突，绝不自动重试。编辑中还可一键开启 **与已保存基线的内联 diff**，未保存的改动一目了然，支持逐块回退。
+- **真编辑器，不是文本框。** CodeMirror 提供查找替换（大小写/正则/全词、全部替换）与选区匹配高亮；侧栏为文件夹树，支持 **多选批量操作**（批量移入回收站 / 批量恢复）。
 - **删除是墓碑，恢复是新版本。** generation 只前进不倒退；历史面板可把任意有内容的版本恢复为新修订。
 - **磁盘布局即备份。** `vaults/{vault}/heads|revisions|blobs`——拷贝目录即完整裸备份；索引（SQLite/D1）是可随时删除重建的投影。
 - **一份 HTTP 契约，三类客户端。** Web、Rust CLI、curl/agent 走同一套版本化 REST API；两个运行时（原生 Axum 与 Cloudflare Worker）复用同一 axum 层。

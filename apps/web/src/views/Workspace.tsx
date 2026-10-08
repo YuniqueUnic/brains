@@ -1,9 +1,12 @@
 import {
   ArchiveRestore,
   Brain,
+  ChevronRight,
   FileText,
+  Folder,
   FolderOpen,
   Languages,
+  ListChecks,
   LoaderCircle,
   LogOut,
   PanelLeftClose,
@@ -15,7 +18,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Group,
@@ -61,9 +64,66 @@ import { cn } from "../lib/utils";
 
 /**
  * Main workspace (design §13.1) in the workbench shell shape: one header row,
- * then a resizable three-column group — file list, editor, info panel. Each
- * column is its own card; the canvas stays quiet behind them.
+ * then a resizable three-column group — file tree, editor, info panel. Tight
+ * 6px gutters; each column is its own card on a quiet canvas.
  */
+
+type FileNode =
+  | { type: "folder"; name: string; path: string; children: FileNode[] }
+  | { type: "file"; entry: Entry };
+
+type FlatRow =
+  | { kind: "folder"; node: Extract<FileNode, { type: "folder" }>; depth: number }
+  | { kind: "file"; entry: Entry; depth: number };
+
+function buildTree(files: Entry[]): FileNode[] {
+  const root: Extract<FileNode, { type: "folder" }> = { type: "folder", name: "", path: "", children: [] };
+  const folders = new Map<string, Extract<FileNode, { type: "folder" }>>([["", root]]);
+  const folderOf = (dir: string) => {
+    const found = folders.get(dir);
+    if (found) return found;
+    const segments = dir.split("/");
+    const name = segments[segments.length - 1];
+    const parentDir = segments.slice(0, -1).join("/");
+    const parent = folderOf(parentDir);
+    const node: Extract<FileNode, { type: "folder" }> = { type: "folder", name, path: dir, children: [] };
+    folders.set(dir, node);
+    parent.children.push(node);
+    return node;
+  };
+  for (const file of files) {
+    const segments = file.path.split("/");
+    const dir = segments.slice(0, -1).join("/");
+    folderOf(dir).children.push({ type: "file", entry: file });
+  }
+  const sortNodes = (nodes: FileNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return (a.type === "folder" ? a.name : a.entry.path).localeCompare(
+        b.type === "folder" ? b.name : b.entry.path,
+      );
+    });
+    for (const node of nodes) {
+      if (node.type === "folder") sortNodes(node.children);
+    }
+  };
+  sortNodes(root.children);
+  return root.children;
+}
+
+function flattenTree(nodes: FileNode[], collapsed: Set<string>, depth = 0, out: FlatRow[] = []): FlatRow[] {
+  for (const node of nodes) {
+    if (node.type === "folder") {
+      out.push({ kind: "folder", node, depth });
+      // Folders start expanded; only explicitly collapsed ones hide children.
+      if (!collapsed.has(node.path)) flattenTree(node.children, collapsed, depth + 1, out);
+    } else {
+      out.push({ kind: "file", entry: node.entry, depth });
+    }
+  }
+  return out;
+}
+
 export default function Workspace({
   session,
   onLogout,
@@ -89,11 +149,23 @@ export default function Workspace({
   const [showTrashConfirm, setShowTrashConfirm] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarPanel = useRef<PanelImperativeHandle | null>(null);
+  // Batch selection: entering selection mode shows checkboxes; row clicks
+  // toggle instead of opening. Batch actions run sequentially per file.
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchRunning, setBatchRunning] = useState(false);
+  // Folders are expanded unless explicitly collapsed (new folders appear open).
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   // Opening another file with unsaved/conflicting text in the editor requires
   // an explicit discard — the confirm dialog reuses the trash pattern.
   const [pendingOpen, setPendingOpen] = useState<string | null>(null);
   const editorRef = useRef(editor);
   editorRef.current = editor;
+
+  const treeRows = useMemo(
+    () => flattenTree(buildTree(files), collapsedFolders),
+    [files, collapsedFolders],
+  );
 
   const toggleSidebar = () => {
     const panel = sidebarPanel.current;
@@ -105,6 +177,15 @@ export default function Workspace({
       panel.collapse();
       setSidebarCollapsed(true);
     }
+  };
+
+  const toggleFolder = (path: string) => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
   };
 
   const fail = useCallback(
@@ -145,7 +226,21 @@ export default function Workspace({
     void refreshFiles();
   }, [refreshFiles]);
 
+  // Leaving trash view (or the selection mode) resets stale selections.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [showTrash]);
+
   const requestOpen = (path: string) => {
+    if (selecting) {
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(path)) next.delete(path);
+        else next.add(path);
+        return next;
+      });
+      return;
+    }
     const current = editorRef.current;
     // `saving` counts too: keystrokes typed during the flight have not been
     // sent yet and would be dropped without a word.
@@ -168,9 +263,7 @@ export default function Workspace({
       // mojibake that a later save would corrupt (design §13.3).
       const meta = await api.readMeta(path);
       if (!isTextMedia(meta.media_type)) {
-        setBanner(
-          t("bannerBinary", { path, mediaType: meta.media_type }),
-        );
+        setBanner(t("bannerBinary", { path, mediaType: meta.media_type }));
         setEditor({ kind: "empty" });
         return;
       }
@@ -275,30 +368,36 @@ export default function Workspace({
     }
   };
 
+  const restoreOne = async (path: string): Promise<boolean> => {
+    // The tombstone itself has no content: restore the newest contentful
+    // revision reachable from it (design §8.1: restore takes a live source).
+    const history = await api.history(path);
+    const anchor = history.anchor_revision;
+    let source: string | null = null;
+    let cursor: string | null = null;
+    let pages = 0;
+    do {
+      const page = await api.history(path, cursor ?? undefined);
+      const newestContentful = page.items.find((rev) => rev.action !== "trash");
+      if (newestContentful) {
+        source = newestContentful.revision;
+        break;
+      }
+      cursor = page.next_cursor;
+      pages += 1;
+    } while (cursor && pages < 10);
+    if (!source) return false;
+    await api.restore(path, source, anchor);
+    return true;
+  };
+
   const restoreFromTrash = async (path: string) => {
     try {
-      // The tombstone itself has no content: restore the newest contentful
-      // revision reachable from it (design §8.1: restore takes a live source).
-      const history = await api.history(path);
-      const anchor = history.anchor_revision;
-      let source: string | null = null;
-      let cursor: string | null = null;
-      let pages = 0;
-      do {
-        const page = await api.history(path, cursor ?? undefined);
-        const newestContentful = page.items.find((rev) => rev.action !== "trash");
-        if (newestContentful) {
-          source = newestContentful.revision;
-          break;
-        }
-        cursor = page.next_cursor;
-        pages += 1;
-      } while (cursor && pages < 10);
-      if (!source) {
+      const ok = await restoreOne(path);
+      if (!ok) {
         setBanner(t("bannerNoHistory", { path }));
         return;
       }
-      await api.restore(path, source, anchor);
       setBanner(t("bannerRestored", { path }));
       await refreshFiles();
     } catch (error) {
@@ -306,12 +405,59 @@ export default function Workspace({
     }
   };
 
+  const exitSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+
+  const runBatch = async (kind: "trash" | "restore") => {
+    if (selected.size === 0 || batchRunning) return;
+    setBatchRunning(true);
+    let done = 0;
+    const failed: string[] = [];
+    for (const path of selected) {
+      try {
+        if (kind === "trash") {
+          const meta = await api.readMeta(path);
+          await api.trash(path, meta.revision);
+        } else {
+          const ok = await restoreOne(path);
+          if (!ok) throw new Error(t("bannerNoHistory", { path }));
+        }
+        done += 1;
+      } catch {
+        failed.push(path);
+      }
+    }
+    setBatchRunning(false);
+    setSelected(new Set());
+    setSelecting(false);
+    await refreshFiles();
+    if (failed.length > 0) {
+      setBanner(
+        t("batchPartial", {
+          done,
+          failed: failed.length,
+          detail: failed.slice(0, 3).join("、"),
+        }),
+      );
+    } else {
+      setBanner(
+        kind === "trash"
+          ? t("batchTrashDone", { count: done })
+          : t("batchRestoreDone", { count: done }),
+      );
+    }
+  };
+
+  const allSelected = selected.size > 0 && selected.size === files.length;
+
   const canTrash = editor.kind === "clean" || editor.kind === "dirty";
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 bg-background p-2">
-      <header className="flex h-12 shrink-0 items-center gap-2 rounded-lg border bg-card px-2.5 shadow-card">
-        <span className="flex items-center gap-1.5 pl-1 pr-1 text-sm font-semibold">
+    <div className="flex h-full min-h-0 flex-col gap-1.5 bg-background p-1.5">
+      <header className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg border bg-card px-2 shadow-card">
+        <span className="flex items-center gap-1.5 pl-1 pr-0.5 text-sm font-semibold">
           <Brain className="size-4 text-primary" />
           BrainStore
         </span>
@@ -326,12 +472,12 @@ export default function Workspace({
           </Button>
         </Tooltip>
 
-        <div className="relative ml-1 w-full max-w-md">
+        <div className="relative ml-0.5 w-full max-w-md">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             data-testid="search-box"
             placeholder={t("searchPlaceholder")}
-            className="pr-16 pl-8"
+            className="h-8 pr-16 pl-8"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -356,7 +502,7 @@ export default function Workspace({
           </div>
         </div>
 
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="ml-auto flex items-center gap-1">
           <Button data-testid="new-file" onClick={() => setShowNewFile(true)}>
             <Plus />
             {tCommon("newFile")}
@@ -397,7 +543,7 @@ export default function Workspace({
               <Languages />
             </Button>
           </Tooltip>
-          <span className="ml-1 rounded-full bg-muted px-2 py-1 text-[10.5px] text-muted-foreground">
+          <span className="ml-0.5 rounded-full bg-muted px-2 py-1 text-[10.5px] text-muted-foreground">
             {session.actor}
           </span>
           <Button variant="ghost" data-testid="logout" onClick={onLogout}>
@@ -408,7 +554,7 @@ export default function Workspace({
       </header>
 
       {banner && (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-40 flex justify-center px-4">
+        <div className="pointer-events-none fixed inset-x-0 top-14 z-40 flex justify-center px-4">
           <div
             className="pointer-events-auto flex max-w-xl items-start gap-2 rounded-lg border bg-card px-3 py-2 text-xs shadow-lg"
             data-testid="banner"
@@ -427,7 +573,7 @@ export default function Workspace({
         </div>
       )}
 
-      <Group orientation="horizontal" className="min-h-0 flex-1 gap-2">
+      <Group orientation="horizontal" className="min-h-0 flex-1 gap-1.5">
         <Panel
           panelRef={sidebarPanel}
           collapsible
@@ -436,13 +582,13 @@ export default function Workspace({
           minSize="16"
           maxSize="45"
         >
-          <div className="flex h-full min-h-0 flex-col gap-2">
+          <div className="flex h-full min-h-0 flex-col gap-1.5">
             {searchResults && (
               <div
                 className="flex min-h-0 flex-col overflow-hidden rounded-lg border bg-card shadow-card"
                 data-testid="search-results"
               >
-                <div className="flex items-center gap-2 border-b px-3 py-2">
+                <div className="flex items-center gap-2 border-b px-2.5 py-1.5">
                   <Search className="size-3.5 shrink-0 text-muted-foreground" />
                   <h3 className="min-w-0 flex-1 truncate text-xs font-semibold">
                     {t("searchResultsTitle", {
@@ -471,7 +617,7 @@ export default function Workspace({
                     <X className="size-3.5" />
                   </button>
                 </div>
-                <ul className="min-h-0 flex-1 overflow-auto p-1.5">
+                <ul className="min-h-0 flex-1 overflow-auto p-1">
                   {searchResults.map((hit) => (
                     <li key={hit.path + hit.indexed_revision} className="rounded-md p-1 hover:bg-muted/70">
                       <button
@@ -491,7 +637,7 @@ export default function Workspace({
             )}
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border bg-card shadow-card">
-              <div className="flex items-center gap-2 border-b px-3 py-2">
+              <div className="flex items-center gap-1.5 border-b px-2.5 py-1.5">
                 <h2 className="flex-1 text-xs font-semibold">
                   {showTrash ? t("panelTrash") : t("panelFiles")}
                   <span className="ml-1.5 font-normal text-muted-foreground">
@@ -506,47 +652,145 @@ export default function Workspace({
                     {t("truncated")}
                   </span>
                 )}
+                {files.length > 0 && !batchRunning && (
+                  <Tooltip content={selecting ? t("exitSelect") : t("select")}>
+                    <Button
+                      variant={selecting ? "secondary" : "ghost"}
+                      size="iconSm"
+                      aria-pressed={selecting}
+                      onClick={() => (selecting ? exitSelecting() : setSelecting(true))}
+                    >
+                      {selecting ? <X /> : <ListChecks />}
+                    </Button>
+                  </Tooltip>
+                )}
               </div>
-              <div className="min-h-0 flex-1 overflow-auto p-1.5" data-testid="file-list">
+
+              {selecting && (
+                <div className="flex items-center gap-2 border-b bg-muted/30 px-2.5 py-1.5">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      className="size-3.5 accent-[var(--primary)]"
+                      checked={allSelected}
+                      onChange={() => {
+                        setSelected(
+                          allSelected ? new Set() : new Set(files.map((f) => f.path)),
+                        );
+                      }}
+                    />
+                    {t("selectAll")}
+                  </label>
+                  <span className="text-[11px] text-muted-foreground">
+                    {t("selectedCount", { count: selected.size })}
+                  </span>
+                  <div className="ml-auto flex items-center gap-1">
+                    {batchRunning && (
+                      <LoaderCircle className="size-3.5 animate-spin text-muted-foreground" />
+                    )}
+                    <Button
+                      size="sm"
+                      variant={showTrash ? "default" : "destructive"}
+                      disabled={selected.size === 0 || batchRunning}
+                      onClick={() => void runBatch(showTrash ? "restore" : "trash")}
+                    >
+                      {showTrash ? <ArchiveRestore /> : <Trash2 />}
+                      {showTrash ? t("batchRestore") : t("batchTrash")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="min-h-0 flex-1 overflow-auto p-1" data-testid="file-list">
                 {files.length === 0 && (
                   <div className="flex flex-col items-center gap-2 px-3 py-8 text-muted-foreground">
                     <FolderOpen className="size-5 opacity-60" />
                     <p className="text-xs">{t("noFiles")}</p>
                   </div>
                 )}
-                <ul className="space-y-0.5">
-                  {files.map((file) => (
-                    <li key={file.path} className="group relative">
-                      <button
-                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-primary/9 focus-visible:bg-primary/13 focus-visible:outline-2 focus-visible:outline-ring"
-                        onClick={() => requestOpen(file.path)}
-                        title={file.path}
-                      >
-                        <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                        <span className="file-path min-w-0 flex-1 truncate font-mono text-xs">
-                          {file.path}
-                        </span>
-                        {file.state === "trashed" && (
-                          <span className="shrink-0 rounded-full bg-warning/12 px-1.5 py-0.5 text-[9.5px] text-warning">
-                            {t("trashedBadge")}
-                          </span>
-                        )}
-                      </button>
-                      {file.state === "trashed" && (
+                <ul className="space-y-px">
+                  {treeRows.map((row) =>
+                    row.kind === "folder" ? (
+                      <li key={`dir:${row.node.path}`}>
                         <button
-                          className="restore-button absolute bottom-1/2 right-1.5 translate-y-1/2 rounded-md bg-card/95 p-1 text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100"
-                          aria-label={t("restoreAria", { path: file.path })}
-                          title={t("restoreTooltip")}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void restoreFromTrash(file.path);
-                          }}
+                          className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-muted/70"
+                          style={{ paddingLeft: `${row.depth * 12 + 6}px` }}
+                          onClick={() => toggleFolder(row.node.path)}
+                          aria-expanded={!collapsedFolders.has(row.node.path)}
+                          title={t(
+                            collapsedFolders.has(row.node.path)
+                              ? "folderExpand"
+                              : "folderCollapse",
+                            { name: row.node.name },
+                          )}
                         >
-                          <ArchiveRestore className="size-3.5" />
+                          <ChevronRight
+                            className={cn(
+                              "size-3 shrink-0 text-muted-foreground transition-transform",
+                              !collapsedFolders.has(row.node.path) && "rotate-90",
+                            )}
+                          />
+                          {!collapsedFolders.has(row.node.path) ? (
+                            <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
+                          ) : (
+                            <Folder className="size-3.5 shrink-0 text-muted-foreground" />
+                          )}
+                          <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                            {row.node.name}
+                          </span>
                         </button>
-                      )}
-                    </li>
-                  ))}
+                      </li>
+                    ) : (
+                      <li key={row.entry.path} className="group relative">
+                        <button
+                          className={cn(
+                            "flex w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors",
+                            selected.has(row.entry.path)
+                              ? "bg-primary/13"
+                              : "hover:bg-primary/9",
+                            "focus-visible:outline-2 focus-visible:outline-ring",
+                          )}
+                          style={{ paddingLeft: `${row.depth * 12 + 6}px` }}
+                          onClick={() => requestOpen(row.entry.path)}
+                          title={row.entry.path}
+                        >
+                          {selecting && (
+                            <input
+                              type="checkbox"
+                              className="size-3.5 shrink-0 accent-[var(--primary)]"
+                              checked={selected.has(row.entry.path)}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => requestOpen(row.entry.path)}
+                            />
+                          )}
+                          <FileText className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className="file-path min-w-0 flex-1 truncate font-mono text-xs">
+                            {selecting
+                              ? row.entry.path.split("/").pop()
+                              : row.entry.path}
+                          </span>
+                          {row.entry.state === "trashed" && (
+                            <span className="shrink-0 rounded-full bg-warning/12 px-1.5 py-0.5 text-[9.5px] text-warning">
+                              {t("trashedBadge")}
+                            </span>
+                          )}
+                        </button>
+                        {row.entry.state === "trashed" && !selecting && (
+                          <button
+                            className="restore-button absolute bottom-1/2 right-1.5 translate-y-1/2 rounded-md bg-card/95 p-1 text-muted-foreground opacity-0 shadow-card transition-opacity hover:text-primary focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring group-hover:opacity-100"
+                            aria-label={t("restoreAria", { path: row.entry.path })}
+                            title={t("restoreTooltip")}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void restoreFromTrash(row.entry.path);
+                            }}
+                          >
+                            <ArchiveRestore className="size-3.5" />
+                          </button>
+                        )}
+                      </li>
+                    ),
+                  )}
                 </ul>
               </div>
             </div>
@@ -711,7 +955,7 @@ function ModeButton({
 
 function ResizeSeparator() {
   return (
-    <Separator className="group relative w-1 rounded-full bg-transparent transition-colors hover:bg-primary/40 data-[state=dragging]:bg-primary/60" />
+    <Separator className="w-0.5 rounded-full bg-transparent transition-colors hover:bg-primary/40 data-[state=dragging]:bg-primary/60" />
   );
 }
 

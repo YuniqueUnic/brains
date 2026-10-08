@@ -59,11 +59,42 @@ brainstore-cli patch note.md --set-kind note ...
 brainstore-cli cp a.md b.md / mv a.md b.md / diff a.md b.md
 brainstore-cli restore note.md --revision <hex>
 brainstore-cli reindex --all-pages                # 重建索引投影（不碰 store）
+brainstore-cli seed                              # 推送内置模板笔记（已存在的跳过，幂等）
 brainstore-cli export ./worktree                 # 导出可读工作树（两阶段 revision 锚定 + manifest + casefold/便携名检查）
 brainstore-cli edit note.md / add note.md        # $EDITOR 编辑后落库
 ```
 
 冲突语义与 HTTP 一致：预置条件失败返回 412（携带当前 revision），CLI 报错并提示远端当前版本；不自动重试。
+
+## 模板内容（首启播种）
+
+- **本地**：`brainstore-server` 启动时若 vault 完全为空（无任何 HEAD，含墓碑），自动写入 4 篇模板笔记：`README.md`、`docs/brainstore-guide.md`（使用规则）、`docs/ai-guide.md`（AI 协作守则）、`inbox/README.md`。有任何内容即跳过，绝不覆盖。
+- **云端**（Worker 首次部署后是空库）：`brainstore-cli --profile <cloud> seed` 推送同一套模板；已存在的路径自动跳过，可重复执行。
+
+## GitHub 自动 Release / 部署清单（真实运行所需）
+
+仓库内三个工作流已就绪，真实运行只需一次性配置：
+
+**1. 自动发布（`.github/workflows/release.yml`）** — 无需任何 secret：
+```bash
+git tag v0.1.0 && git push origin v0.1.0     # 或 Actions 页手动 dispatch 填版本号
+```
+产物：macOS arm64/x64 与 Linux musl 的 server+CLI tar.gz（含 sha256）、web dist、worker bundle，自动创建 GitHub Release。注意 `Cargo.toml` / `package.json` 版本号需先手动 bump。
+
+**2. 自动部署 Cloudflare Worker（`.github/workflows/deploy.yml`）** — 需要一次性准备：
+
+| 步骤 | 命令 / 位置 |
+|---|---|
+| repo secrets | `CLOUDFLARE_API_TOKEN`（Workers/R2/D1 编辑权限）、`CLOUDFLARE_ACCOUNT_ID`（GitHub → Settings → Secrets and variables → Actions） |
+| 资源开通（一次） | `pnpm --dir apps/worker exec wrangler r2 bucket create brainstore-data` |
+| | `pnpm --dir apps/worker exec wrangler d1 create brainstore-index` → 把输出的 `database_id` 填进 `apps/worker/wrangler.toml` |
+| 实例密钥（一次，永不入库） | `cd apps/worker && pnpm exec wrangler secret put TOKEN_REGISTRY_JSON`（内容形如 `{"tokens":[{"id":"default","name":"owner","token_sha256":"<sha256(token)>","scopes":["read:/","write:/","admin:/"],"enabled":true}]}`） |
+| | `wrangler secret put SESSION_SIGNING_KEY`（64 位 hex）、`wrangler secret put CURSOR_SIGNING_KEY`（64 位 hex） |
+| 可选 var | `wrangler.toml` 的 `[vars]` 追加 `ALLOWED_ORIGINS = "https://a.example,https://b.example"`（跨域 cookie 白名单，缺省仅同源） |
+| 触发部署 | Actions → Deploy → Run workflow（可选先应用远程 D1 迁移），或本地 `pnpm --dir apps/worker exec wrangler deploy` |
+| 部署后 | 给空库灌内容：`brainstore-cli profile add cloud --url https://<worker>.workers.dev --token <token> && brainstore-cli --profile cloud seed` |
+
+**3. CI（`.github/workflows/ci.yml`）**：push/PR 自动跑 Rust 全门禁 + web build + 双运行时 e2e + worker smoke，无 secret 依赖。
 
 ## E2E（screenplay pattern）
 

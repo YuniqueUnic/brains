@@ -9,6 +9,7 @@ pub mod projection;
 pub mod query;
 pub mod reindex;
 pub mod search;
+pub mod seed;
 pub mod transfer;
 
 use brainstore_domain::{CursorSigner, DomainError, DomainResult, Limits, Principal, VaultPath};

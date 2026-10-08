@@ -83,12 +83,8 @@ await RIVAL.put("notes/rust-ci-cache.md", "同事已推送的远端版本：CI �
 // Local save now 412s into the three-column conflict view.
 await page.locator(".cm-content").press("ControlOrMeta+s");
 await page.waitForSelector('[data-testid="conflict-view"]');
-const columns = await page.evaluate(() =>
-  [...document.querySelectorAll('[data-testid="conflict-view"] textarea')].map((t) => t.value.length),
-);
-if (columns[1] === 0 || columns[2] === 0) {
-  throw new Error(`conflict columns unexpectedly empty: ${columns}`);
-}
+// The split merge view highlights the differing chunks on both sides.
+await page.waitForSelector('[data-testid="conflict-view"] .cm-changedLine');
 await page.screenshot({ path: `${OUT}/04-conflict.png` });
 
 // 5. Dark theme (explicit toggle), same note open.

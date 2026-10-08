@@ -175,6 +175,77 @@
   background: color-mix(in srgb, var(--muted) 55%, transparent);
 }
 
+/* Search panel (VSCode-style find/replace): blend with the token system. */
+.cm-panels {
+  background: var(--card);
+  color: var(--foreground);
+  border-color: var(--border);
+}
+.cm-panel label {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.cm-panel button[name=close] {
+  color: var(--muted-foreground);
+}
+.cm-panel input,
+.cm-panel .cm-textfield {
+  border-radius: calc(var(--radius) * 0.5);
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-size: 12px;
+}
+.cm-searchMatch {
+  background: color-mix(in srgb, var(--warning) 22%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--warning) 40%, transparent);
+}
+.cm-searchMatch-selected {
+  background: color-mix(in srgb, var(--warning) 38%, transparent);
+}
+
+/* Merge/diff views (conflict + diff-vs-base): incoming = brand blue,
+   removed = red, consistent in light and dark. */
+.cm-mergeView {
+  height: 100%;
+  overflow: auto;
+}
+.cm-mergeView .cm-editor {
+  height: 100%;
+}
+.cm-changedLine {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.cm-changedText,
+.cm-insertedText {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  text-decoration: none;
+}
+.cm-deletedChunk,
+.cm-deletedText {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  color: inherit;
+}
+.cm-deletedText {
+  background: color-mix(in srgb, var(--destructive) 16%, transparent);
+  text-decoration: none;
+}
+.cm-insertedLine {
+  border-left: 2px solid color-mix(in srgb, var(--primary) 55%, transparent);
+}
+.cm-revertButton,
+.cm-merge-revertButton {
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.cm-revertButton:hover,
+.cm-merge-revertButton:hover {
+  color: var(--primary);
+}
+.cm-mergeSpacer {
+  flex-grow: 0 !important;
+}
+
 /* Save-indicator pulse while a write is in flight (1.2s, gentle halo). */
 @keyframes save-pulse {
   0%,

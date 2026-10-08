@@ -11,7 +11,7 @@ BrainStore is *not* an AI memory framework. There is no recall engine, no vector
 | Login | Workbench |
 |---|---|
 | ![login](docs/screenshots/01-login.png) | ![workspace](docs/screenshots/02-workspace.png) |
-| *Full-text search* | *Three-way conflict view — nothing is ever auto-overwritten* |
+| *Full-text search* | *Three-way conflict view — split/inline diff, nothing is ever auto-overwritten* |
 | ![search](docs/screenshots/03-search.png) | ![conflict](docs/screenshots/04-conflict.png) |
 | *Dark theme* | |
 | ![dark](docs/screenshots/05-dark.png) | |
@@ -20,8 +20,12 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 
 ## Core properties
 
+- **Ships with content, not a blank screen.** First boot on an empty vault seeds four template notes — a welcome page, the usage guide, an **AI collaboration guide** and an inbox — so humans and agents start from working conventions (cloud instances: `brainstore-cli seed`).
+- **AI-friendly by construction.** [docs/ai-integration.md](docs/ai-integration.md) is a machine-first API reference (endpoints, CAS etiquette, error model), `llms.txt` indexes the project for crawlers/agents, and every vault carries the condensed etiquette inside itself (`docs/ai-guide.md`).
+
 - **Immutable revisions + one atomic commit point.** Every save writes a content-addressed blob and a revision record, then swaps the per-path HEAD with a compare-and-swap. Two writers racing on the same base: exactly one commits, the loser gets `412` with the current revision — never a silent overwrite.
-- **Conflicts are a first-class UI.** The editor shows base / local / remote side by side; keep-local or take-remote is an explicit human choice, and re-conflicts if the remote moves again mid-decision.
+- **Conflicts are a first-class UI.** The conflict view offers VSCode-style **split** (remote vs local side-by-side with synced chunk highlights) and **inline** (per-chunk accept/reject against the remote original) diff modes, both editable; keep-local or take-remote is an explicit human choice, and it re-conflicts if the remote moves again mid-decision. While typing, a one-click **inline diff against the saved base** shows exactly what is unsaved, with per-chunk revert.
+- **A real editor, not a textarea.** CodeMirror with find & replace (match case / regex / whole word, replace all), selection-match highlights, and a folder tree sidebar with **multi-select batch actions** (batch trash / batch restore).
 - **Delete is a tombstone; restore is a new revision.** Generations only move forward. Nothing is ever destroyed by accident, and the history panel can bring any contentful revision back.
 - **The on-disk layout is the backup.** `vaults/{vault}/heads|revisions|blobs` — copy the directory and you have a complete raw backup; the index (SQLite/D1) is a rebuildable projection you can delete at any time.
 - **One HTTP contract, three clients.** The Web app, the Rust CLI and `curl`/agents all speak the same versioned REST API, backed by the same axum layer on both runtimes.

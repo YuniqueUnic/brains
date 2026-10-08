@@ -180,6 +180,9 @@ enum Command {
         #[arg(long, default_value_t = 5)]
         limit: usize,
     },
+    /// Push the built-in template notes into the target vault (existing files
+    /// are skipped). Useful for cloud instances deployed without content.
+    Seed,
     /// Export the current working tree to a new directory.
     Export { output: String },
     /// Read a file into $EDITOR and conditionally write it back.
@@ -301,6 +304,7 @@ fn run(cli: Cli) -> i32 {
         } => transfer(&client, TransferKind::Move, &source, &target, &if_revision),
         Command::Diff { path, from, to } => diff(&client, &path, &from, &to),
         Command::Reindex { all_pages, limit } => reindex(&client, all_pages, limit),
+        Command::Seed => seed_template(&client),
         Command::Export { output } => export(&client, &output),
         Command::Edit { path, if_revision } => edit(&client, &path, &if_revision),
     };
@@ -841,6 +845,32 @@ fn export(client: &BrainClient, output: &str) -> ClientResult<i32> {
         .unwrap_or_else(|| "default".into());
     let summary = brainstore_client::export::export_working_tree(client, output, &vault)?;
     println!("{summary}");
+    Ok(0)
+}
+
+/// Push the built-in template notes into the target vault: existing paths are
+/// skipped, missing ones are created. Idempotent — rerun anytime.
+fn seed_template(client: &BrainClient) -> ClientResult<i32> {
+    let mut written = 0usize;
+    let mut skipped = 0usize;
+    for (path, body) in brainstore_application::seed::template_notes() {
+        match client.get_meta(path) {
+            Ok(_) => skipped += 1,
+            Err(error) if error.status == 404 => {
+                client.put_content(
+                    path,
+                    body.as_bytes(),
+                    "text/markdown",
+                    Precondition::Create,
+                    None,
+                )?;
+                written += 1;
+                println!("seeded {path}");
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    println!("done: {written} seeded, {skipped} already present.");
     Ok(0)
 }
 

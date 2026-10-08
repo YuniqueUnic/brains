@@ -57,7 +57,7 @@ export default function InfoPanel({
   }
 
   return (
-    <aside className="flex h-full min-h-0 flex-col gap-3 overflow-auto" data-testid="info-panel">
+    <aside className="flex h-full min-h-0 flex-col gap-2 overflow-auto" data-testid="info-panel">
       {meta && (
         <Section icon={<Hash className="size-3.5" />} title={t("meta")}>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11.5px]">
@@ -143,8 +143,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-lg border bg-card p-3 shadow-card">
-      <h3 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-foreground">
+    <section className="rounded-lg border bg-card p-2.5 shadow-card">
+      <h3 className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-foreground">
         <span className="text-muted-foreground">{icon}</span>
         {title}
       </h3>

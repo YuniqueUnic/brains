@@ -1,13 +1,21 @@
-import { useCallback, useEffect, useRef } from "react";
-import { EditorState as CodeMirrorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Compartment, EditorState as CodeMirrorState } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { CopyPlus, GitMerge, Save, Trash2 } from "lucide-react";
+import {
+  highlightSelectionMatches,
+  openSearchPanel,
+  search,
+  searchKeymap,
+} from "@codemirror/search";
+import { MergeView, unifiedMergeView } from "@codemirror/merge";
+import { CopyPlus, FileDiff, GitMerge, Save, Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import { Button } from "./ui/button";
 import { SaveIndicator, type SaveTone } from "./SaveIndicator";
 import { Tooltip } from "./ui/tooltip";
+import { cn } from "../lib/utils";
 
 /**
  * Editor state machine (design §13.2):
@@ -49,6 +57,19 @@ function freshEditorState(path: string, text: string, baseRevision: string): Edi
   return { kind: "clean", path, text, baseText: text, baseRevision };
 }
 
+function baseExtensions(onDocChange: (text: string) => void) {
+  return [
+    markdown({ base: markdownLanguage }),
+    EditorView.lineWrapping,
+    search({ top: true }),
+    highlightSelectionMatches(),
+    keymap.of(searchKeymap),
+    EditorView.updateListener.of((update) => {
+      if (update.docChanged) onDocChange(update.state.doc.toString());
+    }),
+  ];
+}
+
 export default function EditorPane({
   state,
   onChange,
@@ -71,37 +92,40 @@ export default function EditorPane({
   const viewRef = useRef<EditorView | null>(null);
   const stateRef = useRef<EditorState>(state);
   stateRef.current = state;
+  const [diffOpen, setDiffOpen] = useState(false);
+  // Swap the inline diff extension without rebuilding the editor.
+  const diffCompartment = useRef(new Compartment());
 
   useEffect(() => {
     if (!hostRef.current) return;
+    const onDocChange = (text: string) => {
+      const current = stateRef.current;
+      if (current.kind === "clean" || current.kind === "dirty" || current.kind === "error") {
+        const next = {
+          ...current,
+          kind: text === current.baseText ? ("clean" as const) : ("dirty" as const),
+          text,
+          message: undefined,
+        };
+        // Sync the ref BEFORE notifying React: Ctrl+S must see the
+        // freshest buffer even if the keystroke and the hotkey land in
+        // the same frame, before the re-render catches up.
+        stateRef.current = next;
+        onChange(next);
+      } else if (current.kind === "saving") {
+        // Buffer keystrokes; the save-completion handler re-evaluates.
+        current.text = text;
+      }
+    };
     const view = new EditorView({
       parent: hostRef.current,
       state: CodeMirrorState.create({
         doc: currentDoc(stateRef.current),
         extensions: [
-          markdown({ base: markdownLanguage }),
-          EditorView.lineWrapping,
-          EditorView.updateListener.of((update) => {
-            if (!update.docChanged) return;
-            const text = update.state.doc.toString();
-            const current = stateRef.current;
-            if (current.kind === "clean" || current.kind === "dirty" || current.kind === "error") {
-              const next = {
-                ...current,
-                kind: text === current.baseText ? ("clean" as const) : ("dirty" as const),
-                text,
-                message: undefined,
-              };
-              // Sync the ref BEFORE notifying React: Ctrl+S must see the
-              // freshest buffer even if the keystroke and the hotkey land in
-              // the same frame, before the re-render catches up.
-              stateRef.current = next;
-              onChange(next);
-            } else if (current.kind === "saving") {
-              // Buffer keystrokes; the save-completion handler re-evaluates.
-              current.text = text;
-            }
-          }),
+          ...baseExtensions(onDocChange),
+          // The inline diff extension is swapped in/out via this compartment;
+          // the doc listener above runs in every state (saves buffer typing).
+          diffCompartment.current.of([]),
         ],
       }),
     });
@@ -110,6 +134,35 @@ export default function EditorPane({
     // Editor instance lives across file switches; doc is swapped below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Inline diff against the saved base (VSCode-style): chunks highlight the
+  // unsaved changes; per-chunk revert restores the saved text. Exits on save.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const canDiff =
+      diffOpen &&
+      (state.kind === "dirty" || state.kind === "error") &&
+      state.text !== state.baseText;
+    if (canDiff) {
+      view.dispatch({
+        effects: diffCompartment.current.reconfigure(
+          unifiedMergeView({
+            original: state.baseText,
+            mergeControls: true,
+            highlightChanges: true,
+            gutter: true,
+            allowInlineDiffs: true,
+            collapseUnchanged: { margin: 3, minSize: 8 },
+          }),
+        ),
+      });
+    } else {
+      view.dispatch({ effects: diffCompartment.current.reconfigure([]) });
+      if (diffOpen && state.kind === "clean") setDiffOpen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diffOpen, state]);
 
   // Doc resync happens ONLY when the buffer's identity (docKey: file switch,
   // conflict, restore) changes — never per keystroke. CodeMirror is the
@@ -122,6 +175,7 @@ export default function EditorPane({
     const previous = lastDocRef.current;
     if (key === previous.key) return;
     lastDocRef.current = { key, state };
+    if (state.kind === "conflict") setDiffOpen(false);
 
     // Text typed while NO file was bound to the editor (the 新建 dialog is
     // still committing) belongs to the user, not to the state replacing it:
@@ -239,7 +293,7 @@ export default function EditorPane({
         stateRef.current = failed;
       }
     }
-  }, [onStateChange, onAuthLost]);
+  }, [onStateChange, onAuthLost, t]);
 
   // Ctrl+S saves; P0 keeps saving explicit (design §13.2).
   useEffect(() => {
@@ -266,6 +320,11 @@ export default function EditorPane({
     }
   };
 
+  const openFind = () => {
+    const view = viewRef.current;
+    if (view && state.kind !== "conflict") openSearchPanel(view);
+  };
+
   // The CodeMirror host must stay mounted through EVERY state — including
   // conflict, which renders its panel as a sibling and hides (never unmounts)
   // the editor. Unmounting would orphan the one EditorView created on mount
@@ -277,13 +336,15 @@ export default function EditorPane({
     words: buffer.split(/\s+/).filter(Boolean).length,
     lines: buffer === "" ? 1 : buffer.split("\n").length,
   };
+  const canDiff =
+    (state.kind === "dirty" || state.kind === "error") && state.text !== state.baseText;
 
   return (
     <div
       className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-card shadow-card"
       data-testid="editor-pane"
     >
-      <div className="flex min-h-[50px] items-center gap-2 border-b bg-card px-3 py-1.5">
+      <div className="flex h-11 min-h-11 shrink-0 items-center gap-1 border-b bg-card px-2.5">
         <span
           className="min-w-0 flex-1 truncate font-mono text-[13px] font-semibold text-foreground"
           data-testid="editor-path"
@@ -298,17 +359,31 @@ export default function EditorPane({
           title={state.kind === "error" ? state.message : undefined}
         />
         {inConflict || state.kind === "empty" ? null : (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5">
+            <Tooltip content={t("searchTooltip")}>
+              <Button variant="ghost" size="icon" onClick={openFind}>
+                <Search />
+              </Button>
+            </Tooltip>
+            <Tooltip content={t("diffTooltip")}>
+              <Button
+                variant={diffOpen ? "secondary" : "ghost"}
+                size="icon"
+                aria-pressed={diffOpen}
+                disabled={!canDiff && !diffOpen}
+                onClick={() => setDiffOpen((v) => !v)}
+              >
+                <FileDiff />
+              </Button>
+            </Tooltip>
             <Tooltip content={t("saveTooltip")}>
               <Button
-                data-testid="save-button"
                 size="sm"
+                className="ml-1"
                 disabled={state.kind !== "dirty" && state.kind !== "error"}
                 onClick={() => void save()}
               >
-                {state.kind === "dirty" || state.kind === "error" ? (
-                  <Save className="size-3.5" />
-                ) : null}
+                <Save />
                 {t("save")}
               </Button>
             </Tooltip>
@@ -361,7 +436,7 @@ export default function EditorPane({
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t bg-muted/20 px-3 py-1.5 text-[11px] text-muted-foreground">
+      <div className="flex shrink-0 items-center justify-between border-t bg-muted/20 px-2.5 py-1 text-[11px] text-muted-foreground">
         <span className="font-mono">
           {t("stats", {
             chars: stats.chars,
@@ -379,6 +454,15 @@ export default function EditorPane({
   );
 }
 
+type ConflictMode = "split" | "inline";
+
+/**
+ * Conflict resolution with VSCode-style diff views: "split" shows remote and
+ * local side-by-side with synced chunk highlights; "inline" shows the local
+ * buffer against the remote original with per-chunk accept/reject. The merge
+ * editor owns the buffer while the conflict is open — text typed here flows
+ * back into `localText` through the same state machine.
+ */
 function ConflictView({
   state,
   stateRef,
@@ -388,22 +472,87 @@ function ConflictView({
   stateRef: React.RefObject<EditorState>;
   onChange: (next: EditorState) => void;
 }) {
+  const { t } = useTranslation("editor");
+  const [mode, setMode] = useState<ConflictMode>("split");
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
   // True while THIS conflict still owns the editor (the human may have
   // opened another file while the request was in flight).
-  const { t } = useTranslation("editor");
   const stillMine = () =>
     stateRef.current.kind === "conflict" &&
     stateRef.current.path === state.path &&
     stateRef.current.remoteRevision === state.remoteRevision;
 
+  useEffect(() => {
+    const parent = hostRef.current;
+    if (!parent) return;
+    const onDocChange = (text: string) => {
+      const current = stateRef.current;
+      if (
+        current.kind === "conflict" &&
+        current.path === state.path &&
+        current.remoteRevision === state.remoteRevision &&
+        current.localText !== text
+      ) {
+        onChangeRef.current({ ...current, localText: text });
+      }
+    };
+    if (mode === "inline") {
+      const view = new EditorView({
+        parent,
+        state: CodeMirrorState.create({
+          doc: state.localText,
+          extensions: [
+            ...baseExtensions(onDocChange),
+            unifiedMergeView({
+              original: state.remoteText,
+              mergeControls: true,
+              highlightChanges: true,
+              gutter: true,
+              allowInlineDiffs: true,
+              collapseUnchanged: { margin: 3, minSize: 8 },
+            }),
+          ],
+        }),
+      });
+      return () => view.destroy();
+    }
+    const merge = new MergeView({
+      a: {
+        doc: state.remoteText,
+        extensions: [
+          markdown({ base: markdownLanguage }),
+          EditorView.lineWrapping,
+          EditorView.editable.of(false),
+        ],
+      },
+      b: {
+        doc: state.localText,
+        extensions: baseExtensions(onDocChange),
+      },
+      parent,
+      highlightChanges: true,
+      gutter: true,
+      collapseUnchanged: { margin: 3, minSize: 8 },
+    });
+    return () => merge.destroy();
+    // Rebuild only on mode or conflict identity change: the merge editors
+    // own the buffer text in between (prop pushes would clobber typing).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, state.path, state.remoteRevision]);
+
   const saveWithRemoteBase = async () => {
+    const current = stateRef.current;
+    const localText = current.kind === "conflict" ? current.localText : state.localText;
     try {
-      const result = await api.saveText(state.path, state.localText, {
+      const result = await api.saveText(state.path, localText, {
         mode: "update",
         baseRevision: state.remoteRevision,
       });
       if (!stillMine()) return;
-      onChange(freshEditorState(state.path, state.localText, result.revision));
+      onChange(freshEditorState(state.path, localText, result.revision));
     } catch (error) {
       if (!stillMine()) return;
       if (error instanceof ApiError && error.status === 412) {
@@ -446,14 +595,14 @@ function ConflictView({
 
   return (
     <div
-      className="absolute inset-0 z-10 flex flex-col gap-3 overflow-auto border-b p-3"
+      className="absolute inset-0 z-10 flex flex-col gap-1.5 border-b"
       data-testid="conflict-view"
       style={{
         borderColor: "color-mix(in srgb, var(--warning) 30%, var(--border))",
         backgroundColor: "color-mix(in srgb, var(--warning) 6%, var(--card))",
       }}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2 px-3 pt-2.5">
         <GitMerge className="mt-0.5 size-4 shrink-0" style={{ color: "var(--warning)" }} />
         <div className="min-w-0 flex-1">
           <p className="text-[12.5px] font-semibold">{t("conflictTitle")}</p>
@@ -461,10 +610,18 @@ function ConflictView({
             {t("conflictDesc", { revision: state.remoteRevision.slice(0, 8) })}
           </p>
         </div>
+        <div className="flex shrink-0 items-center gap-0.5 rounded-md border bg-card p-0.5">
+          <ModeChip active={mode === "split"} onClick={() => setMode("split")}>
+            {t("conflictModeSplit")}
+          </ModeChip>
+          <ModeChip active={mode === "inline"} onClick={() => setMode("inline")}>
+            {t("conflictModeInline")}
+          </ModeChip>
+        </div>
       </div>
       {state.notice && (
         <p
-          className="rounded-md px-2.5 py-1.5 text-xs"
+          className="mx-3 rounded-md px-2.5 py-1.5 text-xs"
           role="alert"
           style={{
             backgroundColor: "color-mix(in srgb, var(--destructive) 8%, transparent)",
@@ -474,21 +631,13 @@ function ConflictView({
           {state.notice}
         </p>
       )}
-      <div className="grid min-h-0 flex-1 grid-cols-3 gap-2">
-        <ConflictColumn label={t("conflictBase")} value={state.baseText} />
-        <div className="flex min-h-0 flex-col gap-1">
-          <span className="text-[11px] font-medium text-muted-foreground">
-            {t("conflictLocal")}
-          </span>
-          <textarea
-            className="min-h-0 flex-1 resize-none rounded-md border bg-card p-2 font-mono text-xs focus-visible:border-primary focus-visible:outline-none"
-            value={state.localText}
-            onChange={(e) => onChange({ ...state, localText: e.target.value })}
-          />
-        </div>
-        <ConflictColumn label={t("conflictRemote")} value={state.remoteText} />
+      <div className="min-h-0 flex-1 px-3">
+        <div
+          ref={hostRef}
+          className="h-full overflow-hidden rounded-md border bg-card [&_.cm-editor]:h-full"
+        />
       </div>
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex shrink-0 items-center justify-end gap-2 px-3 py-2">
         <Button data-testid="conflict-keep-local" onClick={() => void saveWithRemoteBase()}>
           {t("conflictKeepLocal")}
         </Button>
@@ -506,16 +655,28 @@ function ConflictView({
   );
 }
 
-function ConflictColumn({ label, value }: { label: string; value: string }) {
+function ModeChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex min-h-0 flex-col gap-1">
-      <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
-      <textarea
-        readOnly
-        className="min-h-0 flex-1 resize-none rounded-md border bg-card p-2 font-mono text-xs"
-        value={value}
-      />
-    </div>
+    <button
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "rounded px-2 py-1 text-[10.5px] font-medium transition-colors",
+        active
+          ? "bg-primary/12 text-primary ring-1 ring-primary/30"
+          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
