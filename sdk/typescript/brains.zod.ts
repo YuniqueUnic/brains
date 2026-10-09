@@ -143,6 +143,78 @@ import { xjson } from "xidl-typescript-codec";
             
         });
 
+        export const ArchiveContentSchema = z.object({
+            
+                key: z.coerce.string(),
+            
+                sha256: z.coerce.string(),
+            
+                size: z.coerce.number().int(),
+            
+                media_type: z.coerce.string(),
+            
+                executable: z.coerce.boolean()
+            
+        });
+
+        export const ArchiveRevisionSchema = z.object({
+            
+                schema_version: z.coerce.number().int().nonnegative(),
+            
+                revision: z.coerce.string(),
+            
+                path: z.coerce.string(),
+            
+                generation: z.coerce.number().int(),
+            
+                parent: z.string().nullable().optional(),
+            
+                action: z.coerce.string(),
+            
+                actor: z.coerce.string(),
+            
+                operation_id: z.coerce.string(),
+            
+                created_at: z.coerce.string(),
+            
+                restores_revision: z.coerce.string().optional(),
+            
+                copied_from: CopiedFromSchema.optional(),
+            
+                content: ArchiveContentSchema.nullable().optional()
+            
+        });
+
+        export const ArchiveHeadSchema = z.object({
+            
+                schema_version: z.coerce.number().int().nonnegative(),
+            
+                path: z.coerce.string(),
+            
+                revision: z.coerce.string(),
+            
+                generation: z.coerce.number().int(),
+            
+                state: z.coerce.string(),
+            
+                updated_at: z.coerce.string()
+            
+        });
+
+        export const ArchivePublishedSchema = z.object({
+            
+                head: ArchiveHeadSchema,
+            
+                index_state: z.coerce.string()
+            
+        });
+
+        export const ArchiveBlobStoredSchema = z.object({
+            
+                stored: z.coerce.boolean()
+            
+        });
+
         export const HistoryPageSchema = z.object({
             
                 items: z.array(RevisionSchema),

@@ -280,7 +280,7 @@ async fn text_limits_reject_non_utf8_and_demote_oversize() {
                 actor: owner.actor.clone(),
                 operation_id: brains_domain::HexId::generate(),
                 precondition: Precondition::Create,
-                executable: false,
+                executable: Some(false),
                 copied_from: None,
             },
         )

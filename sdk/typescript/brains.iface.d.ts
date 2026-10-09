@@ -20,38 +20,41 @@
 
 
     export interface FilesPutFileRequest {
-            path: string;
+            file_path: string;
                 if_match?: string;
                 if_none_match?: string;
                 operation_id?: string;
                 content_sha256?: string;
-                body: Array<number>;
+                executable?: string;
+                content_type: string;
+                payload: Array<number>;
             }
 
 
     export interface FilesGetFileMetaRequest {
-            path: string;
+            file_path: string;
                 format?: string;
             }
 
 
     export interface FilesDeleteFileRequest {
-            path: string;
+            file_path: string;
+                purge?: boolean;
                 if_match?: string;
                 operation_id?: string;
             }
 
 
     export interface FilesPatchFileRequest {
-            path: string;
+            file_path: string;
                 if_match?: string;
                 operation_id?: string;
-                body: types.brains.PatchBody;
+                payload: types.brains.PatchBody;
             }
 
 
     export interface FilesListRevisionsRequest {
-            path: string;
+            file_path: string;
                 limit?: number;
                 cursor?: string;
             }
@@ -59,7 +62,7 @@
 
     export interface FilesRestoreRequest {
             if_match?: string;
-                body: types.brains.RestoreBody;
+                payload: types.brains.RestoreBody;
             }
 
 
@@ -73,7 +76,7 @@
 
 
     export interface FilesLinksRequest {
-            path: string;
+            file_path: string;
                 direction?: string;
                 limit?: number;
                 cursor?: string;
@@ -81,24 +84,48 @@
 
 
     export interface FilesCopyRequest {
-            body: types.brains.TransferBody;
+            payload: types.brains.TransferBody;
             }
 
 
     export interface FilesMoveRequest {
-            body: types.brains.TransferBody;
+            payload: types.brains.TransferBody;
             }
 
 
     export interface FilesDiffRequest {
-            path: string;
+            file_path: string;
                 "from": string;
                 to?: string;
             }
 
 
+    export interface FilesArchiveRevisionRequest {
+            file_path: string;
+                revision: string;
+            }
+
+
+    export interface FilesImportArchiveRevisionRequest {
+            payload: types.brains.ArchiveRevision;
+            }
+
+
+    export interface FilesImportArchiveBlobRequest {
+            file_path: string;
+                revision: string;
+                payload: Array<number>;
+            }
+
+
+    export interface FilesImportArchiveHeadRequest {
+            file_path: string;
+                revision: string;
+            }
+
+
     export interface FilesReindexRequest {
-            body: types.brains.ReindexRequest;
+            payload: types.brains.ReindexRequest;
             }
 
 

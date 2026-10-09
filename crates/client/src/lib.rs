@@ -2,8 +2,12 @@
 //! explicit revision precondition — the client never reads-and-overwrites
 //! behind the user's back (design §12.1).
 
+pub mod archive;
+pub mod endpoint;
 pub mod export;
+pub mod import;
 pub mod sync;
+pub mod verify;
 
 use brains_api_types::{
     DiffResult, Entry, FilePage, HistoryPage, LinkPage, MutationResult, PatchBody, PatchDryRun,
@@ -210,6 +214,7 @@ impl BrainClient {
         path: &str,
         body: &[u8],
         media_type: &str,
+        executable: Option<bool>,
         precondition: Precondition,
         operation_id: Option<&str>,
     ) -> ClientResult<MutationResult> {
@@ -221,6 +226,9 @@ impl BrainClient {
             .put(self.url("/api/v1/file", &query))
             .header(reqwest::header::CONTENT_TYPE, media_type)
             .header("X-Content-SHA256", digest);
+        if let Some(executable) = executable {
+            request = request.header("X-Executable", executable.to_string());
+        }
         request = match precondition {
             Precondition::Create => request.header(reqwest::header::IF_NONE_MATCH, "*"),
             Precondition::IfRevision(rev) => {

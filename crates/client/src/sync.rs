@@ -1,15 +1,16 @@
 //! Per-profile-pair, per-file synchronization over the existing revision API.
 //!
-//! The engine knows nothing about HTTP or storage adapters. `SyncEndpoint`
+//! The engine knows nothing about HTTP or storage adapters. `FileEndpoint`
 //! is the narrow transport boundary; local FS/SQLite and cloud R2/D1 continue
 //! to use the same server API and CAS semantics.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use brains_api_types::{Entry, MutationResult, RevisionDto};
+use brains_api_types::{Entry, MutationResult};
 use serde::{Deserialize, Serialize};
 
-use crate::{BrainClient, ClientError, ClientResult, Precondition, urlencode};
+use crate::endpoint::FileEndpoint;
+use crate::{ClientError, ClientResult};
 
 mod merge;
 mod resolve;
@@ -20,75 +21,6 @@ use merge::{both_sides, load_live, publish};
 
 const STATE_FORMAT: &str = "brains-sync-state";
 const STATE_VERSION: u32 = 1;
-
-/// Operations required by the sync engine. Implementations must retain the
-/// server's revision preconditions; writes are never unconditional.
-pub trait SyncEndpoint {
-    fn current_files(&self) -> ClientResult<Vec<Entry>>;
-    fn revision_meta(&self, path: &str, revision: &str) -> ClientResult<RevisionDto>;
-    fn revision_bytes(&self, path: &str, revision: &str) -> ClientResult<Vec<u8>>;
-    fn put(
-        &self,
-        path: &str,
-        bytes: &[u8],
-        media_type: &str,
-        precondition: Precondition,
-    ) -> ClientResult<MutationResult>;
-    fn trash(&self, path: &str, revision: &str) -> ClientResult<MutationResult>;
-    fn restore(&self, path: &str, revision: &str, if_current: &str)
-    -> ClientResult<MutationResult>;
-}
-
-impl SyncEndpoint for BrainClient {
-    fn current_files(&self) -> ClientResult<Vec<Entry>> {
-        let mut files = Vec::new();
-        let mut cursor: Option<String> = None;
-        loop {
-            let mut query = String::from("source=store&include_deleted=true&limit=100");
-            if let Some(cursor) = &cursor {
-                query.push_str("&cursor=");
-                query.push_str(&urlencode(cursor));
-            }
-            let page = self.list_files(&query)?;
-            files.extend(page.items);
-            match page.next_cursor {
-                Some(next) => cursor = Some(next),
-                None => return Ok(files),
-            }
-        }
-    }
-
-    fn revision_meta(&self, path: &str, revision: &str) -> ClientResult<RevisionDto> {
-        BrainClient::revision_meta(self, path, revision)
-    }
-
-    fn revision_bytes(&self, path: &str, revision: &str) -> ClientResult<Vec<u8>> {
-        BrainClient::revision_raw(self, path, revision)
-    }
-
-    fn put(
-        &self,
-        path: &str,
-        bytes: &[u8],
-        media_type: &str,
-        precondition: Precondition,
-    ) -> ClientResult<MutationResult> {
-        self.put_content(path, bytes, media_type, precondition, None)
-    }
-
-    fn trash(&self, path: &str, revision: &str) -> ClientResult<MutationResult> {
-        self.delete(path, revision, None)
-    }
-
-    fn restore(
-        &self,
-        path: &str,
-        revision: &str,
-        if_current: &str,
-    ) -> ClientResult<MutationResult> {
-        BrainClient::restore(self, path, revision, if_current, None)
-    }
-}
 
 /// Durable metadata for one ordered endpoint pair. It contains no file bytes,
 /// credentials, or revision history.
@@ -135,6 +67,8 @@ struct Snapshot {
     sha256: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     media_type: Option<String>,
+    #[serde(default)]
+    executable: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -171,6 +105,7 @@ pub enum ConflictReason {
     DeletedAndModified,
     MissingBase,
     MediaTypeMismatch,
+    ExecutableMismatch,
     PurgedAndModified,
 }
 
@@ -183,6 +118,7 @@ impl std::fmt::Display for ConflictReason {
             Self::DeletedAndModified => "one side deleted while the other changed",
             Self::MissingBase => "the common base revision is unavailable",
             Self::MediaTypeMismatch => "media types differ",
+            Self::ExecutableMismatch => "executable flags differ",
             Self::PurgedAndModified => "one side was permanently purged while the other changed",
         };
         f.write_str(text)
@@ -193,6 +129,12 @@ pub struct SyncReport {
     pub state: SyncState,
     pub counts: SyncCounts,
     pub conflicts: Vec<SyncConflict>,
+    pub failure: Option<SyncFailure>,
+}
+
+pub struct SyncFailure {
+    pub path: String,
+    pub error: ClientError,
 }
 
 pub enum Resolution<'a> {
@@ -200,6 +142,7 @@ pub enum Resolution<'a> {
     Merged {
         bytes: &'a [u8],
         media_type: &'a str,
+        executable: bool,
     },
 }
 
@@ -225,11 +168,12 @@ struct LoadedFile {
     bytes: Vec<u8>,
 }
 
-pub fn synchronize<E: SyncEndpoint>(
-    first: &E,
-    second: &E,
+pub fn synchronize(
+    first: &dyn FileEndpoint,
+    second: &dyn FileEndpoint,
     mut state: SyncState,
     dry_run: bool,
+    mut checkpoint: impl FnMut(&SyncState) -> ClientResult<()>,
 ) -> ClientResult<SyncReport> {
     let endpoints = [first, second];
     let heads = [head_map(first)?, head_map(second)?];
@@ -240,6 +184,7 @@ pub fn synchronize<E: SyncEndpoint>(
 
     let mut counts = SyncCounts::default();
     let mut conflicts = Vec::new();
+    let mut failure = None;
     for path in paths {
         counts.checked += 1;
         let current = [heads[0].get(&path).cloned(), heads[1].get(&path).cloned()];
@@ -248,7 +193,13 @@ pub fn synchronize<E: SyncEndpoint>(
             current[1].as_ref().map(|entry| entry.revision.clone()),
         ];
         let base = state.files.get(&path).cloned();
-        let result = reconcile_path(endpoints, &path, current, base.as_ref(), dry_run)?;
+        let result = match reconcile_path(endpoints, &path, current, base.as_ref(), dry_run) {
+            Ok(result) => result,
+            Err(error) => {
+                failure = Some(SyncFailure { path, error });
+                break;
+            }
+        };
         match result.disposition {
             Disposition::Unchanged => counts.unchanged += 1,
             Disposition::Copied(0) => counts.copied_first_to_second += 1,
@@ -272,16 +223,20 @@ pub fn synchronize<E: SyncEndpoint>(
         } else if result.forget {
             state.files.remove(&path);
         }
+        if !dry_run {
+            checkpoint(&state)?;
+        }
     }
     Ok(SyncReport {
         state,
         counts,
         conflicts,
+        failure,
     })
 }
 
-fn reconcile_path<E: SyncEndpoint>(
-    endpoints: [&E; 2],
+fn reconcile_path(
+    endpoints: [&dyn FileEndpoint; 2],
     path: &str,
     current: [Option<Entry>; 2],
     base: Option<&PairSnapshot>,
@@ -302,8 +257,8 @@ fn reconcile_path<E: SyncEndpoint>(
     }
 }
 
-fn first_sync<E: SyncEndpoint>(
-    endpoints: [&E; 2],
+fn first_sync(
+    endpoints: [&dyn FileEndpoint; 2],
     path: &str,
     current: [Option<Entry>; 2],
     dry_run: bool,
@@ -317,6 +272,7 @@ fn first_sync<E: SyncEndpoint>(
                 None,
                 &file.bytes,
                 media(&file.snapshot)?,
+                file.snapshot.executable,
                 dry_run,
             )?;
             Ok(with_pair(
@@ -332,6 +288,7 @@ fn first_sync<E: SyncEndpoint>(
                 None,
                 &file.bytes,
                 media(&file.snapshot)?,
+                file.snapshot.executable,
                 dry_run,
             )?;
             Ok(with_pair(
@@ -344,6 +301,7 @@ fn first_sync<E: SyncEndpoint>(
             let right = load_live(endpoints[1], path, b)?;
             if left.snapshot.sha256 == right.snapshot.sha256
                 && left.snapshot.media_type == right.snapshot.media_type
+                && left.snapshot.executable == right.snapshot.executable
             {
                 Ok(with_pair(
                     [Some(left.snapshot), Some(right.snapshot)],
@@ -374,8 +332,8 @@ fn first_sync<E: SyncEndpoint>(
     }
 }
 
-fn one_sided<E: SyncEndpoint>(
-    endpoints: [&E; 2],
+fn one_sided(
+    endpoints: [&dyn FileEndpoint; 2],
     path: &str,
     current: [Option<Entry>; 2],
     base: &PairSnapshot,
@@ -412,6 +370,7 @@ fn one_sided<E: SyncEndpoint>(
                 None,
                 &source_file.bytes,
                 media(&source_file.snapshot)?,
+                source_file.snapshot.executable,
                 dry_run,
             )?;
             let mut sides = [None, None];
@@ -442,6 +401,7 @@ fn one_sided<E: SyncEndpoint>(
                     &endpoints[target].trash(path, &target_entry.revision)?,
                     None,
                     None,
+                    false,
                 )?)
             };
             let mut sides = [None, None];
@@ -460,6 +420,7 @@ fn one_sided<E: SyncEndpoint>(
     if target_base.is_some_and(|snapshot| {
         snapshot.sha256 == source_file.snapshot.sha256
             && snapshot.media_type == source_file.snapshot.media_type
+            && snapshot.executable == source_file.snapshot.executable
     }) {
         let mut sides = [None, None];
         sides[source] = Some(source_file.snapshot);
@@ -472,6 +433,7 @@ fn one_sided<E: SyncEndpoint>(
         Some(target_entry),
         &source_file.bytes,
         media(&source_file.snapshot)?,
+        source_file.snapshot.executable,
         dry_run,
     )?;
     let mut sides = [None, None];
@@ -480,7 +442,7 @@ fn one_sided<E: SyncEndpoint>(
     Ok(with_pair(sides, Disposition::Copied(source)))
 }
 
-fn head_map<E: SyncEndpoint>(endpoint: &E) -> ClientResult<BTreeMap<String, Entry>> {
+fn head_map(endpoint: &dyn FileEndpoint) -> ClientResult<BTreeMap<String, Entry>> {
     endpoint
         .current_files()?
         .into_iter()
@@ -516,6 +478,7 @@ fn snapshot_head(entry: &Entry) -> ClientResult<Snapshot> {
         },
         sha256: entry.sha256.clone(),
         media_type: entry.media_type.clone(),
+        executable: false,
     })
 }
 
@@ -523,7 +486,19 @@ fn snapshot_mutation(
     result: &MutationResult,
     sha256: Option<&str>,
     media_type: Option<&str>,
+    executable: bool,
 ) -> ClientResult<Snapshot> {
+    if result.index_state != "ready" {
+        return Err(ClientError {
+            status: 503,
+            code: Some("INDEX_PENDING".into()),
+            message: format!(
+                "{} committed, but index is {}; reindex before retrying sync",
+                result.entry.path, result.index_state
+            ),
+            current_revision: Some(result.entry.revision.clone()),
+        });
+    }
     Ok(Snapshot {
         revision: result.entry.revision.clone(),
         state: if is_live(&result.entry)? {
@@ -537,6 +512,7 @@ fn snapshot_mutation(
         media_type: media_type
             .map(str::to_owned)
             .or_else(|| result.entry.media_type.clone()),
+        executable,
     })
 }
 

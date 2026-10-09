@@ -132,16 +132,9 @@
   --text-sm--line-height: 1.5;
 }
 
-/* Interface zoom: #root carries the scale; the floating layer (popups,
-   dialogs, tooltips mount on <body>) inverts it so anchor rects (visual px)
-   and applied coordinates (layout px) agree 1:1 — that inversion is what
-   keeps hover menus from flickering at non-default sizes. Popup content
-   scales back up via --ui-zoom. */
+/* Only the application and popup contents scale. Positioners use visual px. */
 #root {
   zoom: var(--ui-zoom, 1);
-}
-body > *:not(#root):not(script):not(style) {
-  zoom: var(--ui-zoom-inverse, 1);
 }
 
 /* Quiet chrome: content leads, the shell stays out of the way. */
@@ -635,7 +628,7 @@ body > *:not(#root):not(script):not(style) {
   border-radius: 8px;
   background: var(--card);
   box-shadow: var(--shadow-menu);
-  overflow: hidden;
+  overflow: visible;
   font-family: var(--font-sans);
   font-size: 12px;
 }
@@ -708,45 +701,18 @@ body > *:not(#root):not(script):not(style) {
   color: var(--muted-foreground);
 }
 
-/* Popup content sits in the inverse-zoomed portal layer: scale it back up. */
-[data-sonner-toaster] {
+/* A nested completion info card must not inherit a second zoom. */
+[data-sonner-toaster],
+.cm-tooltip-autocomplete > ul,
+.brains-ref-hover {
   zoom: var(--ui-zoom, 1);
 }
-.cm-tooltip > * {
-  zoom: var(--ui-zoom, 1);
-}
-
-/* Completion-list preview: host takes the inverse zoom (direct body child),
-   the card scales back up — net zoom 1, so its fixed transform is applied in
-   visual px and the fit-viewport math positions it exactly. */
-.cm-completion-preview-host {
-  position: fixed;
-  left: 0;
-  top: 0;
-  /* Under the banner (z-40) and dialog layers (z-50): an open confirm box
-     must cover the preview. */
-  z-index: 30;
-}
-.cm-completion-preview-card {
-  zoom: var(--ui-zoom, 1);
-  position: fixed;
-  left: 0;
-  top: 0;
-  width: min(360px, 60vw);
-  max-height: min(520px, 60vh);
-  overflow: auto;
-  /* The scroll affordance must be perceptible: a 10k-px document in a
-     nearly-invisible thin scrollbar reads as "content is cut off". */
-  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent;
-  border-radius: 10px;
+.cm-tooltip-autocomplete > ul { border-radius: 8px; }
+.cm-tooltip.cm-completionInfo {
+  padding: 0;
   border: 1px solid var(--border);
+  border-radius: 10px;
   background: var(--card);
   box-shadow: var(--shadow-overlay);
-  font-size: 12px;
+  overflow: auto;
 }
-.cm-completion-preview-card .brains-ref-hover {
-  max-width: none;
-  max-height: none;
-  overflow: visible;
-}
-

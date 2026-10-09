@@ -10,10 +10,8 @@ import {
   FolderPlus,
   Info,
   Link2,
-  ListChecks,
   MoreHorizontal,
   Trash2,
-  X,
 } from "lucide-react";
 import { ContextMenu } from "@base-ui-components/react/context-menu";
 import { Menu } from "@base-ui-components/react/menu";
@@ -24,12 +22,11 @@ import type { Entry } from "../../api/client";
 import { cn } from "../../lib/utils";
 import { menuItemClass, menuPopupClass, MenuShortcut } from "../ui/menu";
 import { Button } from "../ui/button";
+import { BulkSelectionBar, BulkSelectionToggle } from "../ui/bulk-selection-bar";
 import { Input } from "../ui/input";
 import {
   checkState,
   collapseToRoots,
-  invertSelection,
-  selectAllFiles,
   togglePath,
 } from "./selection";
 
@@ -426,47 +423,14 @@ export function FileTree({
           </Menu.Portal>
         </Menu.Root>
         <span className="flex-1" />
-        <Button
-          variant={selecting ? "secondary" : "ghost"}
-          size="iconSm"
-          aria-pressed={selecting}
-          aria-label={selecting ? t("exitSelect") : t("select")}
-          data-testid="toggle-select"
-          onClick={onToggleSelecting}
-        >
-          {selecting ? <X /> : <ListChecks />}
-        </Button>
+        <BulkSelectionToggle selecting={selecting} onToggle={onToggleSelecting} />
       </div>
 
       {selecting && (
-        <div className="mx-2 mb-1 flex shrink-0 items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-meta text-muted-foreground">
-          <span className="min-w-0 flex-1 truncate">
-            {t("selectedCount", { count: selected.size })}
-          </span>
-          <button
-            type="button"
-            className="cursor-pointer rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-            onClick={() => onSelectionChange(selectAllFiles(allPaths))}
-          >
-            {t("selectAll")}
-          </button>
-          <button
-            type="button"
-            className="cursor-pointer rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-            onClick={() => onSelectionChange(invertSelection(allPaths, selected))}
-          >
-            {t("invertSelection")}
-          </button>
-          <button
-            type="button"
-            data-testid="delete-selected"
-            disabled={selected.size === 0}
-            className="cursor-pointer rounded px-1.5 py-0.5 text-destructive hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-45"
-            onClick={() => actions.onTrash([...selected])}
-          >
-            {t("deleteSelected")}
-          </button>
-        </div>
+        <BulkSelectionBar paths={allPaths} selected={selected} onSelectionChange={onSelectionChange} actions={
+          <Button size="iconSm" variant="dangerGhost" aria-label={t("deleteSelected")} title={t("deleteSelected")}
+            data-testid="delete-selected" disabled={selected.size === 0} onClick={() => actions.onTrash([...selected])}><Trash2 /></Button>
+        } />
       )}
 
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-1" data-testid="file-list">
@@ -478,7 +442,7 @@ export function FileTree({
           onSelectionChange={(keys) => {
             if (selecting) return;
             const next = new Set<string>();
-            for (const key of keys) next.add(String(key));
+            for (const key of keys) { if (allPaths.includes(String(key))) next.add(String(key)); }
             onSelectionChange(next);
           }}
           expandedKeys={allExpandedKeys(nodes, collapsed)}

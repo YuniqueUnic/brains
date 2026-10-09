@@ -1,4 +1,4 @@
-import { Folder, LogOut, PanelLeft, Search, Settings2, Upload } from "lucide-react";
+import { FilePlus, Folder, LogOut, PanelLeft, Search, Settings2, Upload } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
 import type { SessionInfo } from "../../api/client";
@@ -97,8 +97,9 @@ export function TopBar({
           aria-label={tCommon("newFile")}
           onClick={onNewDocument}
         >
-          {tCommon("newFile")}
-          <MenuShortcut>⌘N</MenuShortcut>
+          <FilePlus />
+          <span className="hidden sm:inline">{tCommon("newFile")}</span>
+          <span className="hidden sm:inline"><MenuShortcut>⌘N</MenuShortcut></span>
         </Button>
 
         <HoverMenu
@@ -169,7 +170,7 @@ export function TopBar({
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-meta font-semibold text-primary">
                 {session.actor.slice(0, 1).toUpperCase()}
               </span>
-              <span className="min-w-0 max-w-[140px] truncate">{session.actor}</span>
+              <span className="hidden min-w-0 max-w-[140px] truncate sm:inline">{session.actor}</span>
             </button>
           }
         >

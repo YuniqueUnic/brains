@@ -151,6 +151,7 @@ const en = {
     restoreTooltip: "Restore to the file list",
     close: "Close",
     selectedCount: "{{count}} selected",
+    clearSelection: "Clear selection",
     selectAll: "Select all",
     exitSelect: "Exit selection",
     batchTrashDone: "Moved {{count}} file(s) to Trash.",

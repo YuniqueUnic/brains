@@ -97,16 +97,18 @@ import {
             
         }
         
-            async put_file(path: string, if_match: string | undefined, if_none_match: string | undefined, operation_id: string | undefined, content_sha256: string | undefined, body: Array<number>): Promise<types.brains.MutationResult> {
-                const parsed = ifaceSchemas.brains.FilesPutFileRequestSchema.parse({ "path": path, "if_match": if_match, "if_none_match": if_none_match, "operation_id": operation_id, "content_sha256": content_sha256, "body": body });
+            async put_file(file_path: string, if_match: string | undefined, if_none_match: string | undefined, operation_id: string | undefined, content_sha256: string | undefined, executable: string | undefined, content_type: string, payload: Array<number>): Promise<types.brains.MutationResult> {
+                const parsed = ifaceSchemas.brains.FilesPutFileRequestSchema.parse({ "file_path": file_path, "if_match": if_match, "if_none_match": if_none_match, "operation_id": operation_id, "content_sha256": content_sha256, "executable": executable, "content_type": content_type, "payload": payload });
                 let path = "/file";
                 const query = new URLSearchParams();
-                appendParam(query, "path", path, false, false);
+                appendParam(query, "path", file_path, false, false);
                 const headers = new Headers(this.defaultHeaders);
                 appendHeader(headers, "If-Match", if_match, true, false);
                 appendHeader(headers, "If-None-Match", if_none_match, true, false);
                 appendHeader(headers, "X-Operation-ID", operation_id, true, false);
                 appendHeader(headers, "X-Content-SHA256", content_sha256, true, false);
+                appendHeader(headers, "X-Executable", executable, true, false);
+                appendHeader(headers, "Content-Type", content_type, false, false);
                 const cookies: string[] = [];
                 applyCookies(headers, cookies);
                 applyClientAuth(path, query, headers, this.auth, [{ kind: "bearer" }]);
@@ -115,10 +117,10 @@ import {
                     path = `${path}?${queryString}`;
                 }
                 const url = joinUrl(this.baseUrl, path);
-                const body = { "body": parsed["body"] };
-            headers.set("Content-Type", "application/json");
+                const body = parsed.payload;
+            headers.set("Content-Type", content_type);
             headers.set("Accept", "application/json");
-            const resp = await this.fetchImpl(url, { method: "PUT", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.brains.FilesPutFileRequestSchema) });
+            const resp = await this.fetchImpl(url, { method: "PUT", headers, body: new Uint8Array(body) });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
             }
@@ -126,11 +128,11 @@ import {
             
         }
         
-            async get_file_meta(path: string, format: string | undefined): Promise<types.brains.Entry> {
-                const parsed = ifaceSchemas.brains.FilesGetFileMetaRequestSchema.parse({ "path": path, "format": format });
+            async get_file_meta(file_path: string, format: string | undefined): Promise<types.brains.Entry> {
+                const parsed = ifaceSchemas.brains.FilesGetFileMetaRequestSchema.parse({ "file_path": file_path, "format": format });
                 let path = "/file";
                 const query = new URLSearchParams();
-                appendParam(query, "path", path, false, false);
+                appendParam(query, "path", file_path, false, false);
                 appendParam(query, "format", format, true, false);
                 const headers = new Headers(this.defaultHeaders);
                 const cookies: string[] = [];
@@ -150,11 +152,12 @@ import {
             
         }
         
-            async delete_file(path: string, if_match: string | undefined, operation_id: string | undefined): Promise<types.brains.MutationResult> {
-                const parsed = ifaceSchemas.brains.FilesDeleteFileRequestSchema.parse({ "path": path, "if_match": if_match, "operation_id": operation_id });
+            async delete_file(file_path: string, purge: boolean | undefined, if_match: string | undefined, operation_id: string | undefined): Promise<types.brains.MutationResult> {
+                const parsed = ifaceSchemas.brains.FilesDeleteFileRequestSchema.parse({ "file_path": file_path, "purge": purge, "if_match": if_match, "operation_id": operation_id });
                 let path = "/file";
                 const query = new URLSearchParams();
-                appendParam(query, "path", path, false, false);
+                appendParam(query, "path", file_path, false, false);
+                appendParam(query, "purge", purge, true, false);
                 const headers = new Headers(this.defaultHeaders);
                 appendHeader(headers, "If-Match", if_match, true, false);
                 appendHeader(headers, "X-Operation-ID", operation_id, true, false);
@@ -175,11 +178,11 @@ import {
             
         }
         
-            async patch_file(path: string, if_match: string | undefined, operation_id: string | undefined, body: types.brains.PatchBody): Promise<types.brains.MutationResult> {
-                const parsed = ifaceSchemas.brains.FilesPatchFileRequestSchema.parse({ "path": path, "if_match": if_match, "operation_id": operation_id, "body": body });
+            async patch_file(file_path: string, if_match: string | undefined, operation_id: string | undefined, payload: types.brains.PatchBody): Promise<types.brains.MutationResult> {
+                const parsed = ifaceSchemas.brains.FilesPatchFileRequestSchema.parse({ "file_path": file_path, "if_match": if_match, "operation_id": operation_id, "payload": payload });
                 let path = "/file";
                 const query = new URLSearchParams();
-                appendParam(query, "path", path, false, false);
+                appendParam(query, "path", file_path, false, false);
                 const headers = new Headers(this.defaultHeaders);
                 appendHeader(headers, "If-Match", if_match, true, false);
                 appendHeader(headers, "X-Operation-ID", operation_id, true, false);
@@ -191,10 +194,10 @@ import {
                     path = `${path}?${queryString}`;
                 }
                 const url = joinUrl(this.baseUrl, path);
-                const body = { "body": parsed["body"] };
+                const body = parsed.payload;
             headers.set("Content-Type", "application/json");
             headers.set("Accept", "application/json");
-            const resp = await this.fetchImpl(url, { method: "PATCH", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.brains.FilesPatchFileRequestSchema) });
+            const resp = await this.fetchImpl(url, { method: "PATCH", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.models.brains.PatchBodySchema) });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
             }
@@ -202,11 +205,11 @@ import {
             
         }
         
-            async list_revisions(path: string, limit: number | undefined, cursor: string | undefined): Promise<types.brains.HistoryPage> {
-                const parsed = ifaceSchemas.brains.FilesListRevisionsRequestSchema.parse({ "path": path, "limit": limit, "cursor": cursor });
+            async list_revisions(file_path: string, limit: number | undefined, cursor: string | undefined): Promise<types.brains.HistoryPage> {
+                const parsed = ifaceSchemas.brains.FilesListRevisionsRequestSchema.parse({ "file_path": file_path, "limit": limit, "cursor": cursor });
                 let path = "/revisions";
                 const query = new URLSearchParams();
-                appendParam(query, "path", path, false, false);
+                appendParam(query, "path", file_path, false, false);
                 appendParam(query, "limit", limit, true, false);
                 appendParam(query, "cursor", cursor, true, false);
                 const headers = new Headers(this.defaultHeaders);
@@ -227,8 +230,8 @@ import {
             
         }
         
-            async restore(if_match: string | undefined, body: types.brains.RestoreBody): Promise<types.brains.MutationResult> {
-                const parsed = ifaceSchemas.brains.FilesRestoreRequestSchema.parse({ "if_match": if_match, "body": body });
+            async restore(if_match: string | undefined, payload: types.brains.RestoreBody): Promise<types.brains.MutationResult> {
+                const parsed = ifaceSchemas.brains.FilesRestoreRequestSchema.parse({ "if_match": if_match, "payload": payload });
                 let path = "/restore";
                 const query = new URLSearchParams();
                 const headers = new Headers(this.defaultHeaders);
@@ -241,10 +244,10 @@ import {
                     path = `${path}?${queryString}`;
                 }
                 const url = joinUrl(this.baseUrl, path);
-                const body = { "body": parsed["body"] };
+                const body = parsed.payload;
             headers.set("Content-Type", "application/json");
             headers.set("Accept", "application/json");
-            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.brains.FilesRestoreRequestSchema) });
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.models.brains.RestoreBodySchema) });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
             }
@@ -279,11 +282,11 @@ import {
             
         }
         
-            async links(path: string, direction: string | undefined, limit: number | undefined, cursor: string | undefined): Promise<types.brains.LinkPage> {
-                const parsed = ifaceSchemas.brains.FilesLinksRequestSchema.parse({ "path": path, "direction": direction, "limit": limit, "cursor": cursor });
+            async links(file_path: string, direction: string | undefined, limit: number | undefined, cursor: string | undefined): Promise<types.brains.LinkPage> {
+                const parsed = ifaceSchemas.brains.FilesLinksRequestSchema.parse({ "file_path": file_path, "direction": direction, "limit": limit, "cursor": cursor });
                 let path = "/links";
                 const query = new URLSearchParams();
-                appendParam(query, "path", path, false, false);
+                appendParam(query, "path", file_path, false, false);
                 appendParam(query, "direction", direction, true, false);
                 appendParam(query, "limit", limit, true, false);
                 appendParam(query, "cursor", cursor, true, false);
@@ -305,8 +308,8 @@ import {
             
         }
         
-            async copy(body: types.brains.TransferBody): Promise<types.brains.TransferResult> {
-                const parsed = ifaceSchemas.brains.FilesCopyRequestSchema.parse({ "body": body });
+            async copy(payload: types.brains.TransferBody): Promise<types.brains.TransferResult> {
+                const parsed = ifaceSchemas.brains.FilesCopyRequestSchema.parse({ "payload": payload });
                 let path = "/copy";
                 const query = new URLSearchParams();
                 const headers = new Headers(this.defaultHeaders);
@@ -318,10 +321,10 @@ import {
                     path = `${path}?${queryString}`;
                 }
                 const url = joinUrl(this.baseUrl, path);
-                const body = { "body": parsed["body"] };
+                const body = parsed.payload;
             headers.set("Content-Type", "application/json");
             headers.set("Accept", "application/json");
-            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.brains.FilesCopyRequestSchema) });
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.models.brains.TransferBodySchema) });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
             }
@@ -329,8 +332,8 @@ import {
             
         }
         
-            async move(body: types.brains.TransferBody): Promise<types.brains.TransferResult> {
-                const parsed = ifaceSchemas.brains.FilesMoveRequestSchema.parse({ "body": body });
+            async move(payload: types.brains.TransferBody): Promise<types.brains.TransferResult> {
+                const parsed = ifaceSchemas.brains.FilesMoveRequestSchema.parse({ "payload": payload });
                 let path = "/move";
                 const query = new URLSearchParams();
                 const headers = new Headers(this.defaultHeaders);
@@ -342,10 +345,10 @@ import {
                     path = `${path}?${queryString}`;
                 }
                 const url = joinUrl(this.baseUrl, path);
-                const body = { "body": parsed["body"] };
+                const body = parsed.payload;
             headers.set("Content-Type", "application/json");
             headers.set("Accept", "application/json");
-            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.brains.FilesMoveRequestSchema) });
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.models.brains.TransferBodySchema) });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
             }
@@ -353,11 +356,11 @@ import {
             
         }
         
-            async diff(path: string, _from: string, to: string | undefined): Promise<types.brains.DiffResult> {
-                const parsed = ifaceSchemas.brains.FilesDiffRequestSchema.parse({ "path": path, "from": _from, "to": to });
+            async diff(file_path: string, _from: string, to: string | undefined): Promise<types.brains.DiffResult> {
+                const parsed = ifaceSchemas.brains.FilesDiffRequestSchema.parse({ "file_path": file_path, "from": _from, "to": to });
                 let path = "/diff";
                 const query = new URLSearchParams();
-                appendParam(query, "path", path, false, false);
+                appendParam(query, "path", file_path, false, false);
                 appendParam(query, "from", _from, false, false);
                 appendParam(query, "to", to, true, false);
                 const headers = new Headers(this.defaultHeaders);
@@ -378,8 +381,106 @@ import {
             
         }
         
-            async reindex(body: types.brains.ReindexRequest): Promise<types.brains.ReindexPage> {
-                const parsed = ifaceSchemas.brains.FilesReindexRequestSchema.parse({ "body": body });
+            async archive_revision(file_path: string, revision: string): Promise<types.brains.ArchiveRevision> {
+                const parsed = ifaceSchemas.brains.FilesArchiveRevisionRequestSchema.parse({ "file_path": file_path, "revision": revision });
+                let path = "/maintenance/archive/revision";
+                const query = new URLSearchParams();
+                appendParam(query, "path", file_path, false, false);
+                appendParam(query, "revision", revision, false, false);
+                const headers = new Headers(this.defaultHeaders);
+                const cookies: string[] = [];
+                applyCookies(headers, cookies);
+                applyClientAuth(path, query, headers, this.auth, [{ kind: "bearer" }]);
+                const queryString = query.toString();
+                if (queryString.length > 0) {
+                    path = `${path}?${queryString}`;
+                }
+                const url = joinUrl(this.baseUrl, path);
+                headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "GET", headers });
+            if (!resp.ok) {
+                throw await parseXidlError(resp);
+            }
+            return await decodeResponseBody<types.brains.ArchiveRevision>(resp, "application/json", this.codecs);
+            
+        }
+        
+            async import_archive_revision(payload: types.brains.ArchiveRevision): Promise<types.brains.ArchiveRevision> {
+                const parsed = ifaceSchemas.brains.FilesImportArchiveRevisionRequestSchema.parse({ "payload": payload });
+                let path = "/maintenance/archive/revision";
+                const query = new URLSearchParams();
+                const headers = new Headers(this.defaultHeaders);
+                const cookies: string[] = [];
+                applyCookies(headers, cookies);
+                applyClientAuth(path, query, headers, this.auth, [{ kind: "bearer" }]);
+                const queryString = query.toString();
+                if (queryString.length > 0) {
+                    path = `${path}?${queryString}`;
+                }
+                const url = joinUrl(this.baseUrl, path);
+                const body = parsed.payload;
+            headers.set("Content-Type", "application/json");
+            headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.models.brains.ArchiveRevisionSchema) });
+            if (!resp.ok) {
+                throw await parseXidlError(resp);
+            }
+            return await decodeResponseBody<types.brains.ArchiveRevision>(resp, "application/json", this.codecs);
+            
+        }
+        
+            async import_archive_blob(file_path: string, revision: string, payload: Array<number>): Promise<types.brains.ArchiveBlobStored> {
+                const parsed = ifaceSchemas.brains.FilesImportArchiveBlobRequestSchema.parse({ "file_path": file_path, "revision": revision, "payload": payload });
+                let path = "/maintenance/archive/blob";
+                const query = new URLSearchParams();
+                appendParam(query, "path", file_path, false, false);
+                appendParam(query, "revision", revision, false, false);
+                const headers = new Headers(this.defaultHeaders);
+                const cookies: string[] = [];
+                applyCookies(headers, cookies);
+                applyClientAuth(path, query, headers, this.auth, [{ kind: "bearer" }]);
+                const queryString = query.toString();
+                if (queryString.length > 0) {
+                    path = `${path}?${queryString}`;
+                }
+                const url = joinUrl(this.baseUrl, path);
+                const body = parsed.payload;
+            headers.set("Content-Type", "application/octet-stream");
+            headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "PUT", headers, body: new Uint8Array(body) });
+            if (!resp.ok) {
+                throw await parseXidlError(resp);
+            }
+            return await decodeResponseBody<types.brains.ArchiveBlobStored>(resp, "application/json", this.codecs);
+            
+        }
+        
+            async import_archive_head(file_path: string, revision: string): Promise<types.brains.ArchivePublished> {
+                const parsed = ifaceSchemas.brains.FilesImportArchiveHeadRequestSchema.parse({ "file_path": file_path, "revision": revision });
+                let path = "/maintenance/archive/head";
+                const query = new URLSearchParams();
+                appendParam(query, "path", file_path, false, false);
+                appendParam(query, "revision", revision, false, false);
+                const headers = new Headers(this.defaultHeaders);
+                const cookies: string[] = [];
+                applyCookies(headers, cookies);
+                applyClientAuth(path, query, headers, this.auth, [{ kind: "bearer" }]);
+                const queryString = query.toString();
+                if (queryString.length > 0) {
+                    path = `${path}?${queryString}`;
+                }
+                const url = joinUrl(this.baseUrl, path);
+                headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "POST", headers });
+            if (!resp.ok) {
+                throw await parseXidlError(resp);
+            }
+            return await decodeResponseBody<types.brains.ArchivePublished>(resp, "application/json", this.codecs);
+            
+        }
+        
+            async reindex(payload: types.brains.ReindexRequest): Promise<types.brains.ReindexPage> {
+                const parsed = ifaceSchemas.brains.FilesReindexRequestSchema.parse({ "payload": payload });
                 let path = "/maintenance/reindex";
                 const query = new URLSearchParams();
                 const headers = new Headers(this.defaultHeaders);
@@ -391,10 +492,10 @@ import {
                     path = `${path}?${queryString}`;
                 }
                 const url = joinUrl(this.baseUrl, path);
-                const body = { "body": parsed["body"] };
+                const body = parsed.payload;
             headers.set("Content-Type", "application/json");
             headers.set("Accept", "application/json");
-            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.brains.FilesReindexRequestSchema) });
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(body, "application/json", this.codecs, ifaceSchemas.models.brains.ReindexRequestSchema) });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
             }

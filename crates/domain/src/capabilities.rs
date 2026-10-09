@@ -58,6 +58,7 @@ impl Capabilities {
             ("move".into(), true),
             ("diff".into(), true),
             ("export".into(), true),
+            ("archive".into(), true),
             ("reindex".into(), true),
             ("server_side_validate".into(), false), // P1 `brain doctor`
             ("checkout_push_pull".into(), false), // server-side sync endpoint; the CLI composes existing APIs

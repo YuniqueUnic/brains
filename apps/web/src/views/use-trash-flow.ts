@@ -34,6 +34,7 @@ export function useTrashFlow({
   t: (key: string, vars?: Record<string, unknown>) => string;
 }) {
   const [trashSelected, setTrashSelected] = useState<string | null>(null);
+  const [selecting, setSelecting] = useState(false);
   const [trashChecked, setTrashChecked] = useState<Set<string>>(new Set());
   const [restoringAll, setRestoringAll] = useState(false);
   const [purging, setPurging] = useState(false);
@@ -114,6 +115,8 @@ export function useTrashFlow({
   };
 
   const restoreFromTrash = async (path: string) => {
+    if (restoringAll || purging) return;
+    setRestoringAll(true);
     try {
       const ok = await restoreOne(path);
       if (!ok) {
@@ -125,20 +128,22 @@ export function useTrashFlow({
       await refreshFiles();
     } catch (error) {
       fail(error);
+    } finally {
+      setRestoringAll(false);
     }
   };
 
-  const batchRestore = async () => {
-    if (restoringAll || trashedFiles.length === 0) return;
+  const batchRestore = async (paths = trashedFiles.map((item) => item.path)) => {
+    if (restoringAll || purging || paths.length === 0) return;
     setRestoringAll(true);
     const failed: string[] = [];
     let done = 0;
-    for (const item of trashedFiles) {
+    for (const path of paths) {
       try {
-        if (await restoreOne(item.path)) done += 1;
-        else failed.push(item.path);
+        if (await restoreOne(path)) done += 1;
+        else failed.push(path);
       } catch {
-        failed.push(item.path);
+        failed.push(path);
       }
     }
     setRestoringAll(false);
@@ -157,6 +162,7 @@ export function useTrashFlow({
   // Permanent delete (owner decision 2026-10): tombstone revision from the
   // listing is the precondition; the server refuses live paths (409).
   const purgePaths = async (paths: string[]) => {
+    if (restoringAll || purging) return;
     closeDialog();
     setPurging(true);
     const failed: string[] = [];
@@ -172,7 +178,7 @@ export function useTrashFlow({
       }
     }
     setPurging(false);
-    setTrashChecked(new Set());
+    setTrashChecked(new Set(failed));
     try {
       await refreshFiles();
     } catch (error) {
@@ -186,6 +192,8 @@ export function useTrashFlow({
   };
 
   return {
+    selecting,
+    toggleSelecting: () => { setSelecting((value) => !value); setTrashChecked(new Set()); },
     trashSelected,
     setTrashSelected,
     trashChecked,

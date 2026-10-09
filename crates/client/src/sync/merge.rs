@@ -6,13 +6,13 @@ use sha2::{Digest, Sha256};
 use crate::{ClientResult, Precondition};
 
 use super::{
-    ConflictReason, Disposition, FileState, LoadedFile, PairSnapshot, Reconciled, Snapshot,
-    SyncEndpoint, conflicted, invalid, is_live, is_trashed, media, snapshot_head,
-    snapshot_mutation, with_pair,
+    ConflictReason, Disposition, FileEndpoint, FileState, LoadedFile, PairSnapshot, Reconciled,
+    Snapshot, conflicted, invalid, is_live, is_trashed, media, snapshot_head, snapshot_mutation,
+    with_pair,
 };
 
-pub(super) fn both_sides<E: SyncEndpoint>(
-    endpoints: [&E; 2],
+pub(super) fn both_sides(
+    endpoints: [&dyn FileEndpoint; 2],
     path: &str,
     current: [Option<Entry>; 2],
     base: &PairSnapshot,
@@ -49,6 +49,7 @@ pub(super) fn both_sides<E: SyncEndpoint>(
     let right_file = load_live(endpoints[1], path, right)?;
     if left_file.snapshot.sha256 == right_file.snapshot.sha256
         && left_file.snapshot.media_type == right_file.snapshot.media_type
+        && left_file.snapshot.executable == right_file.snapshot.executable
     {
         return Ok(with_pair(
             [Some(left_file.snapshot), Some(right_file.snapshot)],
@@ -58,6 +59,10 @@ pub(super) fn both_sides<E: SyncEndpoint>(
     if media(&left_file.snapshot)? != media(&right_file.snapshot)? {
         return Ok(conflicted(ConflictReason::MediaTypeMismatch));
     }
+    if left_file.snapshot.executable != right_file.snapshot.executable {
+        return Ok(conflicted(ConflictReason::ExecutableMismatch));
+    }
+    let executable = left_file.snapshot.executable;
     let media_type = media(&left_file.snapshot)?;
     if !brains_domain::is_text_media(media_type) {
         return Ok(conflicted(ConflictReason::Binary));
@@ -79,18 +84,34 @@ pub(super) fn both_sides<E: SyncEndpoint>(
     let left_next = if bytes == left_file.bytes {
         Some(left_file.snapshot.clone())
     } else {
-        publish(endpoints[0], path, Some(left), &bytes, media_type, dry_run)?
+        publish(
+            endpoints[0],
+            path,
+            Some(left),
+            &bytes,
+            media_type,
+            executable,
+            dry_run,
+        )?
     };
     let right_next = if bytes == right_file.bytes {
         Some(right_file.snapshot.clone())
     } else {
-        publish(endpoints[1], path, Some(right), &bytes, media_type, dry_run)?
+        publish(
+            endpoints[1],
+            path,
+            Some(right),
+            &bytes,
+            media_type,
+            executable,
+            dry_run,
+        )?
     };
     Ok(with_pair([left_next, right_next], Disposition::Merged))
 }
 
-fn read_base<E: SyncEndpoint>(
-    endpoints: [&E; 2],
+fn read_base(
+    endpoints: [&dyn FileEndpoint; 2],
     path: &str,
     base: &PairSnapshot,
 ) -> ClientResult<Option<LoadedFile>> {
@@ -104,7 +125,8 @@ fn read_base<E: SyncEndpoint>(
         match load_revision(*endpoint, path, snapshot) {
             Ok(file)
                 if file.snapshot.sha256 == snapshot.sha256
-                    && file.snapshot.media_type == snapshot.media_type =>
+                    && file.snapshot.media_type == snapshot.media_type
+                    && file.snapshot.executable == snapshot.executable =>
             {
                 return Ok(Some(file));
             }
@@ -116,48 +138,39 @@ fn read_base<E: SyncEndpoint>(
     Ok(None)
 }
 
-pub(super) fn load_live<E: SyncEndpoint>(
-    endpoint: &E,
+pub(super) fn load_live(
+    endpoint: &dyn FileEndpoint,
     path: &str,
     entry: &Entry,
 ) -> ClientResult<LoadedFile> {
     load_revision(endpoint, path, &snapshot_head(entry)?)
 }
 
-fn load_revision<E: SyncEndpoint>(
-    endpoint: &E,
+fn load_revision(
+    endpoint: &dyn FileEndpoint,
     path: &str,
     snapshot: &Snapshot,
 ) -> ClientResult<LoadedFile> {
-    let metadata = endpoint.revision_meta(path, &snapshot.revision)?;
-    let content = metadata
-        .content
-        .ok_or_else(|| invalid("live revision has no content"))?;
-    let bytes = endpoint.revision_bytes(path, &snapshot.revision)?;
-    let digest = hex::encode(Sha256::digest(&bytes));
-    if digest != content.sha256 {
-        return Err(invalid(&format!(
-            "revision checksum mismatch for {path} @ {}",
-            snapshot.revision
-        )));
-    }
+    let (bytes, content) = crate::endpoint::read_verified(endpoint, path, &snapshot.revision)?;
     Ok(LoadedFile {
         snapshot: Snapshot {
             revision: snapshot.revision.clone(),
             state: FileState::Live,
-            sha256: Some(digest),
+            sha256: Some(content.sha256),
             media_type: Some(content.media_type),
+            executable: content.executable,
         },
         bytes,
     })
 }
 
-pub(super) fn publish<E: SyncEndpoint>(
-    endpoint: &E,
+pub(super) fn publish(
+    endpoint: &dyn FileEndpoint,
     path: &str,
     target: Option<&Entry>,
     bytes: &[u8],
     media_type: &str,
+    executable: bool,
     dry_run: bool,
 ) -> ClientResult<Option<Snapshot>> {
     let digest = hex::encode(Sha256::digest(bytes));
@@ -166,11 +179,13 @@ pub(super) fn publish<E: SyncEndpoint>(
             return if dry_run {
                 Ok(None)
             } else {
-                let result = endpoint.put(path, bytes, media_type, Precondition::Create)?;
+                let result =
+                    endpoint.put(path, bytes, media_type, executable, Precondition::Create)?;
                 Ok(Some(snapshot_mutation(
                     &result,
                     Some(&digest),
                     Some(media_type),
+                    executable,
                 )?))
             };
         }
@@ -183,10 +198,9 @@ pub(super) fn publish<E: SyncEndpoint>(
             if dry_run {
                 return Ok(None);
             }
-            endpoint
-                .restore(path, &parent, &entry.revision)?
-                .entry
-                .revision
+            let restored = endpoint.restore(path, &parent, &entry.revision)?;
+            snapshot_mutation(&restored, None, None, executable)?;
+            restored.entry.revision
         }
         Some(_) => return Err(invalid("unsupported file state")),
     };
@@ -194,26 +208,34 @@ pub(super) fn publish<E: SyncEndpoint>(
         && is_live(entry)?
     {
         let metadata = endpoint.revision_meta(path, &entry.revision)?;
-        if metadata
-            .content
-            .as_ref()
-            .is_some_and(|content| content.sha256 == digest && content.media_type == media_type)
-        {
+        if metadata.content.as_ref().is_some_and(|content| {
+            content.sha256 == digest
+                && content.media_type == media_type
+                && content.executable == executable
+        }) {
             return Ok(Some(Snapshot {
                 revision: entry.revision.clone(),
                 state: FileState::Live,
                 sha256: Some(digest),
                 media_type: Some(media_type.to_owned()),
+                executable,
             }));
         }
     }
     if dry_run {
         return Ok(None);
     }
-    let result = endpoint.put(path, bytes, media_type, Precondition::IfRevision(expected))?;
+    let result = endpoint.put(
+        path,
+        bytes,
+        media_type,
+        executable,
+        Precondition::IfRevision(expected),
+    )?;
     Ok(Some(snapshot_mutation(
         &result,
         Some(&digest),
         Some(media_type),
+        executable,
     )?))
 }

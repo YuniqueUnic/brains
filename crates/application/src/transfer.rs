@@ -140,7 +140,7 @@ where
                 actor: input.actor.clone(),
                 operation_id: input.operation_id.clone(),
                 precondition: Precondition::Create,
-                executable: content_ref.executable,
+                executable: Some(content_ref.executable),
                 copied_from: Some(CopyProvenance {
                     path: input.source.as_str().to_owned(),
                     revision: input.expected_source_revision.clone(),

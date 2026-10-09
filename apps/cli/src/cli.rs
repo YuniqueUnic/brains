@@ -3,10 +3,10 @@
 use crate::commands;
 use crate::config::Config;
 use brains_client::{BrainClient, TransferKind};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "brain", version, about = "Brains command line client")]
+#[command(name = "bsx", version = env!("BSX_VERSION"), about = "Brains command line client")]
 struct Cli {
     /// Named profile from ~/.brains/config.json (default: active profile).
     #[arg(long, global = true)]
@@ -36,6 +36,11 @@ pub(crate) struct LsArgs {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Print a shell completion script without loading profiles or connecting.
+    Completion {
+        #[arg(value_enum)]
+        shell: CompletionShell,
+    },
     /// Show supported features and limits of the target instance.
     Capabilities {
         #[arg(long)]
@@ -177,7 +182,21 @@ enum Command {
     /// are skipped). Useful for cloud instances deployed without content.
     Seed,
     /// Export the current working tree to a new directory.
-    Export { output: String },
+    Export {
+        output: std::path::PathBuf,
+        #[arg(long, value_enum, default_value_t = TransferFormat::WorkingTree)]
+        format: TransferFormat,
+    },
+    /// Import a directory; differing live files require explicit --overwrite.
+    Import {
+        input: std::path::PathBuf,
+        #[arg(long, value_enum, default_value_t = TransferFormat::WorkingTree)]
+        format: TransferFormat,
+        #[arg(long)]
+        overwrite: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Synchronize current files between this profile and another profile.
     Sync {
         /// The other named profile. Pair sync requires profiles stored in config.
@@ -199,6 +218,8 @@ enum Command {
 
 #[derive(Clone, Subcommand)]
 pub(crate) enum SyncCommand {
+    /// Compare actual bytes and metadata without writing or loading sync state.
+    Verify,
     /// Resolve a reported path conflict and write the chosen result to both profiles.
     Resolve {
         path: String,
@@ -232,19 +253,51 @@ pub(crate) enum ProfileCommand {
     List,
     Use {
         name: String,
+        /// Verify against this source and rebuild the destination index before switching.
+        #[arg(long)]
+        verify_with: Option<String>,
     },
 }
 
 pub(crate) fn run() -> i32 {
     let cli = Cli::parse();
-    let mut config = Config::load();
+    if let Command::Completion { shell } = cli.command {
+        let mut command = Cli::command();
+        let mut output = std::io::stdout();
+        match shell {
+            CompletionShell::Nushell => clap_complete::generate(
+                clap_complete_nushell::Nushell,
+                &mut command,
+                "bsx",
+                &mut output,
+            ),
+            other => {
+                let shell = match other {
+                    CompletionShell::Bash => clap_complete::Shell::Bash,
+                    CompletionShell::Zsh => clap_complete::Shell::Zsh,
+                    CompletionShell::Fish => clap_complete::Shell::Fish,
+                    CompletionShell::Powershell => clap_complete::Shell::PowerShell,
+                    CompletionShell::Nushell => unreachable!(),
+                };
+                clap_complete::generate(shell, &mut command, "bsx", &mut output);
+            }
+        }
+        return 0;
+    }
+    let mut config = match Config::load() {
+        Ok(config) => config,
+        Err(error) => {
+            eprintln!("bsx: {error}");
+            return 2;
+        }
+    };
     // Profile management owns the config file itself and must work before any
-    // connection exists — the first-use journey is `brain profile add` (§12).
+    // connection exists — the first-use journey is `bsx profile add` (§12).
     if let Command::Profile { command } = cli.command {
         return match commands::system::profile_command(&mut config, command) {
             Ok(code) => code,
             Err(error) => {
-                eprintln!("brain: {error}");
+                eprintln!("bsx: {error}");
                 error.exit_code()
             }
         };
@@ -266,7 +319,7 @@ pub(crate) fn run() -> i32 {
     let connection = match config.resolve(cli.profile.as_deref()) {
         Ok(connection) => connection,
         Err(message) => {
-            eprintln!("brain: {message}");
+            eprintln!("bsx: {message}");
             return 2;
         }
     };
@@ -276,9 +329,12 @@ pub(crate) fn run() -> i32 {
         Command::Capabilities { json } => commands::system::capabilities(&client, json),
         Command::Whoami { json } => commands::system::whoami(&client, json),
         Command::Profile { command } => commands::system::profile_command(&mut config, command),
-        Command::Login { stdin_token } => {
-            commands::system::login(&mut config, &connection.0, stdin_token)
-        }
+        Command::Login { stdin_token } => commands::system::login(
+            &mut config,
+            cli.profile.as_deref(),
+            &connection.0,
+            stdin_token,
+        ),
         Command::Ls(args) => commands::query::ls(&client, args),
         Command::Cat { path } => commands::files::cat(&client, &path),
         Command::Stat { path, json } => commands::files::stat(&client, &path, json),
@@ -345,8 +401,15 @@ pub(crate) fn run() -> i32 {
             commands::system::reindex(&client, all_pages, limit)
         }
         Command::Seed => commands::system::seed_template(&client),
-        Command::Export { output } => commands::system::export(&client, &output),
+        Command::Export { output, format } => commands::system::export(&client, &output, format),
+        Command::Import {
+            input,
+            format,
+            overwrite,
+            dry_run,
+        } => commands::system::import(&client, &input, format, overwrite, dry_run),
         Command::Sync { .. } => unreachable!("sync is handled before single-profile resolution"),
+        Command::Completion { .. } => unreachable!("completion is handled before config loading"),
         Command::Edit { path, if_revision } => commands::files::edit(&client, &path, &if_revision),
     };
 
@@ -354,11 +417,27 @@ pub(crate) fn run() -> i32 {
         Ok(code) => code,
         Err(error) => {
             if let Some(current) = &error.current_revision {
-                eprintln!("brain: {error} (current revision: {current})");
+                eprintln!("bsx: {error} (current revision: {current})");
             } else {
-                eprintln!("brain: {error}");
+                eprintln!("bsx: {error}");
             }
             error.exit_code()
         }
     }
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum CompletionShell {
+    Bash,
+    Zsh,
+    Fish,
+    Powershell,
+    #[value(alias = "nu")]
+    Nushell,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub(crate) enum TransferFormat {
+    WorkingTree,
+    Archive,
 }

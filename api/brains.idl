@@ -96,6 +96,44 @@ struct Revision {
     @optional ContentRef content;
 };
 
+// Lossless, administrative archive records (ordinary Revision omits keys).
+struct ArchiveContent {
+    string key;
+    string sha256;
+    int64 size;
+    string media_type;
+    boolean executable;
+};
+// parent/content serialize as explicit null when absent; xidlc 0.95 lacks
+// nullable fields, so fix-sdk-wire.py preserves this in TS/Zod/OpenAPI.
+struct ArchiveRevision {
+    uint64 schema_version;
+    string revision;
+    string path;
+    int64 generation;
+    @optional string parent;
+    string action;
+    string actor;
+    string operation_id;
+    string created_at;
+    @optional string restores_revision;
+    @optional CopiedFrom copied_from;
+    @optional ArchiveContent content;
+};
+struct ArchiveHead {
+    uint64 schema_version;
+    string path;
+    string revision;
+    int64 generation;
+    string state;
+    string updated_at;
+};
+struct ArchivePublished {
+    ArchiveHead head;
+    string index_state;
+};
+struct ArchiveBlobStored { boolean stored; };
+
 struct HistoryPage {
     sequence<Revision> items;
     string anchor_revision;
@@ -235,12 +273,15 @@ interface Files {
     // Content-Type. Responds 201 on create, 200 on update, 412 on CAS loss.
     @put(path = "/file")
     MutationResult put_file(
-        @query string path,
+        @query @rename("path") string file_path,
         @header @rename("If-Match") @optional string if_match,
         @header @rename("If-None-Match") @optional string if_none_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("X-Content-SHA256") @optional string content_sha256,
-        in sequence<octet> body
+        // true/false; omitted preserves the current flag (new files default false).
+        @header @rename("X-Executable") @optional string executable,
+        @header @rename("Content-Type") string content_type,
+        @flatten in sequence<octet> payload
     );
 
     // Current-HEAD read (JSON metadata view). The same route also serves
@@ -252,7 +293,7 @@ interface Files {
     // format for generated SDKs until then. 410 once the path is trashed.
     @get(path = "/file")
     Entry get_file_meta(
-        @query string path,
+        @query @rename("path") string file_path,
         @query @rename("format") @optional string format
     );
 
@@ -263,7 +304,7 @@ interface Files {
     // 409 when the path is still live; 412 on stale base.
     @delete(path = "/file")
     MutationResult delete_file(
-        @query string path,
+        @query @rename("path") string file_path,
         @query @optional boolean purge,
         @header @rename("If-Match") @optional string if_match,
         @header @rename("X-Operation-ID") @optional string operation_id
@@ -276,16 +317,16 @@ interface Files {
     // same way as the raw file read (see get_file_meta).
     @patch(path = "/file")
     MutationResult patch_file(
-        @query string path,
+        @query @rename("path") string file_path,
         @header @rename("If-Match") @optional string if_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
-        in PatchBody body
+        @flatten in PatchBody payload
     );
 
     // Reachable history of one path, newest first (signed cursor pages).
     @get(path = "/revisions")
     HistoryPage list_revisions(
-        @query string path,
+        @query @rename("path") string file_path,
         @query @optional int64 limit,
         @query @optional string cursor
     );
@@ -295,7 +336,7 @@ interface Files {
     @post(path = "/restore")
     MutationResult restore(
         @header @rename("If-Match") @optional string if_match,
-        in RestoreBody body
+        @flatten in RestoreBody payload
     );
 
     // Literal (case-sensitive UTF-8 substring) or FTS (tokenized) search.
@@ -311,7 +352,7 @@ interface Files {
     // Wiki-link graph induced by [[links]] in stored text.
     @get(path = "/links")
     LinkPage links(
-        @query string path,
+        @query @rename("path") string file_path,
         @query @rename("direction") @optional string direction,
         @query @optional int64 limit,
         @query @optional string cursor
@@ -319,23 +360,45 @@ interface Files {
 
     // Copy: create target from a source revision; source stays live.
     @post(path = "/copy")
-    TransferResult copy(in TransferBody body);
+    TransferResult copy(@flatten in TransferBody payload);
 
     // Move: copy + trash source; partial outcomes are reported, never hidden.
     @post(path = "/move")
-    TransferResult move(in TransferBody body);
+    TransferResult move(@flatten in TransferBody payload);
 
     // Unified diff between two revisions of one path.
     @get(path = "/diff")
     DiffResult diff(
-        @query string path,
+        @query @rename("path") string file_path,
         @query string from,
         @query @optional string to
     );
 
+    // Admin only. Complete original records; writes reuse cookie/CSRF protection.
+    @get(path = "/maintenance/archive/revision")
+    ArchiveRevision archive_revision(
+        @query @rename("path") string file_path,
+        @query string revision
+    );
+    @post(path = "/maintenance/archive/revision")
+    ArchiveRevision import_archive_revision(@flatten in ArchiveRevision payload);
+    // Raw octets checked against the saved revision's actual content.key/hash.
+    @put(path = "/maintenance/archive/blob")
+    ArchiveBlobStored import_archive_blob(
+        @query @rename("path") string file_path,
+        @query string revision,
+        @flatten in sequence<octet> payload
+    );
+    // CAS advances one generation; index remains pending until reindex.
+    @post(path = "/maintenance/archive/head")
+    ArchivePublished import_archive_head(
+        @query @rename("path") string file_path,
+        @query string revision
+    );
+
     // Paged index rebuild from authoritative storage (safe anytime).
     @post(path = "/maintenance/reindex")
-    ReindexPage reindex(in ReindexRequest body);
+    ReindexPage reindex(@flatten in ReindexRequest payload);
 };
 
 // Session exchange for browser flows: token -> signed cookie + CSRF token.

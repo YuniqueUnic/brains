@@ -1,9 +1,8 @@
 import { EditorView } from "@codemirror/view";
+import { startCompletion } from "@codemirror/autocomplete";
 import { EditorSelection } from "@codemirror/state";
 import {
   Bold,
-  ChevronDown,
-  ChevronUp,
   Code,
   Heading1,
   Heading2,
@@ -33,8 +32,9 @@ import { cn } from "../../lib/utils";
 
 type WrapAction = { kind: "wrap"; marker: string; tail?: string };
 type PrefixAction = { kind: "prefix"; token: string; match: RegExp };
+type ReferenceAction = { kind: "reference"; image: boolean };
 type BlockAction = { kind: "fence" } | { kind: "hr" };
-export type MarkdownAction = WrapAction | PrefixAction | BlockAction;
+export type MarkdownAction = WrapAction | PrefixAction | BlockAction | ReferenceAction;
 
 const STRIP_MARKER = /^(#{1,6}\s|>\s|[-*+]\s(?:\[[ x]\]\s)?|\d+\.\s)?/;
 
@@ -50,8 +50,8 @@ const ACTIONS = {
   italic: { kind: "wrap", marker: "*" },
   strike: { kind: "wrap", marker: "~~" },
   code: { kind: "wrap", marker: "`" },
-  link: { kind: "wrap", marker: "[", tail: "]()" },
-  image: { kind: "wrap", marker: "![", tail: "]()" },
+  link: { kind: "reference", image: false },
+  image: { kind: "reference", image: true },
   fence: { kind: "fence" },
   hr: { kind: "hr" },
 } satisfies Record<string, MarkdownAction>;
@@ -60,6 +60,14 @@ const ACTIONS = {
 export function applyMarkdownAction(view: EditorView, action: MarkdownAction) {
   const { state } = view;
   const range = state.selection.main;
+  if (action.kind === "reference") {
+    const text = state.sliceDoc(range.from, range.to);
+    const label = `${action.image ? "!" : ""}[${text}](`;
+    view.dispatch({ changes: { from: range.from, to: range.to, insert: `${label})` }, selection: EditorSelection.cursor(range.from + label.length) });
+    view.focus();
+    startCompletion(view);
+    return;
+  }
   if (action.kind === "hr") {
     // The divider belongs on its own line: never split the line the cursor
     // sits in — append below it.
@@ -81,7 +89,7 @@ export function applyMarkdownAction(view: EditorView, action: MarkdownAction) {
     const closeLine = state.doc.lineAt(range.to);
     const pre = range.from === openLine.from ? "" : "\n";
     const post = range.to === closeLine.to ? "" : "\n";
-    const insert = `${pre}\`\`\`\n${text}${text ? "\n" : ""}\`\`\`${post}`;
+    const insert = `${pre}\`\`\`\n${text}\n\`\`\`${post}`;
     view.dispatch({
       changes: { from: range.from, to: range.to, insert },
       selection: EditorSelection.cursor(range.from + pre.length + 4),
@@ -117,30 +125,22 @@ export function applyMarkdownAction(view: EditorView, action: MarkdownAction) {
   // current marker first; lines that did not carry THIS action's marker gain
   // it (so h2 over h1 becomes h1, re-clicking the same level unwraps).
   const first = state.doc.lineAt(range.from);
-  const last = state.doc.lineAt(range.to);
+  const last = state.doc.lineAt(range.empty ? range.to : range.to - 1);
   const changes = [];
   for (let n = first.number; n <= last.number; n++) {
     const line = state.doc.line(n);
     const stripped = line.text.replace(STRIP_MARKER, "");
     const had = action.match.test(line.text);
-    const insert = `${had && line.text === action.token + stripped ? "" : action.token}${stripped}`;
-    changes.push({ from: line.from, to: line.to, insert });
+    const insert = had && line.text === action.token + stripped ? "" : action.token;
+    changes.push({ from: line.from, to: line.from + line.text.length - stripped.length, insert });
   }
-  view.dispatch({ changes });
+  const changeSet = state.changes(changes);
+  view.dispatch({ changes: changeSet, selection: range.empty ? EditorSelection.cursor(changeSet.mapPos(range.head, 1)) : state.selection.map(changeSet) });
   view.focus();
 }
 
 /** The collapsible formatting row under the editor header. */
-export function MarkdownToolbar({
-  view,
-  open,
-  onToggle,
-}: {
-  /** The live editor view; null while the buffer is not editable. */
-  view: EditorView | null;
-  open: boolean;
-  onToggle: () => void;
-}) {
+export function MarkdownToolbar({ view }: { view: EditorView | null }) {
   const { t } = useTranslation("editor");
   const run = (action: MarkdownAction) => () => {
     if (view) applyMarkdownAction(view, action);
@@ -172,11 +172,9 @@ export function MarkdownToolbar({
   ];
   return (
     <div className="flex h-8 shrink-0 items-center border-b px-2" data-testid="markdown-toolbar">
-      {/* Actions scroll; the collapse control stays pinned at the right even
-          when the groups overflow. */}
+      {/* Keep all formatting actions reachable on narrow screens. */}
       <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-        {open &&
-          groups.map((group, index) => (
+        {groups.map((group, index) => (
             <span key={index} className="flex shrink-0 items-center gap-0.5">
               {index > 0 && <span className="mx-1 h-4 w-px shrink-0 bg-border" />}
               {group.map(({ icon: Icon, label, action }) => (
@@ -195,18 +193,7 @@ export function MarkdownToolbar({
             </span>
           ))}
       </div>
-      <Tooltip content={t("toolbarToggle")}>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t("toolbarToggle")}
-          aria-expanded={open}
-          data-testid="markdown-toolbar-toggle"
-          onClick={onToggle}
-        >
-          {open ? <ChevronUp className="size-4 stroke-[1.5]" /> : <ChevronDown className="size-4 stroke-[1.5]" />}
-        </Button>
-      </Tooltip>
+
     </div>
   );
 }

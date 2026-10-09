@@ -13,12 +13,14 @@ export function ToggleGroupSection({
   options,
   className = "flex items-center gap-0.5 rounded-md border p-0.5",
   dense = false,
+  compactOnMobile = false,
 }: {
   value: string;
   onChange: (next: string) => void;
   options: { value: string; label: string; icon?: ReactNode }[];
   className?: string;
   dense?: boolean;
+  compactOnMobile?: boolean;
 }) {
   return (
     <ToggleGroup
@@ -41,7 +43,7 @@ export function ToggleGroupSection({
           }
         >
           {option.icon}
-          {option.label}
+          <span className={compactOnMobile && option.icon ? "hidden sm:inline" : undefined}>{option.label}</span>
         </Toggle>
       ))}
     </ToggleGroup>

@@ -27,45 +27,21 @@ impl Config {
         PathBuf::from(home).join(".brains").join("config.json")
     }
 
-    pub fn load() -> Self {
-        std::fs::read_to_string(Self::path())
-            .ok()
-            .and_then(|raw| serde_json::from_str(&raw).ok())
-            .unwrap_or_default()
+    pub fn load() -> Result<Self, String> {
+        let path = Self::path();
+        let bytes = match std::fs::read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::default());
+            }
+            Err(error) => return Err(format!("read config {}: {error}", path.display())),
+        };
+        serde_json::from_slice(&bytes)
+            .map_err(|error| format!("invalid config {}: {error}", path.display()))
     }
 
     pub fn save(&self) -> Result<(), String> {
-        let path = Self::path();
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .mode(0o600)
-                .open(&path)
-                .map_err(|e| e.to_string())?;
-            use std::io::Write;
-            file.write_all(
-                serde_json::to_vec_pretty(self)
-                    .map_err(|e| e.to_string())?
-                    .as_slice(),
-            )
-            .map_err(|e| e.to_string())?;
-            Ok(())
-        }
-        #[cfg(not(unix))]
-        {
-            std::fs::write(
-                &path,
-                serde_json::to_vec_pretty(self).map_err(|e| e.to_string())?,
-            )
-            .map_err(|e| e.to_string())
-        }
+        write_json_atomic(&Self::path(), self)
     }
 
     /// Resolve URL/token: env overrides, then the active profile.
@@ -86,7 +62,7 @@ impl Config {
                     return Ok((url, token));
                 }
                 Err(format!(
-                    "no profile `{name}`; run `brain profile add {name} --url <URL>` or set BRAINS_URL/BRAINS_TOKEN"
+                    "no profile `{name}`; run `bsx profile add {name} --url <URL>` or set BRAINS_URL/BRAINS_TOKEN"
                 ))
             }
         }
@@ -107,4 +83,39 @@ impl Config {
         }
         Ok((profile.url.clone(), profile.token.clone()))
     }
+}
+
+/// Publish profile and sync metadata without truncating the last valid file.
+pub(crate) fn write_json_atomic(
+    path: &std::path::Path,
+    value: &impl Serialize,
+) -> Result<(), String> {
+    use std::io::Write;
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| std::path::Path::new("."));
+    std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let temporary = parent.join(format!(".brains-{}.tmp", brains_domain::HexId::generate()));
+    let bytes = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let result = (|| -> std::io::Result<()> {
+        let mut file = options.open(&temporary)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, path)?;
+        #[cfg(unix)]
+        std::fs::File::open(parent)?.sync_all()?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result.map_err(|error| format!("save {}: {error}", path.display()))
 }

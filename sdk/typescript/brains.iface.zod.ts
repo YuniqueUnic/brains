@@ -22,38 +22,41 @@ import { xjson } from "xidl-typescript-codec";
     export type FilesListFilesRequest = z.infer<typeof FilesListFilesRequestSchema>;
 
     export const FilesPutFileRequestSchema = z.object({
-            path: z.coerce.string(),
+            file_path: z.coerce.string(),
             if_match: z.coerce.string().optional(),
             if_none_match: z.coerce.string().optional(),
             operation_id: z.coerce.string().optional(),
             content_sha256: z.coerce.string().optional(),
-            body: z.array(z.coerce.number().int().nonnegative()),
+            executable: z.coerce.string().optional(),
+            content_type: z.coerce.string(),
+            payload: z.array(z.coerce.number().int().nonnegative()),
         });
     export type FilesPutFileRequest = z.infer<typeof FilesPutFileRequestSchema>;
 
     export const FilesGetFileMetaRequestSchema = z.object({
-            path: z.coerce.string(),
+            file_path: z.coerce.string(),
             format: z.coerce.string().optional(),
         });
     export type FilesGetFileMetaRequest = z.infer<typeof FilesGetFileMetaRequestSchema>;
 
     export const FilesDeleteFileRequestSchema = z.object({
-            path: z.coerce.string(),
+            file_path: z.coerce.string(),
+            purge: z.coerce.boolean().optional(),
             if_match: z.coerce.string().optional(),
             operation_id: z.coerce.string().optional(),
         });
     export type FilesDeleteFileRequest = z.infer<typeof FilesDeleteFileRequestSchema>;
 
     export const FilesPatchFileRequestSchema = z.object({
-            path: z.coerce.string(),
+            file_path: z.coerce.string(),
             if_match: z.coerce.string().optional(),
             operation_id: z.coerce.string().optional(),
-            body: models.brains.PatchBodySchema,
+            payload: models.brains.PatchBodySchema,
         });
     export type FilesPatchFileRequest = z.infer<typeof FilesPatchFileRequestSchema>;
 
     export const FilesListRevisionsRequestSchema = z.object({
-            path: z.coerce.string(),
+            file_path: z.coerce.string(),
             limit: z.coerce.number().int().optional(),
             cursor: z.coerce.string().optional(),
         });
@@ -61,7 +64,7 @@ import { xjson } from "xidl-typescript-codec";
 
     export const FilesRestoreRequestSchema = z.object({
             if_match: z.coerce.string().optional(),
-            body: models.brains.RestoreBodySchema,
+            payload: models.brains.RestoreBodySchema,
         });
     export type FilesRestoreRequest = z.infer<typeof FilesRestoreRequestSchema>;
 
@@ -75,7 +78,7 @@ import { xjson } from "xidl-typescript-codec";
     export type FilesSearchRequest = z.infer<typeof FilesSearchRequestSchema>;
 
     export const FilesLinksRequestSchema = z.object({
-            path: z.coerce.string(),
+            file_path: z.coerce.string(),
             direction: z.coerce.string().optional(),
             limit: z.coerce.number().int().optional(),
             cursor: z.coerce.string().optional(),
@@ -83,24 +86,48 @@ import { xjson } from "xidl-typescript-codec";
     export type FilesLinksRequest = z.infer<typeof FilesLinksRequestSchema>;
 
     export const FilesCopyRequestSchema = z.object({
-            body: models.brains.TransferBodySchema,
+            payload: models.brains.TransferBodySchema,
         });
     export type FilesCopyRequest = z.infer<typeof FilesCopyRequestSchema>;
 
     export const FilesMoveRequestSchema = z.object({
-            body: models.brains.TransferBodySchema,
+            payload: models.brains.TransferBodySchema,
         });
     export type FilesMoveRequest = z.infer<typeof FilesMoveRequestSchema>;
 
     export const FilesDiffRequestSchema = z.object({
-            path: z.coerce.string(),
+            file_path: z.coerce.string(),
             "from": z.coerce.string(),
             to: z.coerce.string().optional(),
         });
     export type FilesDiffRequest = z.infer<typeof FilesDiffRequestSchema>;
 
+    export const FilesArchiveRevisionRequestSchema = z.object({
+            file_path: z.coerce.string(),
+            revision: z.coerce.string(),
+        });
+    export type FilesArchiveRevisionRequest = z.infer<typeof FilesArchiveRevisionRequestSchema>;
+
+    export const FilesImportArchiveRevisionRequestSchema = z.object({
+            payload: models.brains.ArchiveRevisionSchema,
+        });
+    export type FilesImportArchiveRevisionRequest = z.infer<typeof FilesImportArchiveRevisionRequestSchema>;
+
+    export const FilesImportArchiveBlobRequestSchema = z.object({
+            file_path: z.coerce.string(),
+            revision: z.coerce.string(),
+            payload: z.array(z.coerce.number().int().nonnegative()),
+        });
+    export type FilesImportArchiveBlobRequest = z.infer<typeof FilesImportArchiveBlobRequestSchema>;
+
+    export const FilesImportArchiveHeadRequestSchema = z.object({
+            file_path: z.coerce.string(),
+            revision: z.coerce.string(),
+        });
+    export type FilesImportArchiveHeadRequest = z.infer<typeof FilesImportArchiveHeadRequestSchema>;
+
     export const FilesReindexRequestSchema = z.object({
-            body: models.brains.ReindexRequestSchema,
+            payload: models.brains.ReindexRequestSchema,
         });
     export type FilesReindexRequest = z.infer<typeof FilesReindexRequestSchema>;
 

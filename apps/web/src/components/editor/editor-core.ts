@@ -173,8 +173,7 @@ export function baseExtensions(
     // off) — no static EditorView.lineWrapping here.
     history(),
     search({ top: true, createPanel: (view) => createFindPanel(findLabels())(view) }),
-    // Tooltips mount on <body>: the inverse-zoomed portal layer keeps CM's
-    // visual-rect math 1:1 at non-default interface sizes.
+    // Body-mounted wrappers use viewport coordinates; only content is scaled.
     tooltips({ parent: document.body }),
     highlightSelectionMatches(),
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),

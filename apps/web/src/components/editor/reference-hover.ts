@@ -16,7 +16,7 @@ export function referenceHover(
   labels: { loading: string; unavailable: string },
 ): Extension {
   return hoverTooltip(
-    (view, pos) => {
+    async (view, pos) => {
       const line = view.state.doc.lineAt(pos);
       const text = line.text;
       const offset = pos - line.from;
@@ -33,11 +33,12 @@ export function referenceHover(
       if (!hit) return null;
       const resolved = resolveReference(hit.target, files);
       if (!resolved) return null;
+      const dom = await buildRefPreviewDom(resolved, onOpen, labels);
       return {
         pos: line.from + hit.from,
         end: line.from + hit.to,
         above: true,
-        create: () => ({ dom: buildRefPreviewDom(resolved, onOpen, labels) }),
+        create: () => ({ dom }),
       };
     },
     { hoverTime: 350 },

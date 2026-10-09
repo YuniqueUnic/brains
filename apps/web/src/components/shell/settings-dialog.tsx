@@ -50,13 +50,8 @@ function applyUiSettings(settings: UiSettings) {
   const zoom = settings.fontSize / 13;
   root.style.setProperty("--font-sans", FONT_STACKS[settings.font]);
   root.style.setProperty("--ui-font-size", `${settings.fontSize}px`);
-  // Interface size zooms #root (px classes don't follow the body font-size).
-  // The floating layer (Base UI/CM portals mount on <body>) INVERTS the zoom
-  // so anchor rects (visual px) and applied coordinates (layout px) agree
-  // 1:1 — without that inversion every popup misplaces and hover flickers.
-  // Popup content scales back up through --ui-zoom (see styles.css).
+  // Positioning wrappers stay in viewport coordinates; content scales once.
   root.style.setProperty("--ui-zoom", `${zoom}`);
-  root.style.setProperty("--ui-zoom-inverse", `${1 / zoom}`);
 }
 
 export function UiSettingsProvider({ children }: { children: React.ReactNode }) {

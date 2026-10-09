@@ -55,9 +55,16 @@ fn run_inner(
         .unwrap_or("default");
     let pair = resolve_pair(config, local_profile, remote_profile)?;
     let path = state_path(&pair)?;
+    if matches!(action, Some(SyncCommand::Verify)) {
+        if dry_run {
+            return Err(invalid("verify is already read-only; omit --dry-run"));
+        }
+        return verify_pair(&pair);
+    }
     let mut state = load_state(&path, &pair.endpoint_ids())?;
     match action {
         None => synchronize(&pair, &path, state, dry_run),
+        Some(SyncCommand::Verify) => unreachable!("verify runs without sync state"),
         Some(SyncCommand::Resolve {
             path: file_path,
             keep,
@@ -145,6 +152,7 @@ fn synchronize(
         &pair.endpoints[1].client,
         state,
         dry_run,
+        |state| save_state(state_file, state),
     )?;
     if !dry_run {
         save_state(state_file, &report.state)?;
@@ -172,6 +180,13 @@ fn synchronize(
             conflict.first_revision.as_deref().unwrap_or("absent"),
             conflict.second_revision.as_deref().unwrap_or("absent")
         );
+    }
+    if let Some(failure) = &report.failure {
+        eprintln!(
+            "sync stopped at {}: {}; this path may be partially written; completed paths were checkpointed",
+            failure.path, failure.error
+        );
+        return Ok(failure.error.exit_code());
     }
     if !report.conflicts.is_empty() {
         println!(
@@ -213,6 +228,7 @@ fn resolve_conflict(
                 Resolution::Merged {
                     bytes: &bytes,
                     media_type: &media,
+                    executable: brains_client::import::is_executable(std::path::Path::new(&file))?,
                 },
             )?;
             save_state(state_file, state)?;
@@ -259,36 +275,7 @@ fn load_state(path: &Path, endpoint_ids: &[String; 2]) -> ClientResult<SyncState
 }
 
 fn save_state(path: &Path, state: &SyncState) -> ClientResult<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| invalid("sync state path has no parent directory"))?;
-    std::fs::create_dir_all(parent).map_err(|error| ClientError::transport(error.to_string()))?;
-    let name = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| invalid("sync state path has no filename"))?;
-    let temporary = parent.join(format!(".{name}.tmp-{}", brains_domain::HexId::generate()));
-    let bytes = serde_json::to_vec_pretty(state)
-        .map_err(|error| ClientError::transport(error.to_string()))?;
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let write_result = (|| {
-        use std::io::Write;
-        let mut file = options.open(&temporary)?;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-        std::fs::rename(&temporary, path)
-    })();
-    if let Err(error) = write_result {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(ClientError::transport(error.to_string()));
-    }
-    Ok(())
+    crate::config::write_json_atomic(path, state).map_err(ClientError::transport)
 }
 
 impl Pair {
@@ -304,4 +291,42 @@ fn invalid(message: &str) -> ClientError {
         message: message.to_owned(),
         current_revision: None,
     }
+}
+
+fn verify_pair(pair: &Pair) -> ClientResult<i32> {
+    let report = brains_client::verify::verify_current(
+        &pair.endpoints[0].client,
+        &pair.endpoints[1].client,
+    )?;
+    super::print_pretty(&report)?;
+    println!(
+        "Verified current live content only; non-live paths need not have matching tombstones. History requires archive verification."
+    );
+    Ok(if report.success() { 0 } else { 5 })
+}
+
+pub(crate) fn verify_before_use(config: &Config, source: &str, target: &str) -> ClientResult<()> {
+    if std::env::var_os("BRAINS_URL").is_some() || std::env::var_os("BRAINS_TOKEN").is_some() {
+        return Err(invalid(
+            "unset BRAINS_URL and BRAINS_TOKEN before verified profile switching",
+        ));
+    }
+    let pair = resolve_pair(config, source, target)?;
+    if verify_pair(&pair)? != 0 {
+        return Err(invalid("contents differ; active profile was not changed"));
+    }
+    let target = &pair.endpoints[1 - pair.local_index].client;
+    if super::system::reindex(target, true, 5)? != 0 {
+        return Err(invalid(
+            "target reindex failed; active profile was not changed",
+        ));
+    }
+    brains_client::verify::verify_index(target)?;
+    // Re-check the complete stable observation window after rebuilding indexes.
+    if verify_pair(&pair)? != 0 {
+        return Err(invalid(
+            "contents changed during verification; active profile was not changed",
+        ));
+    }
+    Ok(())
 }

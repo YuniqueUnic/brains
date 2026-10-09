@@ -19,27 +19,9 @@ impl RevisionStore for FsRevisionStore {
     async fn create(&self, revision: &Revision) -> DomainResult<()> {
         revision.validate()?;
         let path = self.store.revision_file(&revision.revision);
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| DomainError::StorageUnavailable(format!("revisions dir: {e}")))?;
-        }
         let bytes = serde_json::to_vec(revision)
             .map_err(|e| DomainError::Internal(format!("revision serialization: {e}")))?;
-        let mut file = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::AlreadyExists {
-                    DomainError::Internal("revision id collision".into())
-                } else {
-                    DomainError::StorageUnavailable(format!("revision write: {e}"))
-                }
-            })?;
-        std::io::Write::write_all(&mut file, &bytes)
-            .and_then(|()| file.sync_all())
-            .map_err(|e| DomainError::StorageUnavailable(format!("revision write: {e}")))?;
-        crate::fsync_dir(path.parent().unwrap())
+        crate::create_immutable(&path, &bytes)
     }
 
     async fn get(&self, revision: &HexId) -> DomainResult<Option<Revision>> {

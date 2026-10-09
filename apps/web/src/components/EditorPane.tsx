@@ -9,6 +9,8 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import {
   CopyPlus,
+  ChevronUp,
+  ChevronDown,
   Eye,
   FileDiff,
   Info,
@@ -35,7 +37,6 @@ import { SliderRow } from "./ui/slider-row";
 import { ToggleGroupSection } from "./shell/toggle-section";
 import { fileCompletions, type CompletionFile } from "./editor/completions";
 import { referenceHover } from "./editor/reference-hover";
-import { completionPreview } from "./editor/completion-preview";
 import { MarkdownToolbar } from "./editor/markdown-toolbar";
 import { ConflictView } from "./editor/conflict-view";
 import { SaveAsDialog } from "./editor/save-as-dialog";
@@ -154,9 +155,8 @@ export default function EditorPane({
     const initialSettings = loadEditorSettings();
     const completionExtensions = completions
       ? [
-          autocompletion({ override: [fileCompletions(completions)] }),
+          autocompletion({ override: [fileCompletions(completions, onOpenReference, previewLabels)] }),
           referenceHover(completions, onOpenReference, previewLabels),
-          completionPreview(onOpenReference, previewLabels),
         ]
       : [];
     const view = new EditorView({
@@ -335,9 +335,8 @@ export default function EditorPane({
         completionsComp.current.reconfigure(
           completions
             ? [
-                autocompletion({ override: [fileCompletions(completions)] }),
+                autocompletion({ override: [fileCompletions(completions, onOpenReference, previewLabels)] }),
                 referenceHover(completions, onOpenReference, previewLabels),
-                completionPreview(onOpenReference, previewLabels),
               ]
             : [],
         ),
@@ -540,6 +539,7 @@ export default function EditorPane({
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-0.5">
             <ToggleGroupSection
+              compactOnMobile
               value={viewMode}
               onChange={(next) => setViewMode(next as "source" | "preview")}
               className="mr-1 flex items-center gap-0.5 rounded-[7px] border p-0.5"
@@ -549,7 +549,7 @@ export default function EditorPane({
               ]}
             />
             {viewMode === "source" && (
-              <>
+              <div className="hidden items-center gap-0.5 sm:flex">
             <Tooltip content={t("undoTooltip")}>
               <Button
                 size="icon"
@@ -587,18 +587,27 @@ export default function EditorPane({
                 <FileDiff />
               </Button>
             </Tooltip>
-            </>
+              </div>
+            )}
+            {viewMode === "source" && (
+              <Tooltip content={t("toolbarToggle")}>
+                <Button size="icon" aria-label={t("toolbarToggle")} aria-expanded={settings.toolbar}
+                  data-testid="markdown-toolbar-toggle" onClick={() => updateSettings({ toolbar: !settings.toolbar })}>
+                  {settings.toolbar ? <ChevronUp /> : <ChevronDown />}
+                </Button>
+              </Tooltip>
             )}
             <Button
+              aria-label={t("publish")}
               variant="default"
               data-testid="publish-button"
-              className="ml-1"
+              className="ml-1 w-8 px-0 sm:w-auto sm:px-3"
               disabled={state.kind !== "dirty" && state.kind !== "error"}
               onClick={() => void publish()}
             >
               <Send />
-              {t("publish")}
-              <MenuShortcut>⌘⏎</MenuShortcut>
+              <span className="hidden sm:inline">{t("publish")}</span>
+              <span className="hidden sm:inline"><MenuShortcut>⌘⏎</MenuShortcut></span>
             </Button>
             <Menu.Root>
               <Menu.Trigger
@@ -611,6 +620,12 @@ export default function EditorPane({
               <Menu.Portal>
                 <Menu.Positioner sideOffset={4} align="end">
                   <Menu.Popup className={menuPopupClass}>
+                    {viewMode === "source" && <div className="sm:hidden">
+                      <Menu.Item className={menuItemClass()} disabled={!undoPossible} onClick={runUndo}><Undo2 className="size-4" />{t("undoTooltip")}</Menu.Item>
+                      <Menu.Item className={menuItemClass()} disabled={!redoPossible} onClick={runRedo}><Redo2 className="size-4" />{t("redoTooltip")}</Menu.Item>
+                      <Menu.Item className={menuItemClass()} onClick={openFind}><Search className="size-4" />{t("searchTooltip")}</Menu.Item>
+                      <Menu.Item className={menuItemClass()} disabled={!canDiff && !diffOpen} onClick={() => setDiffOpen((value) => !value)}><FileDiff className="size-4" />{t("diffTooltip")}</Menu.Item>
+                    </div>}
                     {state.kind === "clean" || state.kind === "dirty" ? (
                       <Menu.Item className={menuItemClass()} onClick={openSaveAs}>
                         <CopyPlus className="size-4 stroke-[1.5] text-muted-foreground" />
@@ -634,7 +649,7 @@ export default function EditorPane({
             <EditorSettingsPopover settings={settings} onChange={updateSettings} />
             {onOpenProperties && (
               <Tooltip content={`${t("properties")}（⌘I）`}>
-                <Button size="icon" aria-label={t("properties")} onClick={onOpenProperties}>
+                <Button className="hidden sm:inline-flex" size="icon" aria-label={t("properties")} onClick={onOpenProperties}>
                   <Info />
                 </Button>
               </Tooltip>
@@ -643,12 +658,8 @@ export default function EditorPane({
         )}
       </div>
 
-      {!inConflict && state.kind !== "empty" && viewMode === "source" && (
-        <MarkdownToolbar
-          view={viewInstance}
-          open={settings.toolbar}
-          onToggle={() => updateSettings({ toolbar: !settings.toolbar })}
-        />
+      {!inConflict && state.kind !== "empty" && viewMode === "source" && settings.toolbar && (
+        <MarkdownToolbar view={viewInstance} />
       )}
 
       <div
@@ -689,7 +700,7 @@ export default function EditorPane({
 
       <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-faint">
         {state.kind !== "empty" && state.kind !== "loading" && (
-          <span className="font-mono">
+          <span className="min-w-0 truncate font-mono">
             {t("stats", {
               chars: stats.chars,
               words: stats.words,
@@ -710,7 +721,7 @@ export default function EditorPane({
               resetLabel={t("scaleReset")}
               onChange={(scale) => updateSettings({ scale })}
               onReset={() => updateSettings({ scale: 100 })}
-              className="w-40"
+              className="w-28 sm:w-40"
             />
             <Tooltip content={settings.wrap ? t("wrapLabel") : t("overflowLabel")}>
               <Toggle
@@ -724,7 +735,7 @@ export default function EditorPane({
             </Tooltip>
           </div>
         )}
-        <span className="font-mono">
+        <span className="hidden font-mono sm:inline">
           {inConflict || state.kind === "empty" || state.kind === "loading"
             ? null
             : t("revLabel", { revision: state.baseRevision.slice(0, 8) })}

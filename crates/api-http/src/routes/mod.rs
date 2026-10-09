@@ -1,6 +1,7 @@
 //! Router assembly and shared handler plumbing: request IDs, principal
 //! extraction, precondition parsing, ETag helpers.
 
+pub mod archive;
 pub mod files;
 pub mod history;
 pub mod maintenance;
@@ -71,6 +72,15 @@ pub fn build_router<H: Head, R: Rev, B: Blob, I: Idx>(state: SharedState<H, R, B
         .route("/search", get(search::search))
         .route("/links", get(search::links))
         .route("/maintenance/reindex", post(maintenance::reindex))
+        .route(
+            "/maintenance/archive/revision",
+            get(archive::get_revision).post(archive::put_revision),
+        )
+        .route(
+            "/maintenance/archive/blob",
+            axum::routing::put(archive::put_blob),
+        )
+        .route("/maintenance/archive/head", post(archive::put_head))
         .route("/maintenance/validate", post(maintenance::validate))
         .route(
             "/session",

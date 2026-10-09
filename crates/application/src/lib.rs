@@ -3,6 +3,7 @@
 //! HEAD CAS → best-effort index projection. The layer returns domain errors;
 //! it never names HTTP statuses.
 
+pub mod archive;
 pub mod commit;
 pub mod patch;
 pub mod projection;

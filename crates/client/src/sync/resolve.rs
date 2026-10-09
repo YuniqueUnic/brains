@@ -6,13 +6,13 @@ use crate::ClientResult;
 
 use super::merge::load_live;
 use super::{
-    Disposition, FileState, PairSnapshot, Resolution, Snapshot, SyncEndpoint, SyncState, head_map,
+    Disposition, FileEndpoint, FileState, PairSnapshot, Resolution, Snapshot, SyncState, head_map,
     invalid, is_live, media, publish, reconcile_path, snapshot_head, snapshot_mutation,
 };
 
-pub fn resolve<E: SyncEndpoint>(
-    first: &E,
-    second: &E,
+pub fn resolve(
+    first: &dyn FileEndpoint,
+    second: &dyn FileEndpoint,
     state: &mut SyncState,
     path: &str,
     resolution: Resolution<'_>,
@@ -41,6 +41,7 @@ pub fn resolve<E: SyncEndpoint>(
                         current[other].as_ref(),
                         &file.bytes,
                         media(&file.snapshot)?,
+                        file.snapshot.executable,
                         false,
                     )?;
                 }
@@ -51,7 +52,7 @@ pub fn resolve<E: SyncEndpoint>(
                         .filter(|target| target.state == "live")
                     {
                         let result = endpoints[other].trash(path, &target.revision)?;
-                        resolved[other] = Some(snapshot_mutation(&result, None, None)?);
+                        resolved[other] = Some(snapshot_mutation(&result, None, None, false)?);
                     } else {
                         resolved[other] =
                             snapshot_optional(endpoints[other], path, current[other].as_ref())?;
@@ -60,7 +61,11 @@ pub fn resolve<E: SyncEndpoint>(
             }
         }
         Resolution::Keep(_) => return Err(invalid("resolution side must be local or remote")),
-        Resolution::Merged { bytes, media_type } => {
+        Resolution::Merged {
+            bytes,
+            media_type,
+            executable,
+        } => {
             for index in 0..2 {
                 resolved[index] = publish(
                     endpoints[index],
@@ -68,6 +73,7 @@ pub fn resolve<E: SyncEndpoint>(
                     current[index].as_ref(),
                     bytes,
                     media_type,
+                    executable,
                     false,
                 )?;
             }
@@ -77,8 +83,8 @@ pub fn resolve<E: SyncEndpoint>(
     Ok(())
 }
 
-fn snapshot_optional<E: SyncEndpoint>(
-    endpoint: &E,
+fn snapshot_optional(
+    endpoint: &dyn FileEndpoint,
     path: &str,
     entry: Option<&Entry>,
 ) -> ClientResult<Option<Snapshot>> {
@@ -93,6 +99,7 @@ fn snapshot_optional<E: SyncEndpoint>(
             state: FileState::Live,
             sha256: Some(content.sha256),
             media_type: Some(content.media_type),
+            executable: content.executable,
         }))
     } else {
         Ok(Some(snapshot_head(entry)?))

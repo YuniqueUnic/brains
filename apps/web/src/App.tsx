@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Toaster } from "sonner";
 import { Tooltip as TooltipPrimitive } from "@base-ui-components/react/tooltip";
 import { api, ApiError, type SessionInfo } from "./api/client";
 import { UiSettingsProvider } from "./components/shell/settings-dialog";
 import Login from "./views/Login";
-import Workspace from "./views/Workspace";
+const Workspace = lazy(() => import("./views/Workspace"));
 
 type SessionState =
   | { kind: "checking" }
@@ -60,7 +60,9 @@ export default function App() {
   return (
     <UiSettingsProvider>
       <TooltipPrimitive.Provider delay={400}>
-        <Workspace session={state.session} onLogout={logout} />
+        <Suspense fallback={<div role="status" className="flex h-full items-center justify-center text-muted-foreground">{t("connecting")}</div>}>
+          <Workspace session={state.session} onLogout={logout} />
+        </Suspense>
         <Toaster
           position="bottom-center"
           toastOptions={{

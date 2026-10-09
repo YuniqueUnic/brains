@@ -106,6 +106,11 @@ export function PropertiesPanel({
   const [confirming, setConfirming] = useState<RevisionDto | null>(null);
 
   useEffect(() => {
+    setMeta(null);
+    setHistory(null);
+    setLinks(null);
+    setViewing(null);
+    setConfirming(null);
     if (!path) {
       setMeta(null);
       setHistory(null);

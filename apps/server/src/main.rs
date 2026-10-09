@@ -21,6 +21,9 @@ struct Args {
     /// one. Also read from BRAINS_TOKEN. Printed once when generated.
     #[arg(long)]
     token: Option<String>,
+    /// Start an empty vault, suitable for exact archive restoration.
+    #[arg(long)]
+    no_seed: bool,
     /// Serve a built web app (directory with index.html) from the same origin.
     #[arg(long)]
     web_dist: Option<std::path::PathBuf>,
@@ -45,7 +48,7 @@ fn main() {
         token: args.token.or_else(|| std::env::var("BRAINS_TOKEN").ok()),
         web_dist: args.web_dist,
         allowed_origins: args.origin,
-        seed_templates: true,
+        seed_templates: !args.no_seed,
     };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

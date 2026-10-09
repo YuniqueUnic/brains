@@ -19,7 +19,8 @@ pub struct CommitInput<'a> {
     pub actor: String,
     pub operation_id: HexId,
     pub precondition: Precondition,
-    pub executable: bool,
+    /// None preserves the current live revision flag; a new file defaults to false.
+    pub executable: Option<bool>,
     /// `Some` turns the commit into a `copy` revision with this provenance.
     pub copied_from: Option<brains_domain::CopyProvenance>,
 }
@@ -50,6 +51,17 @@ where
         let current = self
             .check_precondition(input.path, &input.precondition)
             .await?;
+        let executable = match (input.executable, &current) {
+            (Some(value), _) => value,
+            (None, Some(stored)) => self
+                .revisions
+                .get(&stored.head.revision)
+                .await?
+                .ok_or_else(|| DomainError::Internal("HEAD revision is missing".into()))?
+                .content
+                .is_some_and(|content| content.executable),
+            (None, None) => false,
+        };
         let created = current.is_none();
         let (generation, parent) = match &current {
             Some(stored) => (
@@ -89,7 +101,7 @@ where
                 sha256: sha256.clone(),
                 size: input.content.len() as i64,
                 media_type,
-                executable: input.executable,
+                executable,
             }),
         )?;
         self.revisions.create(&revision).await?;

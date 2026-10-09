@@ -1,4 +1,4 @@
-import { ArchiveRestore, Copy, FileWarning, LoaderCircle, Trash2, Trash2 as TrashIcon } from "lucide-react";
+import { Eye, SquarePen, ArchiveRestore, Copy, FileWarning, LoaderCircle, Trash2, Trash2 as TrashIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "../ui/skeleton";
@@ -28,24 +28,19 @@ export function TrashViewer({
   onCopyPath,
   onPurge,
   purging,
+  restoring,
 }: {
   item: Entry | null;
   onRestore: (path: string) => void;
   onCopyPath: (path: string) => void;
   onPurge: (path: string) => void;
   purging: boolean;
+  restoring: boolean;
 }) {
   const { t } = useTranslation("workspace");
   const { t: tInfo } = useTranslation("info");
   const [viewMode, setViewMode] = useState<"preview" | "source">("preview");
   const [content, setContent] = useState<ViewerContent>({ kind: "loading" });
-  const [restoring, setRestoring] = useState(false);
-  // The restore callback is fire-and-forget; the flag only gates double
-  // clicks and MUST not outlive the item (it would brick the button).
-  useEffect(() => {
-    setRestoring(false);
-  }, [item]);
-
   useEffect(() => {
     if (!item) {
       setContent({ kind: "unavailable" });
@@ -108,14 +103,12 @@ export function TrashViewer({
             size="sm"
             variant="default"
             data-testid="trash-viewer-restore"
-            disabled={restoring}
-            onClick={() => {
-              setRestoring(true);
-              onRestore(item.path);
-            }}
+            aria-label={t("menuRestore")}
+            disabled={restoring || purging}
+            onClick={() => onRestore(item.path)}
           >
             {restoring ? <LoaderCircle className="animate-spin" /> : <ArchiveRestore />}
-            {t("menuRestore")}
+            <span className="hidden sm:inline">{t("menuRestore")}</span>
           </Button>
         </Tooltip>
         <Tooltip content={t("menuCopyPath")}>
@@ -129,7 +122,7 @@ export function TrashViewer({
             variant="dangerGhost"
             aria-label={t("purgeOne")}
             data-testid="trash-viewer-purge"
-            disabled={purging}
+            disabled={purging || restoring}
             onClick={() => onPurge(item.path)}
           >
             {purging ? <LoaderCircle className="animate-spin" /> : <TrashIcon />}
@@ -139,11 +132,12 @@ export function TrashViewer({
       {content.kind === "text" && (
         <div className="flex h-9 shrink-0 items-center border-b px-2.5">
           <ToggleGroupSection
+            compactOnMobile
             value={viewMode}
             onChange={(next) => setViewMode(next as "preview" | "source")}
             options={[
-              { value: "preview", label: tInfo("modePreview") },
-              { value: "source", label: tInfo("modeCode") },
+              { value: "preview", label: tInfo("modePreview"), icon: <Eye className="size-3.5" /> },
+              { value: "source", label: tInfo("modeCode"), icon: <SquarePen className="size-3.5" /> },
             ]}
           />
         </div>

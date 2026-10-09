@@ -8,7 +8,15 @@ export default defineConfig({
   base: process.env.VITE_BASE ?? "/",
   plugins: [react(), tailwindcss()],
   build: {
-    // CodeMirror + marked + i18next account for the bundle; local-first app.
+    // Editor and tree dependencies cache independently from the app shell.
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("/node_modules/@codemirror/") || id.includes("/node_modules/@lezer/")) return "editor";
+          if (id.includes("/node_modules/react-aria") || id.includes("/node_modules/@react-aria/") || id.includes("/node_modules/@react-stately/")) return "file-tree";
+        },
+      },
+    },
     chunkSizeWarningLimit: 1100,
   },
   server: {

@@ -180,7 +180,7 @@ where
                 actor: principal.actor.clone(),
                 operation_id: brains_domain::HexId::generate(),
                 precondition,
-                executable: false,
+                executable: Some(false),
                 copied_from: None,
             },
         )

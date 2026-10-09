@@ -13,7 +13,7 @@ pub(crate) fn ls(client: &BrainClient, args: LsArgs) -> ClientResult<i32> {
         kind,
         sort,
     } = args;
-    // `brain ls /` reads as "the whole vault" (§6.1): paths are vault-relative
+    // `bsx ls /` reads as "the whole vault" (§6.1): paths are vault-relative
     // and never start with a slash.
     if prefix == "/" {
         prefix.clear();
@@ -111,7 +111,7 @@ pub(crate) fn search(
         }
     }
     if !complete {
-        eprintln!("brain: search incomplete after {pages} pages; results may be partial");
+        eprintln!("bsx: search incomplete after {pages} pages; results may be partial");
         return Ok(7);
     }
     Ok(if total_hits == 0 { 1 } else { 0 })

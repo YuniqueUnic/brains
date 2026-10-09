@@ -325,6 +325,21 @@ pub async fn put_file<H: Head, R: Rev, B: Blob, I: Idx>(
         .and_then(|v| v.to_str().ok())
         .map(|v| v.trim().to_owned());
 
+    let executable = crate::routes::single_header(
+        &headers,
+        header::HeaderName::from_static("x-executable"),
+        rid,
+    )?
+    .map(|value| match value.as_str() {
+        "true" => Ok(true),
+        "false" => Ok(false),
+        _ => Err(ApiError::new(
+            DomainError::InvalidArgument("X-Executable must be true or false".into()),
+            rid,
+        )),
+    })
+    .transpose()?;
+
     // Binary uploads must carry the digest header (design §22.3); the actual
     // bytes are always verified against it before HEAD CAS.
     let declared_sha = single_sha_header(&headers, rid)?;
@@ -364,7 +379,7 @@ pub async fn put_file<H: Head, R: Rev, B: Blob, I: Idx>(
                 actor: auth.principal().actor.clone(),
                 operation_id: op_id,
                 precondition,
-                executable: false,
+                executable,
                 copied_from: None,
             },
         )

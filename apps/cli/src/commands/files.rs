@@ -87,7 +87,14 @@ pub(crate) fn put(
         }
     };
     let media = content_type.unwrap_or_else(|| brains_domain::media_type_for(path).to_owned());
-    let result = client.put_content(path, &bytes, &media, precondition, operation_id.as_deref())?;
+    let result = client.put_content(
+        path,
+        &bytes,
+        &media,
+        None,
+        precondition,
+        operation_id.as_deref(),
+    )?;
     println!(
         "{} gen={} rev={}",
         if result.entry.generation == 1 {
@@ -226,7 +233,7 @@ pub(crate) fn transfer(
     };
     if result.partial {
         eprintln!(
-            "brain: partial move: target created, source NOT trashed; repair manually (operation {})",
+            "bsx: partial move: target created, source NOT trashed; repair manually (operation {})",
             result.operation_id
         );
         return Ok(7);
@@ -261,14 +268,14 @@ pub(crate) fn edit(client: &BrainClient, path: &str, if_revision: &str) -> Clien
         .map_err(|e| ClientError::transport(format!("launch {editor}: {e}")))?;
     if !status.success() {
         eprintln!(
-            "brain: editor exited with {status}; edited bytes kept at {}",
+            "bsx: editor exited with {status}; edited bytes kept at {}",
             temp.display()
         );
         return Ok(8);
     }
     let edited = std::fs::read(&temp).map_err(|e| ClientError::transport(e.to_string()))?;
     if edited == bytes {
-        eprintln!("brain: no changes");
+        eprintln!("bsx: no changes");
         let _ = std::fs::remove_file(&temp);
         return Ok(0);
     }
@@ -277,6 +284,7 @@ pub(crate) fn edit(client: &BrainClient, path: &str, if_revision: &str) -> Clien
         path,
         &edited,
         &media,
+        None,
         Precondition::IfRevision(if_revision.to_owned()),
         None,
     ) {
@@ -291,7 +299,7 @@ pub(crate) fn edit(client: &BrainClient, path: &str, if_revision: &str) -> Clien
         Err(error) => {
             // Keep the edited bytes locally on conflict; never auto-retry.
             eprintln!(
-                "brain: save failed ({}); edited bytes kept at {}",
+                "bsx: save failed ({}); edited bytes kept at {}",
                 error,
                 temp.display()
             );

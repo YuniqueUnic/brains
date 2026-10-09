@@ -88,6 +88,8 @@ export function revisionPreviewFor(path: string, revision: string): Promise<Prev
  * Resolve a markdown/wiki reference to a vault path: exact, then any entry
  * ending with `/<target>`, then stem match ([[name]] without extension).
  */
+export const referenceStem = (path: string) => path.replace(/\.[a-z0-9]+$/i, "");
+
 export function resolveReference(
   target: string,
   files: { path: string }[],
@@ -101,9 +103,9 @@ export function resolveReference(
   if (files.some((file) => file.path === decoded)) return decoded;
   const suffixed = files.find((file) => file.path.endsWith(`/${decoded}`));
   if (suffixed) return suffixed.path;
-  const stem = decoded.replace(/\.[a-z0-9]+$/i, "");
+  const stem = referenceStem(decoded);
   const byStem = files.find(
-    (file) => file.path === stem || file.path.endsWith(`/${stem}`),
+    (file) => referenceStem(file.path) === stem || referenceStem(file.path).endsWith(`/${stem}`),
   );
   return byStem?.path ?? null;
 }

@@ -69,7 +69,7 @@ where
                     actor: principal.actor.clone(),
                     operation_id: HexId::generate(),
                     precondition: Precondition::Create,
-                    executable: false,
+                    executable: Some(false),
                     copied_from: None,
                 },
             )

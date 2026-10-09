@@ -148,6 +148,7 @@ const zhCN = {
     restoreTooltip: "恢复到文件列表",
     close: "关闭",
     selectedCount: "已选 {{count}} 项",
+    clearSelection: "清空选择",
     selectAll: "全选",
     exitSelect: "退出批量选择",
     batchTrashDone: "已移入回收站 {{count}} 个文件。",

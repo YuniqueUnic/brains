@@ -100,6 +100,14 @@ export default function Workspace({
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const editorRef = useRef(editor);
   editorRef.current = editor;
+  const changeEditor = useCallback((next: EditorState) => {
+    const previous = editorRef.current;
+    if (next.kind !== "empty" && (previous.kind === "empty" || next.path !== previous.path)) {
+      setSelected(new Set([next.path]));
+    }
+    editorRef.current = next;
+    setEditor(next);
+  }, []);
   const [banner, setBanner] = useState<string | null>(null);
 
   const folders = useMemo(() => collectFolders(liveFiles), [liveFiles]);
@@ -186,6 +194,7 @@ export default function Workspace({
     const runId = openRunRef.current + 1;
     openRunRef.current = runId;
     const stale = () => openRunRef.current !== runId;
+    setSelected(new Set([path]));
     setEditor({ kind: "loading", path });
     try {
       // Text-only editor: refuse binary media instead of decoding bytes into
@@ -210,6 +219,7 @@ export default function Workspace({
           return;
         }
         const fresh = await api.readText(path);
+        if (stale()) return;
         setEditor({ kind: "clean", path, text: fresh.text, baseText: fresh.text, baseRevision: fresh.etag });
         return;
       }
@@ -401,7 +411,7 @@ export default function Workspace({
       const result = await api.saveText(path, "", { mode: "create" });
       setDialog(null);
       await refreshFiles();
-      setEditor({ kind: "clean", path: result.path, text: "", baseText: "", baseRevision: result.revision });
+      changeEditor({ kind: "clean", path: result.path, text: "", baseText: "", baseRevision: result.revision });
     } catch (error) {
       fail(error);
     }
@@ -437,13 +447,11 @@ export default function Workspace({
     editor.kind === "empty" || editor.kind === "loading" ? null : editor.path;
   // The properties panel either follows the context selection (editor file
   // in the workspace, trash selection in the trash) or stays pinned.
-  const contextPath = mode === "workspace" ? activeEditorPath : trashFlow.trashSelected;
-  const propertiesPath =
-    panel.type === "properties"
-      ? panel.follow
-        ? contextPath
-        : panel.path
-      : null;
+  const selectedFiles = [...selected].filter((path) => liveFiles.some((file) => file.path === path));
+  const workspacePath = selectedFiles.length === 1 ? selectedFiles[0] : selectedFiles.length > 1 ? null : editor.kind === "empty" ? null : editor.path;
+  const trashPath = trashFlow.trashChecked.size === 1 ? [...trashFlow.trashChecked][0] : trashFlow.trashChecked.size > 1 ? null : trashFlow.trashSelected;
+  const contextPath = mode === "workspace" ? workspacePath : trashPath;
+  const propertiesPath = panel.type === "properties" && !panel.follow ? panel.path : contextPath;
 
   const [mobileTab, setMobileTab, isMobile] = useMobileTabSync(editor, mode, propertiesOpen);
 
@@ -480,8 +488,8 @@ export default function Workspace({
         setPaletteOpen((open) => !open);
       } else if (meta && event.key.toLowerCase() === "i") {
         event.preventDefault();
-        if (propertiesOpen && propertiesPath === activeEditorPath) closeProperties();
-        else openProperties(activeEditorPath, true);
+        if (propertiesOpen) closeProperties();
+        else openProperties(contextPath, true);
       } else if (meta && event.key.toLowerCase() === "n") {
         event.preventDefault();
         setDialog({ type: "new-document", folder: "" });
@@ -521,7 +529,7 @@ export default function Workspace({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeEditorPath, propertiesOpen, propertiesPath, selected, treeActions, dialog, paletteOpen, closeProperties]);
+  }, [activeEditorPath, propertiesOpen, propertiesPath, contextPath, selected, treeActions, dialog, paletteOpen, closeProperties]);
 
   const toggleSidebar = () => {
     const panel = sidebarPanel.current;
@@ -576,6 +584,9 @@ export default function Workspace({
           items={trashedFiles}
           selectedPath={trashFlow.trashSelected}
           checked={trashFlow.trashChecked}
+          selecting={trashFlow.selecting}
+          onToggleSelecting={trashFlow.toggleSelecting}
+          onSelectionChange={trashFlow.setTrashChecked}
           onSelect={(path) => {
             trashFlow.setTrashSelected(path);
             openProperties(path, true);
@@ -589,7 +600,7 @@ export default function Workspace({
             })
           }
           onRestore={(paths) =>
-            paths.forEach((path) => void trashFlow.restoreFromTrash(path))
+            void trashFlow.batchRestore(paths)
           }
           onRestoreAll={() => void trashFlow.batchRestore()}
           onPurgeChecked={(paths) => setDialog({ type: "purge", paths })}
@@ -605,8 +616,8 @@ export default function Workspace({
       <div className="h-full min-h-0">
         <EditorPane
           state={editor}
-          onChange={setEditor}
-          onStateChange={setEditor}
+          onChange={changeEditor}
+          onStateChange={changeEditor}
           onOpenProperties={() => openProperties(activeEditorPath)}
           onOpenReference={requestOpen}
           completions={completionFiles}
@@ -627,6 +638,7 @@ export default function Workspace({
         onCopyPath={treeActions.onCopyPath}
         onPurge={(path) => setDialog({ type: "purge", paths: [path] })}
         purging={trashFlow.purging}
+        restoring={trashFlow.restoringAll}
       />
     );
 
@@ -660,7 +672,7 @@ export default function Workspace({
           })();
         }
       }}
-      onClose={closeProperties}
+      onClose={() => { closeProperties(); if (isMobile) setMobileTab(mode === "workspace" && editor.kind !== "empty" ? "editor" : "files"); }}
     />
   );
 

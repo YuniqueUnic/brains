@@ -69,7 +69,7 @@ pub(crate) fn profile_command(config: &mut Config, command: ProfileCommand) -> C
             }
             Ok(0)
         }
-        ProfileCommand::Use { name } => {
+        ProfileCommand::Use { name, verify_with } => {
             if !config.profiles.contains_key(&name) {
                 return Err(ClientError {
                     status: 400,
@@ -78,6 +78,9 @@ pub(crate) fn profile_command(config: &mut Config, command: ProfileCommand) -> C
                     current_revision: None,
                 });
             }
+            if let Some(source) = verify_with {
+                super::sync::verify_before_use(config, &source, &name)?;
+            }
             config.active = Some(name);
             config.save().map_err(ClientError::transport)?;
             Ok(0)
@@ -85,7 +88,12 @@ pub(crate) fn profile_command(config: &mut Config, command: ProfileCommand) -> C
     }
 }
 
-pub(crate) fn login(config: &mut Config, url: &str, stdin_token: bool) -> ClientResult<i32> {
+pub(crate) fn login(
+    config: &mut Config,
+    profile: Option<&str>,
+    url: &str,
+    stdin_token: bool,
+) -> ClientResult<i32> {
     if !stdin_token {
         return Err(ClientError {
             status: 400,
@@ -98,7 +106,10 @@ pub(crate) fn login(config: &mut Config, url: &str, stdin_token: bool) -> Client
     std::io::Read::read_to_string(&mut std::io::stdin(), &mut token)
         .map_err(|e| ClientError::transport(e.to_string()))?;
     let token = token.trim().to_owned();
-    let name = config.active.clone().unwrap_or_else(|| "default".into());
+    let name = profile
+        .map(str::to_owned)
+        .or_else(|| config.active.clone())
+        .unwrap_or_else(|| "default".into());
     let entry = config.profiles.entry(name).or_insert_with(|| Profile {
         url: url.to_owned(),
         token: String::new(),
@@ -118,29 +129,39 @@ pub(crate) fn reindex(client: &BrainClient, all_pages: bool, limit: usize) -> Cl
         processed += page.processed;
         failed += page.failed.len();
         for failure in &page.failed {
-            eprintln!("brain: reindex failed {}: {}", failure.path, failure.code);
+            eprintln!("bsx: reindex failed {}: {}", failure.path, failure.code);
         }
         if let Some(next) = page.next_cursor.clone() {
             if all_pages {
                 cursor = Some(next);
                 continue;
             }
-            eprintln!("brain: more pages pending; rerun with --all-pages");
+            eprintln!("bsx: more pages pending; rerun with --all-pages");
             return Ok(7);
         }
         break;
     }
     println!("reindexed {processed} files, {failed} failures");
-    Ok(0)
+    Ok(if failed == 0 { 0 } else { 7 })
 }
 
-pub(crate) fn export(client: &BrainClient, output: &str) -> ClientResult<i32> {
-    let output = std::path::Path::new(output);
+pub(crate) fn export(
+    client: &BrainClient,
+    output: &std::path::Path,
+    format: crate::cli::TransferFormat,
+) -> ClientResult<i32> {
     let vault = client
         .capabilities()?
         .vault
         .unwrap_or_else(|| "default".into());
-    let summary = brains_client::export::export_working_tree(client, output, &vault)?;
+    let summary = match format {
+        crate::cli::TransferFormat::WorkingTree => {
+            brains_client::export::export_working_tree(client, output, &vault)?
+        }
+        crate::cli::TransferFormat::Archive => {
+            brains_client::archive::export_archive(client, output, &vault)?
+        }
+    };
     println!("{summary}");
     Ok(0)
 }
@@ -158,6 +179,7 @@ pub(crate) fn seed_template(client: &BrainClient) -> ClientResult<i32> {
                     path,
                     body.as_bytes(),
                     "text/markdown",
+                    None,
                     Precondition::Create,
                     None,
                 )?;
@@ -169,4 +191,37 @@ pub(crate) fn seed_template(client: &BrainClient) -> ClientResult<i32> {
     }
     println!("done: {written} seeded, {skipped} already present.");
     Ok(0)
+}
+
+pub(crate) fn import(
+    client: &BrainClient,
+    input: &std::path::Path,
+    format: crate::cli::TransferFormat,
+    overwrite: bool,
+    dry_run: bool,
+) -> ClientResult<i32> {
+    match format {
+        crate::cli::TransferFormat::WorkingTree => {
+            let report =
+                brains_client::import::import_working_tree(client, input, overwrite, dry_run)?;
+            print_pretty(&report)?;
+            Ok(if report.success() { 0 } else { 5 })
+        }
+        crate::cli::TransferFormat::Archive => {
+            if overwrite {
+                return Err(ClientError {
+                    status: 400,
+                    code: Some("INVALID_ARGUMENT".into()),
+                    message: "archive restore never overwrites different history; omit --overwrite"
+                        .into(),
+                    current_revision: None,
+                });
+            }
+            println!(
+                "{}",
+                brains_client::archive::import_archive(client, input, dry_run)?
+            );
+            Ok(0)
+        }
+    }
 }

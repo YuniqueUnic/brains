@@ -98,6 +98,57 @@
                 }
 
 
+    export interface ArchiveContent {
+            
+                key: string;
+                    sha256: string;
+                    size: number;
+                    media_type: string;
+                    executable: boolean;
+                }
+
+
+    export interface ArchiveRevision {
+            
+                schema_version: number;
+                    revision: string;
+                    path: string;
+                    generation: number;
+                    parent?: string | null;
+                    action: string;
+                    actor: string;
+                    operation_id: string;
+                    created_at: string;
+                    restores_revision?: string;
+                    copied_from?: CopiedFrom;
+                    content?: ArchiveContent | null;
+                }
+
+
+    export interface ArchiveHead {
+            
+                schema_version: number;
+                    path: string;
+                    revision: string;
+                    generation: number;
+                    state: string;
+                    updated_at: string;
+                }
+
+
+    export interface ArchivePublished {
+            
+                head: ArchiveHead;
+                    index_state: string;
+                }
+
+
+    export interface ArchiveBlobStored {
+            
+                stored: boolean;
+                }
+
+
     export interface HistoryPage {
             
                 items: Array<Revision>;
