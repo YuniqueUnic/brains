@@ -141,6 +141,74 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   return body as T;
 }
 
+/**
+ * Extension → media type, mirroring the server's authority map (domain
+ * kind.rs media_type_for). The store listing carries no media_type, so the
+ * client derives the same value the server would serve the file with.
+ */
+export function mediaTypeForPath(path: string): string {
+  const name = path.split("/").pop() ?? path;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
+  switch (ext) {
+    case "md":
+    case "markdown":
+      return "text/markdown";
+    case "txt":
+    case "ini":
+      return "text/plain";
+    case "csv":
+      return "text/csv";
+    case "tsv":
+      return "text/tab-separated-values";
+    case "json":
+      return "application/json";
+    case "yaml":
+    case "yml":
+      return "application/yaml";
+    case "toml":
+      return "application/toml";
+    case "html":
+    case "htm":
+      return "text/html";
+    case "svg":
+      return "image/svg+xml";
+    case "png":
+      return "image/png";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "gif":
+      return "image/gif";
+    case "webp":
+      return "image/webp";
+    case "pdf":
+      return "application/pdf";
+    case "sh":
+    case "bash":
+      return "text/x-shellscript";
+    case "py":
+      return "text/x-python";
+    case "rs":
+      return "text/x-rust";
+    case "js":
+    case "mjs":
+    case "cjs":
+      return "text/javascript";
+    case "ts":
+    case "tsx":
+      return "text/typescript";
+    case "rb":
+      return "text/x-ruby";
+    case "pl":
+      return "text/x-perl";
+    case "lua":
+      return "text/x-lua";
+    default:
+      return "application/octet-stream";
+  }
+}
+
 export function isTextMedia(mediaType?: string): boolean {
   const base = mediaType?.split(";")[0]?.trim() ?? "";
   return (
@@ -264,6 +332,19 @@ const httpApi = {
     operationId: string = randomOperationId(),
   ): Promise<MutationResult> {
     return request<MutationResult>(`/file?path=${encodeURIComponent(path)}`, {
+      method: "DELETE",
+      headers: { "If-Match": `"${baseRevision}"`, "X-Operation-ID": operationId },
+    });
+  },
+
+  /** Permanent delete of a TOMBSTONED path (If-Match = tombstone revision).
+   * 409 PURGE_REQUIRES_TRASHED when the path is still live. */
+  async purge(
+    path: string,
+    baseRevision: string,
+    operationId: string = randomOperationId(),
+  ): Promise<{ path: string; purged: boolean; index_state: string; operation_id: string }> {
+    return request(`/file?path=${encodeURIComponent(path)}&purge=true`, {
       method: "DELETE",
       headers: { "If-Match": `"${baseRevision}"`, "X-Operation-ID": operationId },
     });

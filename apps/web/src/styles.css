@@ -122,6 +122,18 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* Interface zoom: #root carries the scale; the floating layer (popups,
+   dialogs, tooltips mount on <body>) inverts it so anchor rects (visual px)
+   and applied coordinates (layout px) agree 1:1 — that inversion is what
+   keeps hover menus from flickering at non-default sizes. Popup content
+   scales back up via --ui-zoom. */
+#root {
+  zoom: var(--ui-zoom, 1);
+}
+body > *:not(#root):not(script):not(style) {
+  zoom: var(--ui-zoom-inverse, 1);
+}
+
 /* Quiet chrome: content leads, the shell stays out of the way. */
 @layer base {
   * {
@@ -209,7 +221,10 @@
   background: transparent;
   border: none;
   color: var(--faint-foreground);
-  font-size: 12px;
+  /* Track the document scale so gutter rows keep aligning with lines: the
+     element height must equal the line box (15px × scale × 1.75). */
+  font-size: calc(12px * var(--editor-scale, 1));
+  line-height: calc(15px * var(--editor-scale, 1) * 1.75);
 }
 .cm-selectionBackground,
 .cm-editor ::selection {
@@ -630,4 +645,41 @@
 .cm-editor.cm-editor .cm-activeLineGutter {
   background: color-mix(in srgb, var(--muted) 55%, transparent);
   color: var(--muted-foreground);
+}
+
+/* Popup content sits in the inverse-zoomed portal layer: scale it back up. */
+[data-sonner-toaster] {
+  zoom: var(--ui-zoom, 1);
+}
+.cm-tooltip > * {
+  zoom: var(--ui-zoom, 1);
+}
+
+/* Completion-list preview: host takes the inverse zoom (direct body child),
+   the card scales back up — net zoom 1, so its fixed transform is applied in
+   visual px and the fit-viewport math positions it exactly. */
+.cm-completion-preview-host {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 60;
+}
+.cm-completion-preview-card {
+  zoom: var(--ui-zoom, 1);
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: min(360px, 60vw);
+  max-height: 320px;
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow-overlay);
+  font-size: 12px;
+}
+.cm-completion-preview-card .brains-ref-hover {
+  max-width: none;
+  max-height: none;
+  overflow: visible;
 }

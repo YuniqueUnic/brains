@@ -46,12 +46,17 @@ export function loadUiSettings(): UiSettings {
 }
 
 function applyUiSettings(settings: UiSettings) {
-  document.documentElement.style.setProperty("--font-sans", FONT_STACKS[settings.font]);
-  // Interface size zooms the whole shell (px classes don't follow the body
-  // font-size; zoom scales text, spacing and icons together). Portals live
-  // inside body, so dialogs/toasts scale with everything else.
-  document.body.style.setProperty("--ui-font-size", `${settings.fontSize}px`);
-  document.body.style.zoom = String(settings.fontSize / 13);
+  const root = document.documentElement;
+  const zoom = settings.fontSize / 13;
+  root.style.setProperty("--font-sans", FONT_STACKS[settings.font]);
+  root.style.setProperty("--ui-font-size", `${settings.fontSize}px`);
+  // Interface size zooms #root (px classes don't follow the body font-size).
+  // The floating layer (Base UI/CM portals mount on <body>) INVERTS the zoom
+  // so anchor rects (visual px) and applied coordinates (layout px) agree
+  // 1:1 — without that inversion every popup misplaces and hover flickers.
+  // Popup content scales back up through --ui-zoom (see styles.css).
+  root.style.setProperty("--ui-zoom", `${zoom}`);
+  root.style.setProperty("--ui-zoom-inverse", `${1 / zoom}`);
 }
 
 export function UiSettingsProvider({ children }: { children: React.ReactNode }) {

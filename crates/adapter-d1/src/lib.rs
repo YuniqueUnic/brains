@@ -170,6 +170,21 @@ impl From<LinkDbRow> for LinkRow {
 }
 
 impl IndexStore for D1Index {
+    fn remove_path(&self, path: &str) -> impl Future<Output = DomainResult<()>> + Send {
+        let db = &self.db;
+        let path = path.to_owned();
+        SendFuture::new(async move {
+            // The files_ad trigger cascades the FTS row, links and tags.
+            run(
+                db,
+                "index remove",
+                "DELETE FROM files WHERE path = ?1",
+                &[js_str(&path)],
+            )
+            .await
+        })
+    }
+
     fn upsert(&self, projection: &FileProjection) -> impl Future<Output = DomainResult<()>> + Send {
         let db = &self.db;
         let projection = projection.clone();

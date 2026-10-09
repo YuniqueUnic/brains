@@ -1,4 +1,4 @@
-import { ArchiveRestore, Copy, FileWarning, LoaderCircle, Trash2 } from "lucide-react";
+import { ArchiveRestore, Copy, FileWarning, LoaderCircle, Trash2, Trash2 as TrashIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, isTextMedia, type Entry } from "../../api/client";
@@ -24,10 +24,14 @@ export function TrashViewer({
   item,
   onRestore,
   onCopyPath,
+  onPurge,
+  purging,
 }: {
   item: Entry | null;
   onRestore: (path: string) => void;
   onCopyPath: (path: string) => void;
+  onPurge: (path: string) => void;
+  purging: boolean;
 }) {
   const { t } = useTranslation("workspace");
   const { t: tInfo } = useTranslation("info");
@@ -110,6 +114,18 @@ export function TrashViewer({
         <Tooltip content={t("menuCopyPath")}>
           <Button size="icon" aria-label={t("menuCopyPath")} onClick={() => onCopyPath(item.path)}>
             <Copy />
+          </Button>
+        </Tooltip>
+        <Tooltip content={t("purgeOne")}>
+          <Button
+            size="icon"
+            variant="dangerGhost"
+            aria-label={t("purgeOne")}
+            data-testid="trash-viewer-purge"
+            disabled={purging}
+            onClick={() => onPurge(item.path)}
+          >
+            {purging ? <LoaderCircle className="animate-spin" /> : <TrashIcon />}
           </Button>
         </Tooltip>
       </div>

@@ -15,6 +15,15 @@ pub mod transfer;
 use brains_domain::{CursorSigner, DomainError, DomainResult, Limits, Principal, VaultPath};
 use brains_ports::{BlobStore, HeadStore, IndexStore, RevisionStore, StoredHead};
 
+/// Outcome of a permanent delete: the tombstone entry (and its reachable
+/// history chain) is gone; only the derived-index bookkeeping is reported.
+#[derive(Clone, Debug)]
+pub struct PurgeOutcome {
+    pub path: String,
+    pub index_state: IndexState,
+    pub operation_id: String,
+}
+
 /// Outcome of a committed mutation: the committed entry plus index state.
 #[derive(Clone, Debug)]
 pub struct MutationOutcome {

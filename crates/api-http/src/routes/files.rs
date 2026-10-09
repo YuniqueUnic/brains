@@ -7,7 +7,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::Response;
 use std::collections::HashMap;
 
-use brains_api_types::{Entry, FilePage, MutationResult, PatchBody, PatchDryRun};
+use brains_api_types::{Entry, FilePage, MutationResult, PatchBody, PatchDryRun, PurgeResult};
 use brains_application::Precondition;
 use brains_application::commit::CommitInput;
 use brains_domain::{DomainError, HeadState};
@@ -420,6 +420,31 @@ pub async fn delete_file<H: Head, R: Rev, B: Blob, I: Idx>(
     }
     let if_match = parse_required_if_match(&headers, rid)?;
     let op_id = operation_id(&headers, rid)?;
+    // ?purge=true upgrades the tombstone delete into a permanent delete
+    // (owner decision 2026-10): the entry and its reachable history vanish.
+    // Same precondition shape — If-Match must name the tombstone revision.
+    if params.get("purge").map(String::as_str) == Some("true") {
+        let outcome = state
+            .vault
+            .purge_file(
+                auth.principal(),
+                &path,
+                Precondition::IfRevision(if_match),
+                op_id,
+            )
+            .await
+            .map_err(|e| ApiError::new(e, rid))?;
+        return Ok(json_response(
+            StatusCode::OK,
+            &PurgeResult {
+                path: outcome.path.clone(),
+                purged: true,
+                index_state: outcome.index_state.as_str().to_owned(),
+                operation_id: outcome.operation_id.clone(),
+            },
+            None,
+        ));
+    }
     let outcome = state
         .vault
         .trash_file(

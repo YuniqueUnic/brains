@@ -1,4 +1,4 @@
-import { ArchiveRestore, FileText, LoaderCircle, Trash2 } from "lucide-react";
+import { ArchiveRestore, FileText, LoaderCircle, Trash2, Trash2 as TrashIcon } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { Entry } from "../../api/client";
 import { cn } from "../../lib/utils";
@@ -13,17 +13,25 @@ import { Button } from "../ui/button";
 export function TrashList({
   items,
   selectedPath,
+  checked,
   onSelect,
+  onToggleSelect,
   onRestore,
   onRestoreAll,
+  onPurgeChecked,
   restoringAll,
+  purging,
 }: {
   items: Entry[];
   selectedPath: string | null;
+  checked: Set<string>;
   onSelect: (path: string) => void;
-  onRestore: (path: string) => void;
+  onToggleSelect: (path: string) => void;
+  onRestore: (paths: string[]) => void;
   onRestoreAll: () => void;
+  onPurgeChecked: (paths: string[]) => void;
   restoringAll: boolean;
+  purging: boolean;
 }) {
   const { t } = useTranslation("workspace");
   const sorted = [...items].sort((a, b) =>
@@ -33,23 +41,55 @@ export function TrashList({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-8 shrink-0 items-center gap-1 px-2">
-        <span className="min-w-0 flex-1 truncate text-[11px] text-faint">
-          {t("trashHintShort")}
-        </span>
-        <Button
-          variant="ghost"
-          size="iconSm"
-          aria-label={t("restoreAll")}
-          title={t("restoreAll")}
-          disabled={items.length === 0 || restoringAll}
-          onClick={onRestoreAll}
-        >
-          {restoringAll ? (
-            <LoaderCircle className="animate-spin" />
-          ) : (
-            <ArchiveRestore />
-          )}
-        </Button>
+        {checked.size > 0 ? (
+          <>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+              {t("selectedCount", { count: checked.size })}
+            </span>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              aria-label={t("restoreSelected")}
+              title={t("restoreSelected")}
+              disabled={purging || restoringAll}
+              onClick={() => onRestore([...checked])}
+            >
+              <ArchiveRestore />
+            </Button>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              aria-label={t("purgeSelected")}
+              title={t("purgeSelected")}
+              disabled={purging}
+              data-testid="purge-checked"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => onPurgeChecked([...checked])}
+            >
+              {purging ? <LoaderCircle className="animate-spin" /> : <TrashIcon />}
+            </Button>
+          </>
+        ) : (
+          <>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-faint">
+              {t("trashHintShort")}
+            </span>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              aria-label={t("restoreAll")}
+              title={t("restoreAll")}
+              disabled={items.length === 0 || restoringAll}
+              onClick={onRestoreAll}
+            >
+              {restoringAll ? (
+                <LoaderCircle className="animate-spin" />
+              ) : (
+                <ArchiveRestore />
+              )}
+            </Button>
+          </>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-1" data-testid="file-list">
         {items.length === 0 ? (
@@ -73,6 +113,14 @@ export function TrashList({
                       : "hover:bg-muted",
                   )}
                 >
+                  <input
+                    type="checkbox"
+                    aria-label={t("selectOne", { path: item.path })}
+                    className="size-3.5 shrink-0 accent-[var(--primary)]"
+                    checked={checked.has(item.path)}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => onToggleSelect(item.path)}
+                  />
                   <FileText className="size-4 shrink-0 stroke-[1.5] text-faint" />
                   <span className="file-path min-w-0 flex-1 truncate">{item.path}</span>
                   <button
@@ -80,7 +128,7 @@ export function TrashList({
                     aria-label={t("restoreAria", { path: item.path })}
                     onClick={(event) => {
                       event.stopPropagation();
-                      onRestore(item.path);
+                      onRestore([item.path]);
                     }}
                   >
                     <ArchiveRestore className="size-3 stroke-[1.5]" />

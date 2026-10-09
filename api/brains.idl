@@ -257,9 +257,14 @@ interface Files {
     );
 
     // Conditional delete: writes a tombstone revision. 412 on stale base.
+    // With purge=true the tombstone itself is removed permanently (owner
+    // decision 2026-10-08): the entry vanishes from every listing, the
+    // history chain becomes unreachable, and the answer is PurgeResult.
+    // 409 when the path is still live; 412 on stale base.
     @delete(path = "/file")
     MutationResult delete_file(
         @query string path,
+        @query @optional boolean purge,
         @header @rename("If-Match") @optional string if_match,
         @header @rename("X-Operation-ID") @optional string operation_id
     );

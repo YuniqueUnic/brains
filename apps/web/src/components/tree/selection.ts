@@ -75,3 +75,22 @@ export function collapseToRoots<T extends { path: string; isFolder: boolean }>(
     });
   });
 }
+
+/**
+ * A batch target is either a file or a folder path (with or without the
+ * trailing slash the context menus pass): folders expand to every file
+ * beneath them so tombstone calls always address real entries.
+ */
+export function expandEntry(
+  files: { path: string }[],
+  folders: Set<string>,
+  raw: string,
+): string[] {
+  const path = raw.replace(/\/+$/, "");
+  const self = files.some((entry) => entry.path === path) ? [path] : [];
+  if (!folders.has(path)) return self.length > 0 ? self : [raw];
+  return [
+    ...self,
+    ...files.filter((entry) => entry.path.startsWith(`${path}/`)).map((entry) => entry.path),
+  ];
+}

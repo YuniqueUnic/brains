@@ -232,6 +232,14 @@ impl brains_ports::HeadStore for FlakyNthCasHeads {
         self.inner.cas(path, expected, new_head).await
     }
 
+    async fn remove(
+        &self,
+        path: &VaultPath,
+        expected: &ExpectedHead,
+    ) -> brains_domain::DomainResult<CasOutcome> {
+        self.inner.remove(path, expected).await
+    }
+
     async fn list(
         &self,
         prefix: Option<&str>,

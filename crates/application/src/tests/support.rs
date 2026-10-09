@@ -86,6 +86,10 @@ impl IndexStore for FlakyIndex {
         self.inner.upsert(projection).await
     }
 
+    async fn remove_path(&self, path: &str) -> brains_domain::DomainResult<()> {
+        self.inner.remove_path(path).await
+    }
+
     async fn scan_literal(
         &self,
         _lower: &str,

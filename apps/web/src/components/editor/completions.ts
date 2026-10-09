@@ -18,7 +18,9 @@ export function fileCompletions(
   return (context) => {
     const line = context.state.doc.lineAt(context.pos);
     const before = line.text.slice(0, context.pos - line.from);
-    const wiki = /\[\[([^[\\]]*)$/.exec(before);
+    // The class must exclude BOTH bracket kinds; the old `[^[\\]]` parsed as
+    // "not [ or backslash, then a literal ]" and never matched `[[` at all.
+    const wiki = /\[\[([^\[\]]*)$/.exec(before);
     if (wiki) {
       return {
         from: context.pos - wiki[1].length,
@@ -31,7 +33,7 @@ export function fileCompletions(
             type: "file",
           };
         }),
-        validFor: /^[^[\]]*$/,
+        validFor: /^[^\[\]]*$/,
       };
     }
     const link = /(!?\[[^\]]*\]\()([^)]*)$/.exec(before);

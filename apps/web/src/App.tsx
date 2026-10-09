@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Toaster } from "sonner";
 import { Tooltip as TooltipPrimitive } from "@base-ui-components/react/tooltip";
 import { api, ApiError, type SessionInfo } from "./api/client";
+import { UiSettingsProvider } from "./components/shell/settings-dialog";
 import Login from "./views/Login";
 import Workspace from "./views/Workspace";
 
@@ -31,12 +32,14 @@ export default function App() {
   }
   if (state.kind === "anonymous") {
     return (
-      <TooltipPrimitive.Provider delay={400}>
-        <Login
-          error={state.error}
-          onLogin={(session) => setState({ kind: "ready", session })}
-        />
-      </TooltipPrimitive.Provider>
+      <UiSettingsProvider>
+        <TooltipPrimitive.Provider delay={400}>
+          <Login
+            error={state.error}
+            onLogin={(session) => setState({ kind: "ready", session })}
+          />
+        </TooltipPrimitive.Provider>
+      </UiSettingsProvider>
     );
   }
 
@@ -53,20 +56,22 @@ export default function App() {
   };
 
   return (
-    <TooltipPrimitive.Provider delay={400}>
-      <Workspace session={state.session} onLogout={logout} />
-      <Toaster
-        position="bottom-center"
-        toastOptions={{
-          style: {
-            background: "var(--card)",
-            color: "var(--foreground)",
-            border: "1px solid var(--border)",
-            borderRadius: "8px",
-            fontSize: "12.5px",
-          },
-        }}
-      />
-    </TooltipPrimitive.Provider>
+    <UiSettingsProvider>
+      <TooltipPrimitive.Provider delay={400}>
+        <Workspace session={state.session} onLogout={logout} />
+        <Toaster
+          position="bottom-center"
+          toastOptions={{
+            style: {
+              background: "var(--card)",
+              color: "var(--foreground)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              fontSize: "12.5px",
+            },
+          }}
+        />
+      </TooltipPrimitive.Provider>
+    </UiSettingsProvider>
   );
 }

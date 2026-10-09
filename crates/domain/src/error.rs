@@ -19,6 +19,8 @@ pub enum DomainError {
     NotFound { path: String },
     /// 410 TRASHED — the path exists as a tombstone.
     Trashed { path: String, revision: String },
+    /// 409 PURGE_REQUIRES_TRASHED — permanent delete of a live path.
+    PurgeLive { path: String },
     /// 409 EDIT_MISMATCH — a patch edit did not match exactly once.
     EditMismatch { path: String, detail: String },
     /// 412 REVISION_CONFLICT — the conditional version moved or was expected absent.
@@ -50,6 +52,7 @@ impl DomainError {
             Self::Forbidden(_) => "FORBIDDEN",
             Self::NotFound { .. } => "NOT_FOUND",
             Self::Trashed { .. } => "TRASHED",
+            Self::PurgeLive { .. } => "PURGE_REQUIRES_TRASHED",
             Self::EditMismatch { .. } => "EDIT_MISMATCH",
             Self::RevisionConflict { .. } => "REVISION_CONFLICT",
             Self::TooLarge { .. } => "TOO_LARGE",
@@ -67,6 +70,7 @@ impl DomainError {
             Self::ChecksumMismatch { path }
             | Self::NotFound { path }
             | Self::Trashed { path, .. }
+            | Self::PurgeLive { path }
             | Self::EditMismatch { path, .. }
             | Self::RevisionConflict { path, .. } => Some(path),
             _ => None,
@@ -99,6 +103,9 @@ impl fmt::Display for DomainError {
             Self::NotFound { path } => write!(f, "not found: {path}"),
             Self::Trashed { path, revision } => {
                 write!(f, "trashed: {path} (revision {revision})")
+            }
+            Self::PurgeLive { path } => {
+                write!(f, "purge requires a trashed path: {path} is live")
             }
             Self::EditMismatch { detail, .. } => write!(f, "edit mismatch: {detail}"),
             Self::RevisionConflict {

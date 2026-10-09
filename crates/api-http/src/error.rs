@@ -14,7 +14,7 @@ pub fn status_for(error: &DomainError) -> StatusCode {
         DomainError::Unauthenticated => StatusCode::UNAUTHORIZED,
         DomainError::Forbidden(_) => StatusCode::FORBIDDEN,
         DomainError::NotFound { .. } => StatusCode::NOT_FOUND,
-        DomainError::EditMismatch { .. } => StatusCode::CONFLICT,
+        DomainError::EditMismatch { .. } | DomainError::PurgeLive { .. } => StatusCode::CONFLICT,
         DomainError::Trashed { .. } => StatusCode::GONE,
         DomainError::RevisionConflict { .. } => StatusCode::PRECONDITION_FAILED,
         DomainError::TooLarge { .. } => StatusCode::PAYLOAD_TOO_LARGE,

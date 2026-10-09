@@ -37,7 +37,7 @@ export function HoverPreview({
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Positioner side={side} sideOffset={10} align="start">
           <TooltipPrimitive.Popup
-            className="z-50 max-h-[320px] w-[min(360px,80vw)] overflow-hidden rounded-[10px] border bg-card shadow-overlay"
+            className="z-50 max-h-[320px] w-[min(360px,80vw)] overflow-hidden rounded-[10px] border bg-card shadow-overlay [zoom:var(--ui-zoom,1)]"
             role="tooltip"
             data-testid={testId}
             onClick={onOpen}

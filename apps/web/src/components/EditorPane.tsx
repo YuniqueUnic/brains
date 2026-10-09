@@ -1,47 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compartment, EditorState as CodeMirrorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import {
-  autocompletion,
-} from "@codemirror/autocomplete";
-import { tags } from "@lezer/highlight";
-import {
-  defaultKeymap,
-  history,
-  historyKeymap,
-  redo,
-  redoDepth,
-  undo,
-  undoDepth,
-} from "@codemirror/commands";
-import {
-  highlightSelectionMatches,
-  openSearchPanel,
-  search,
-  searchKeymap,
-} from "@codemirror/search";
-import { MergeView, unifiedMergeView } from "@codemirror/merge";
+import { EditorView, lineNumbers } from "@codemirror/view";
+import { autocompletion } from "@codemirror/autocomplete";
+import { unifiedMergeView } from "@codemirror/merge";
+import { openSearchPanel } from "@codemirror/search";
+import { redo, undo } from "@codemirror/commands";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { createFindPanel, type FindPanelLabels } from "./editor/find-panel";
-import { fileCompletions, type CompletionFile } from "./editor/completions";
-import { referenceHover } from "./editor/reference-hover";
-import { Toggle } from "@base-ui-components/react/toggle";
-import { ToggleGroup } from "@base-ui-components/react/toggle-group";
-import { Switch } from "@base-ui-components/react/switch";
-import { Popover } from "@base-ui-components/react/popover";
-import { Settings2, Send } from "lucide-react";
 import {
   CopyPlus,
   Eye,
   FileDiff,
-  GitMerge,
   Info,
   MoreHorizontal,
   Redo2,
   Search,
+  Send,
   Sparkles,
   SquarePen,
   Trash2,
@@ -49,11 +23,13 @@ import {
   WrapText,
 } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
+import { Toggle } from "@base-ui-components/react/toggle";
+import { ToggleGroup } from "@base-ui-components/react/toggle-group";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
-import { SaveIndicator, type SaveTone } from "./SaveIndicator";
+import { SaveIndicator } from "./SaveIndicator";
 import { Tooltip } from "./ui/tooltip";
 import { menuItemClass, menuPopupClass, MenuShortcut } from "./ui/menu";
 import { SliderRow } from "./ui/slider-row";
@@ -66,216 +42,42 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { cn } from "../lib/utils";
+import { fileCompletions, type CompletionFile } from "./editor/completions";
+import { referenceHover } from "./editor/reference-hover";
+import { completionPreview } from "./editor/completion-preview";
+import { MarkdownToolbar } from "./editor/markdown-toolbar";
+import { ConflictView } from "./editor/conflict-view";
+import { EditorSettingsPopover } from "./editor/editor-settings-popover";
+import {
+  baseExtensions,
+  currentDoc,
+  docKey,
+  findPanelLabels,
+  freshEditorState,
+  statusLabel,
+  statusTone,
+  type EditorState,
+} from "./editor/editor-core";
+import {
+  clearDraft,
+  DRAFT_LIMIT,
+  flushDrafts,
+  loadEditorSettings,
+  readDraft,
+  saveEditorSettings,
+  writeDraft,
+  type EditorSettings,
+} from "./editor/editor-settings";
 
 /*
- * Editor (DESIGN.md §26-34): the document is the star — 860px measure (CSS),
- * document typography, restrained markdown highlighting. Chrome is one quiet
- * toolbar: undo/redo, find, diff, publish; everything else lives in ⋯.
- * Draft/publish model: typing keeps a LOCAL draft (debounced localStorage,
- * crash-safe); ⌘S stashes it; only 发布 (button / ⌘⏎) writes a new revision.
- * State machine (design §13.2): loading → clean → dirty → saving
- * → clean | conflict | error.
+ * Editor pane (DESIGN.md §26-34): the document is the star. One quiet
+ * toolbar (undo/redo, find, diff, publish), an optional markdown formatting
+ * row under it, and the ⋯ menu for the rest. Shared machinery lives in
+ * editor/editor-core (state machine, extensions) and editor/editor-settings
+ * (preferences, crash-safe drafts); the conflict merge view is
+ * editor/conflict-view. Draft/publish model: typing keeps a LOCAL draft;
+ * ⌘S stashes it; only 发布 (button / ⌘⏎) writes a new revision.
  */
-export type EditorState =
-  | { kind: "empty" }
-  | { kind: "loading"; path: string }
-  | {
-      kind: "clean" | "dirty" | "error";
-      path: string;
-      text: string;
-      baseText: string;
-      baseRevision: string;
-      message?: string;
-    }
-  | {
-      kind: "saving";
-      path: string;
-      /** Keystrokes during the flight buffer here; the closure's `current.text` is what was sent. */
-      text: string;
-      baseText: string;
-      baseRevision: string;
-      operationId: string;
-    }
-  | {
-      kind: "conflict";
-      path: string;
-      localText: string;
-      baseText: string;
-      remoteRevision: string;
-      remoteText: string;
-      /** Latest failure inside the conflict view (kept local, network…). */
-      notice?: string;
-    };
-
-function freshEditorState(path: string, text: string, baseRevision: string): EditorState {
-  return { kind: "clean", path, text, baseText: text, baseRevision };
-}
-
-/* Editor preferences (fonts are independent of the UI font): persisted,
- * applied through compartments so the view never rebuilds. */
-export interface EditorSettings {
-  lineNumbers: boolean;
-  wrap: boolean;
-  font: "sans" | "serif" | "mono";
-  /** Percent, 100 = the 15px document base. */
-  scale: number;
-}
-
-const EDITOR_DEFAULTS: EditorSettings = { lineNumbers: false, wrap: true, font: "sans", scale: 100 };
-const EDITOR_KEY = "brains-editor";
-
-function loadEditorSettings(): EditorSettings {
-  try {
-    const raw = localStorage.getItem(EDITOR_KEY);
-    if (raw) return { ...EDITOR_DEFAULTS, ...(JSON.parse(raw) as Partial<EditorSettings>) };
-  } catch {
-    /* ignore malformed state */
-  }
-  return EDITOR_DEFAULTS;
-}
-
-function saveEditorSettings(settings: EditorSettings) {
-  try {
-    localStorage.setItem(EDITOR_KEY, JSON.stringify(settings));
-  } catch {
-    /* best-effort */
-  }
-}
-
-/* --- Unsaved-buffer drafts (crash/refresh safety) ------------------------- */
-/* Every dirty buffer is debounce-persisted to localStorage keyed by path;
- * reopening the file adopts the draft as dirty content with a discard
- * action. Cleared when the buffer returns to clean (save, revert, take
- * remote). Best-effort only — quota errors are swallowed. */
-
-const DRAFT_PREFIX = "brains-draft:";
-const DRAFT_LIMIT = 500_000;
-
-interface EditorDraft {
-  text: string;
-  at: number;
-}
-
-const draftPending = new Map<string, { text: string; timer: number }>();
-
-function writeDraft(path: string, text: string) {
-  const pending = draftPending.get(path);
-  if (pending) window.clearTimeout(pending.timer);
-  const timer = window.setTimeout(() => {
-    draftPending.delete(path);
-    try {
-      if (text.length <= DRAFT_LIMIT) {
-        localStorage.setItem(
-          DRAFT_PREFIX + path,
-          JSON.stringify({ text, at: Date.now() } satisfies EditorDraft),
-        );
-      }
-    } catch {
-      /* quota or unavailable — drafts are best-effort */
-    }
-  }, 600);
-  draftPending.set(path, { text, timer });
-}
-
-function clearDraft(path: string) {
-  const pending = draftPending.get(path);
-  if (pending) {
-    window.clearTimeout(pending.timer);
-    draftPending.delete(path);
-  }
-  try {
-    localStorage.removeItem(DRAFT_PREFIX + path);
-  } catch {
-    /* ignore */
-  }
-}
-
-function readDraft(path: string): EditorDraft | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_PREFIX + path);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as EditorDraft;
-    return typeof parsed?.text === "string" && typeof parsed?.at === "number" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Flush debounce-pending drafts synchronously (unload / tab hide). */
-function flushDrafts() {
-  for (const [path, pending] of draftPending) {
-    window.clearTimeout(pending.timer);
-    try {
-      if (pending.text.length <= DRAFT_LIMIT) {
-        localStorage.setItem(
-          DRAFT_PREFIX + path,
-          JSON.stringify({ text: pending.text, at: Date.now() } satisfies EditorDraft),
-        );
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  draftPending.clear();
-}
-
-/* Markdown highlighting (DESIGN.md §31): near-monochrome, quiet accents. */
-const markdownHighlights = HighlightStyle.define([
-  { tag: tags.heading1, fontWeight: "650", fontSize: "1.7em", lineHeight: "1.4" },
-  { tag: tags.heading2, fontWeight: "630", fontSize: "1.35em", lineHeight: "1.45" },
-  { tag: tags.heading3, fontWeight: "600", fontSize: "1.12em" },
-  { tag: tags.heading4, fontWeight: "600" },
-  { tag: tags.strong, fontWeight: "620" },
-  { tag: tags.emphasis, fontStyle: "italic" },
-  { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--muted-foreground)" },
-  { tag: tags.link, color: "var(--primary)", textDecoration: "underline" },
-  { tag: tags.url, color: "var(--muted-foreground)" },
-  { tag: tags.monospace, class: "cm-md-code" },
-  { tag: tags.quote, color: "var(--muted-foreground)", fontStyle: "italic" },
-  { tag: tags.processingInstruction, color: "var(--faint-foreground)" },
-  { tag: tags.meta, color: "var(--faint-foreground)" },
-  { tag: [tags.keyword, tags.atom, tags.bool], color: "var(--primary)" },
-  { tag: tags.comment, color: "var(--faint-foreground)" },
-  { tag: [tags.string, tags.number], color: "color-mix(in srgb, var(--foreground) 78%, var(--primary))" },
-]);
-
-function findPanelLabels(t: (key: string) => string): FindPanelLabels {
-  return {
-    find: t("findPlaceholder"),
-    replace: t("replacePlaceholder"),
-    replaceButton: t("replaceAction"),
-    replaceAllButton: t("replaceAllAction"),
-    previous: t("findPrevious"),
-    next: t("findNext"),
-    close: t("close"),
-    caseSensitive: t("matchCase"),
-    useRegex: t("useRegex"),
-    toggleReplace: t("toggleReplace"),
-  };
-}
-
-function baseExtensions(
-  onDocChange: (text: string) => void,
-  onHistoryChange: (canUndo: boolean, canRedo: boolean) => void,
-  findLabels: () => FindPanelLabels,
-) {
-  return [
-    markdown({ base: markdownLanguage }),
-    syntaxHighlighting(markdownHighlights),
-    // Wrapping is owned by wrapComp (the preference must be able to turn it
-    // off) — no static EditorView.lineWrapping here.
-    history(),
-    search({ top: true, createPanel: (view) => createFindPanel(findLabels())(view) }),
-    highlightSelectionMatches(),
-    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-    EditorView.updateListener.of((update) => {
-      if (update.docChanged) onDocChange(update.state.doc.toString());
-      onHistoryChange?.(undoDepth(update.state) > 0, redoDepth(update.state) > 0);
-    }),
-  ];
-}
-
 export default function EditorPane({
   state,
   onChange,
@@ -307,6 +109,7 @@ export default function EditorPane({
   const viewRef = useRef<EditorView | null>(null);
   const stateRef = useRef<EditorState>(state);
   stateRef.current = state;
+  const [viewInstance, setViewInstance] = useState<EditorView | null>(null);
   const [diffOpen, setDiffOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"source" | "preview">("source");
   const [undoPossible, setUndoPossible] = useState(false);
@@ -324,6 +127,7 @@ export default function EditorPane({
   const lineNumComp = useRef(new Compartment());
   const wrapComp = useRef(new Compartment());
   const completionsComp = useRef(new Compartment());
+  const previewLabels = { loading: t("previewLoading"), unavailable: t("previewUnavailable") };
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -355,6 +159,13 @@ export default function EditorPane({
       setRedoPossible((prev) => (prev === canRedo ? prev : canRedo));
     };
     const initialSettings = loadEditorSettings();
+    const completionExtensions = completions
+      ? [
+          autocompletion({ override: [fileCompletions(completions)] }),
+          referenceHover(completions, onOpenReference, previewLabels),
+          completionPreview(onOpenReference, previewLabels),
+        ]
+      : [];
     const view = new EditorView({
       parent: hostRef.current,
       state: CodeMirrorState.create({
@@ -366,21 +177,12 @@ export default function EditorPane({
           diffCompartment.current.of([]),
           lineNumComp.current.of(initialSettings.lineNumbers ? lineNumbers() : []),
           wrapComp.current.of(initialSettings.wrap ? EditorView.lineWrapping : []),
-          completionsComp.current.of(
-            completions
-              ? [
-                  autocompletion({ override: [fileCompletions(completions)] }),
-                  referenceHover(completions, onOpenReference, {
-                    loading: t("previewLoading"),
-                    unavailable: t("previewUnavailable"),
-                  }),
-                ]
-              : [],
-          ),
+          completionsComp.current.of(completionExtensions),
         ],
       }),
     });
     viewRef.current = view;
+    setViewInstance(view);
     // Unsaved buffers survive tab close and crashes through their drafts.
     const flush = () => flushDrafts();
     window.addEventListener("beforeunload", flush);
@@ -540,15 +342,14 @@ export default function EditorPane({
           completions
             ? [
                 autocompletion({ override: [fileCompletions(completions)] }),
-                referenceHover(completions, onOpenReference, {
-                  loading: t("previewLoading"),
-                  unavailable: t("previewUnavailable"),
-                }),
+                referenceHover(completions, onOpenReference, previewLabels),
+                completionPreview(onOpenReference, previewLabels),
               ]
             : [],
         ),
       ],
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.lineNumbers, settings.wrap, completions, onOpenReference, t]);
 
   /**
@@ -869,6 +670,14 @@ export default function EditorPane({
         )}
       </div>
 
+      {!inConflict && state.kind !== "empty" && viewMode === "source" && (
+        <MarkdownToolbar
+          view={viewInstance}
+          open={settings.toolbar}
+          onToggle={() => updateSettings({ toolbar: !settings.toolbar })}
+        />
+      )}
+
       <div
         className="relative min-h-0 flex-1"
         data-editor-font={settings.font}
@@ -976,387 +785,4 @@ export default function EditorPane({
       </Dialog>
     </div>
   );
-}
-
-/**
- * Editor preferences popover (line numbers, wrap, font family, scale).
- * The editor font is independent of the UI font.
- */
-function EditorSettingsPopover({
-  settings,
-  onChange,
-}: {
-  settings: EditorSettings;
-  onChange: (patch: Partial<EditorSettings>) => void;
-}) {
-  const { t } = useTranslation("editor");
-  return (
-    <Popover.Root>
-      <Popover.Trigger
-        render={<Button size="icon" aria-label={t("settingsLabel")} data-testid="editor-settings" />}
-      >
-        <Settings2 />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner align="end" sideOffset={6}>
-          <Popover.Popup className="z-50 w-[248px] rounded-[10px] border bg-card p-3 text-[12.5px] shadow-menu overlay-in">
-            <div className="flex items-center justify-between py-1.5">
-              <span>{t("lineNumbersLabel")}</span>
-              <Switch.Root
-                checked={settings.lineNumbers}
-                onCheckedChange={(checked) => onChange({ lineNumbers: checked === true })}
-                className="relative h-5 w-8 cursor-pointer rounded-full bg-muted transition-colors data-[checked]:bg-primary"
-              >
-                <Switch.Thumb className="absolute left-0.5 top-0.5 size-4 rounded-full bg-card shadow transition-transform data-[checked]:translate-x-3" />
-              </Switch.Root>
-            </div>
-            <div className="flex items-center justify-between py-1.5">
-              <span>{t("wrapLabel")}</span>
-              <Switch.Root
-                checked={settings.wrap}
-                onCheckedChange={(checked) => onChange({ wrap: checked === true })}
-                className="relative h-5 w-8 cursor-pointer rounded-full bg-muted transition-colors data-[checked]:bg-primary"
-              >
-                <Switch.Thumb className="absolute left-0.5 top-0.5 size-4 rounded-full bg-card shadow transition-transform data-[checked]:translate-x-3" />
-              </Switch.Root>
-            </div>
-            <div className="flex items-center justify-between py-1.5">
-              <span>{t("fontLabel")}</span>
-              <ToggleGroup
-                value={[settings.font]}
-                onValueChange={(groupValue) =>
-                  onChange({ font: (groupValue[groupValue.length - 1] ?? "sans") as EditorSettings["font"] })
-                }
-                className="flex items-center gap-0.5 rounded-md border p-0.5"
-              >
-                {(
-                  [
-                    ["sans", t("fontSans")],
-                    ["serif", t("fontSerif")],
-                    ["mono", t("fontMono")],
-                  ] as const
-                ).map(([value, label]) => (
-                  <Toggle
-                    key={value}
-                    value={value}
-                    aria-label={label}
-                    className="cursor-pointer rounded px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-                  >
-                    {label}
-                  </Toggle>
-                ))}
-              </ToggleGroup>
-            </div>
-            <div className="py-1.5">
-              <SliderRow
-                label={t("scaleLabel")}
-                value={settings.scale}
-                min={80}
-                max={160}
-                step={5}
-                suffix="%"
-                resetLabel={t("scaleReset")}
-                onChange={(scale) => onChange({ scale })}
-                onReset={() => onChange({ scale: 100 })}
-              />
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}
-
-type ConflictMode = "split" | "inline";
-
-/**
- * Conflict resolution with VSCode-style diff views: "split" shows remote and
- * local side-by-side with synced chunk highlights; "inline" shows the local
- * buffer against the remote original with per-chunk accept/reject. The merge
- * editor owns the buffer while the conflict is open — text typed here flows
- * back into `localText` through the same state machine.
- */
-function ConflictView({
-  state,
-  stateRef,
-  onChange,
-  onAuthLost,
-}: {
-  state: Extract<EditorState, { kind: "conflict" }>;
-  stateRef: React.RefObject<EditorState>;
-  onChange: (next: EditorState) => void;
-  onAuthLost?: () => void;
-}) {
-  const { t } = useTranslation("editor");
-  const [mode, setMode] = useState<ConflictMode>("split");
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-
-  // True while THIS conflict still owns the editor (the human may have
-  // opened another file while the request was in flight).
-  const stillMine = () =>
-    stateRef.current.kind === "conflict" &&
-    stateRef.current.path === state.path &&
-    stateRef.current.remoteRevision === state.remoteRevision;
-
-  useEffect(() => {
-    const parent = hostRef.current;
-    if (!parent) return;
-    const onDocChange = (text: string) => {
-      const current = stateRef.current;
-      if (
-        current.kind === "conflict" &&
-        current.path === state.path &&
-        current.remoteRevision === state.remoteRevision &&
-        current.localText !== text
-      ) {
-        onChangeRef.current({ ...current, localText: text });
-      }
-    };
-    if (mode === "inline") {
-      const view = new EditorView({
-        parent,
-        state: CodeMirrorState.create({
-          doc: state.localText,
-          extensions: [
-            ...baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
-            EditorView.lineWrapping,
-            unifiedMergeView({
-              original: state.remoteText,
-              mergeControls: true,
-              highlightChanges: true,
-              gutter: true,
-              allowInlineDiffs: true,
-              collapseUnchanged: { margin: 3, minSize: 8 },
-            }),
-          ],
-        }),
-      });
-      return () => view.destroy();
-    }
-    const merge = new MergeView({
-      a: {
-        doc: state.remoteText,
-        extensions: [
-          markdown({ base: markdownLanguage }),
-          EditorView.lineWrapping,
-          EditorView.editable.of(false),
-        ],
-      },
-      b: {
-        doc: state.localText,
-        extensions: [
-          ...baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
-          EditorView.lineWrapping,
-        ],
-      },
-      parent,
-      highlightChanges: true,
-      gutter: true,
-      collapseUnchanged: { margin: 3, minSize: 8 },
-    });
-    return () => merge.destroy();
-    // Rebuild only on mode or conflict identity change: the merge editors
-    // own the buffer text in between (prop pushes would clobber typing).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, state.path, state.remoteRevision]);
-
-  const saveWithRemoteBase = async () => {
-    const current = stateRef.current;
-    const localText = current.kind === "conflict" ? current.localText : state.localText;
-    try {
-      const result = await api.saveText(state.path, localText, {
-        mode: "update",
-        baseRevision: state.remoteRevision,
-      });
-      if (!stillMine()) return;
-      onChange(freshEditorState(state.path, localText, result.revision));
-    } catch (error) {
-      if (!stillMine()) return;
-      if (error instanceof ApiError && error.status === 401) {
-        onAuthLost?.();
-        return;
-      }
-      if (error instanceof ApiError && error.status === 412) {
-        const nextRevision = error.currentRevision ?? state.remoteRevision;
-        let remoteText = state.remoteText;
-        let notice: string | undefined;
-        try {
-          remoteText = (await api.readText(state.path)).text;
-        } catch {
-          // Never pair a NEW revision with the STALE text the human compared:
-          // keep the old pair together and say why (design §13.2).
-          notice = t("conflictReReadFailed");
-        }
-        onChange({
-          ...state,
-          remoteRevision: notice ? state.remoteRevision : nextRevision,
-          remoteText,
-          notice,
-        });
-        return;
-      }
-      onChange({
-        ...state,
-        notice: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
-
-  const takeRemote = () => {
-    onChange({
-      kind: "clean",
-      path: state.path,
-      text: state.remoteText,
-      baseText: state.remoteText,
-      baseRevision: state.remoteRevision,
-    });
-  };
-
-  const remoteUsable = state.remoteRevision !== "(unknown)";
-
-  return (
-    <div
-      className="absolute inset-0 z-10 flex flex-col gap-1.5 border-b"
-      data-testid="conflict-view"
-      style={{
-        borderColor: "color-mix(in srgb, var(--warning) 30%, var(--border))",
-        backgroundColor: "color-mix(in srgb, var(--warning) 6%, var(--card))",
-      }}
-    >
-      <div className="flex items-start gap-2 px-3 pt-2.5">
-        <GitMerge className="mt-0.5 size-4 shrink-0 stroke-[1.5]" style={{ color: "var(--warning)" }} />
-        <div className="min-w-0 flex-1">
-          <p className="text-[12.5px] font-semibold">{t("conflictTitle")}</p>
-          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-            {t("conflictDesc", { revision: state.remoteRevision.slice(0, 8) })}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5 rounded-md border bg-card p-0.5">
-          <ModeChip active={mode === "split"} onClick={() => setMode("split")}>
-            {t("conflictModeSplit")}
-          </ModeChip>
-          <ModeChip active={mode === "inline"} onClick={() => setMode("inline")}>
-            {t("conflictModeInline")}
-          </ModeChip>
-        </div>
-      </div>
-      {state.notice && (
-        <p
-          className="mx-3 rounded-md px-2.5 py-1.5 text-xs"
-          role="alert"
-          style={{
-            backgroundColor: "color-mix(in srgb, var(--destructive) 8%, transparent)",
-            color: "color-mix(in srgb, var(--destructive) 80%, var(--foreground))",
-          }}
-        >
-          {state.notice}
-        </p>
-      )}
-      <div className="min-h-0 flex-1 px-3">
-        <div
-          ref={hostRef}
-          className="h-full overflow-hidden rounded-md border bg-card [&_.cm-editor]:h-full"
-        />
-      </div>
-      <div className="flex shrink-0 items-center justify-end gap-2 px-3 py-2">
-        <Button variant="secondary" data-testid="conflict-keep-local" onClick={() => void saveWithRemoteBase()}>
-          {t("conflictKeepLocal")}
-        </Button>
-        <Button
-          variant="outline"
-          data-testid="conflict-take-remote"
-          onClick={takeRemote}
-          disabled={!remoteUsable}
-          title={remoteUsable ? undefined : t("conflictRemoteUnreadable")}
-        >
-          {t("conflictTakeRemote")}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function ModeChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "cursor-pointer rounded px-2 py-1 text-[10.5px] font-medium transition-colors",
-        active
-          ? "bg-primary/12 text-primary ring-1 ring-primary/30"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-/** Traffic-light tone for the publish capsule; labels stay the e2e contract. */
-function statusTone(state: EditorState): SaveTone {
-  switch (state.kind) {
-    case "empty":
-    case "loading":
-      return "neutral";
-    case "clean":
-      return "saved";
-    case "saving":
-    case "dirty":
-      return "pending";
-    case "conflict":
-    case "error":
-      return "error";
-  }
-}
-
-/** Draft/publish model: clean = everything published; dirty = local draft. */
-function statusLabel(state: EditorState, t: (key: string) => string): string {
-  switch (state.kind) {
-    case "empty":
-      return t("statusEmpty");
-    case "loading":
-      return t("statusLoading");
-    case "clean":
-      return t("statusSaved");
-    case "dirty":
-      return t("statusDirty");
-    case "saving":
-      return t("statusSaving");
-    case "conflict":
-      return t("statusConflict");
-    case "error":
-      return state.message ?? t("statusFailed");
-  }
-}
-
-function currentDoc(state: EditorState): string {
-  if (state.kind === "empty" || state.kind === "loading") return "";
-  if (state.kind === "conflict") return state.localText;
-  return state.text;
-}
-
-function docKey(state: EditorState): string {
-  // Re-sync the CodeMirror doc when the underlying version identity changes
-  // (file switch, conflict resolution, restore) but not on every keystroke.
-  switch (state.kind) {
-    case "empty":
-      return "empty";
-    case "loading":
-      return `loading:${state.path}`;
-    case "conflict":
-      return `conflict:${state.path}:${state.remoteRevision}`;
-    default:
-      return `edit:${state.path}:${state.baseRevision}`;
-  }
 }
