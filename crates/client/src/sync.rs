@@ -135,6 +135,12 @@ pub struct SyncReport {
 pub struct SyncFailure {
     pub path: String,
     pub error: ClientError,
+    pub stage: SyncFailureStage,
+}
+
+pub enum SyncFailureStage {
+    Reconcile,
+    Checkpoint,
 }
 
 pub enum Resolution<'a> {
@@ -196,7 +202,11 @@ pub fn synchronize(
         let result = match reconcile_path(endpoints, &path, current, base.as_ref(), dry_run) {
             Ok(result) => result,
             Err(error) => {
-                failure = Some(SyncFailure { path, error });
+                failure = Some(SyncFailure {
+                    path,
+                    error,
+                    stage: SyncFailureStage::Reconcile,
+                });
                 break;
             }
         };
@@ -219,12 +229,17 @@ pub fn synchronize(
             }),
         }
         if let Some(pair) = result.pair {
-            state.files.insert(path, pair);
+            state.files.insert(path.clone(), pair);
         } else if result.forget {
             state.files.remove(&path);
         }
-        if !dry_run {
-            checkpoint(&state)?;
+        if !dry_run && let Err(error) = checkpoint(&state) {
+            failure = Some(SyncFailure {
+                path,
+                error,
+                stage: SyncFailureStage::Checkpoint,
+            });
+            break;
         }
     }
     Ok(SyncReport {

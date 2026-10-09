@@ -454,6 +454,12 @@ export default function Workspace({
   const propertiesPath = panel.type === "properties" && !panel.follow ? panel.path : contextPath;
 
   const [mobileTab, setMobileTab, isMobile] = useMobileTabSync(editor, mode, propertiesOpen);
+  const dismissProperties = useCallback(() => {
+    closeProperties();
+    if (isMobile && mobileTab === "info") {
+      setMobileTab(mode === "workspace" && activeEditorPath ? "editor" : "files");
+    }
+  }, [closeProperties, isMobile, mobileTab, setMobileTab, mode, activeEditorPath]);
 
   const restoreRevision = (path: string, revision: string, baseRevision: string) => {
     if (editorRef.current.kind !== "clean") {
@@ -488,8 +494,11 @@ export default function Workspace({
         setPaletteOpen((open) => !open);
       } else if (meta && event.key.toLowerCase() === "i") {
         event.preventDefault();
-        if (propertiesOpen) closeProperties();
-        else openProperties(contextPath, true);
+        if (isMobile ? mobileTab === "info" : propertiesOpen) dismissProperties();
+        else {
+          openProperties(contextPath, true);
+          if (isMobile) setMobileTab("info");
+        }
       } else if (meta && event.key.toLowerCase() === "n") {
         event.preventDefault();
         setDialog({ type: "new-document", folder: "" });
@@ -522,14 +531,14 @@ export default function Workspace({
           target?.isContentEditable ||
           target?.closest("input, textarea, .cm-content, .cm-panel") != null;
         if (!inChrome) {
-          closeProperties();
+          dismissProperties();
           setSelected(new Set());
         }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeEditorPath, propertiesOpen, propertiesPath, contextPath, selected, treeActions, dialog, paletteOpen, closeProperties]);
+  }, [propertiesOpen, contextPath, selected, treeActions, dialog, paletteOpen, dismissProperties, openProperties, isMobile, mobileTab, setMobileTab]);
 
   const toggleSidebar = () => {
     const panel = sidebarPanel.current;
@@ -672,7 +681,7 @@ export default function Workspace({
           })();
         }
       }}
-      onClose={() => { closeProperties(); if (isMobile) setMobileTab(mode === "workspace" && editor.kind !== "empty" ? "editor" : "files"); }}
+      onClose={dismissProperties}
     />
   );
 

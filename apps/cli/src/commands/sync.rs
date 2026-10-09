@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use brains_client::sync::{self, Resolution, SyncState};
+use brains_client::sync::{self, Resolution, SyncFailureStage, SyncState};
 use brains_client::{BrainClient, ClientError, ClientResult};
 use sha2::{Digest, Sha256};
 
@@ -154,9 +154,6 @@ fn synchronize(
         dry_run,
         |state| save_state(state_file, state),
     )?;
-    if !dry_run {
-        save_state(state_file, &report.state)?;
-    }
     let first = &pair.endpoints[0].profile;
     let second = &pair.endpoints[1].profile;
     let counts = report.counts;
@@ -182,9 +179,17 @@ fn synchronize(
         );
     }
     if let Some(failure) = &report.failure {
+        let progress = match failure.stage {
+            SyncFailureStage::Reconcile => {
+                "this path may be partially written; earlier completed paths were checkpointed"
+            }
+            SyncFailureStage::Checkpoint => {
+                "file changes may already be committed; this path's checkpoint was not saved; fix local state storage before retrying"
+            }
+        };
         eprintln!(
-            "sync stopped at {}: {}; this path may be partially written; completed paths were checkpointed",
-            failure.path, failure.error
+            "sync stopped at {}: {}; {progress}",
+            failure.path, failure.error,
         );
         return Ok(failure.error.exit_code());
     }

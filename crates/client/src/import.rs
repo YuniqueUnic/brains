@@ -41,6 +41,13 @@ pub fn import_working_tree(
                 "unsupported working-tree manifest; export with the current bsx first",
             ));
         }
+        check_portability(
+            &manifest
+                .entries
+                .iter()
+                .map(|entry| entry.path.clone())
+                .collect::<Vec<_>>(),
+        )?;
         manifest
             .entries
             .into_iter()

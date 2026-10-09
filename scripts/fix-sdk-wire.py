@@ -1,7 +1,7 @@
-"""Narrow xidlc 0.95 wire corrections. Delete when upstream handles raw bodies.
+"""Narrow xidlc 0.95 wire corrections. Remove as upstream fixes these templates.
 
 IDL owns parameter names and flatten semantics; this postprocessor corrects
-raw octets and the TypeScript flattened-body template with exact assertions.
+raw octets, flattened bodies, nullable revisions and qualified schema refs.
 """
 import json
 from pathlib import Path
@@ -47,6 +47,28 @@ ts.write_text(text)
 
 path = Path('sdk/openapi/brains-openapi.json')
 spec = json.loads(path.read_text())
+
+
+def qualify_schema_refs(node):
+    if isinstance(node, list):
+        for value in node:
+            qualify_schema_refs(value)
+    elif isinstance(node, dict):
+        ref = node.get('$ref', '')
+        prefix = '#/components/schemas/'
+        if ref.startswith(prefix):
+            name = ref[len(prefix):]
+            schemas = spec['components']['schemas']
+            if name not in schemas:
+                qualified = f'brains.{name}'
+                if qualified not in schemas:
+                    raise SystemExit(f'unresolved generated schema reference: {ref}')
+                node['$ref'] = prefix + qualified
+        for value in node.values():
+            qualify_schema_refs(value)
+
+
+qualify_schema_refs(spec)
 for route in ['/file', '/maintenance/archive/blob']:
     op = spec['paths'][route]['put']
     op['requestBody'] = {'required': True, 'content': {'application/octet-stream': {'schema': {'type': 'string', 'format': 'binary'}}}}
