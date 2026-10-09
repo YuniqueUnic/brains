@@ -61,6 +61,7 @@ unicode-normalization = "0.1"
 pulldown-cmark = { version = "0.13", default-features = false }
 fs2 = "0.4"
 similar = { version = "3", features = ["text"] }
+diffy = "0.5.2"
 futures = "0.3"
 bytes = "1"
 

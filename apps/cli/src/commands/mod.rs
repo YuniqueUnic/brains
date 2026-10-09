@@ -2,6 +2,7 @@
 
 pub(crate) mod files;
 pub(crate) mod query;
+pub(crate) mod sync;
 pub(crate) mod system;
 
 use brains_client::{ClientError, ClientResult};

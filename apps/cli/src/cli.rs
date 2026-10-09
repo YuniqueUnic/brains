@@ -178,12 +178,46 @@ enum Command {
     Seed,
     /// Export the current working tree to a new directory.
     Export { output: String },
+    /// Synchronize current files between this profile and another profile.
+    Sync {
+        /// The other named profile. Pair sync requires profiles stored in config.
+        #[arg(long, global = true)]
+        remote_profile: Option<String>,
+        /// Show planned actions without writing files or sync state.
+        #[arg(long)]
+        dry_run: bool,
+        #[command(subcommand)]
+        action: Option<SyncCommand>,
+    },
     /// Read a file into $EDITOR and conditionally write it back.
     Edit {
         path: String,
         #[arg(long)]
         if_revision: String,
     },
+}
+
+#[derive(Clone, Subcommand)]
+pub(crate) enum SyncCommand {
+    /// Resolve a reported path conflict and write the chosen result to both profiles.
+    Resolve {
+        path: String,
+        /// Keep the selected profile's current state.
+        #[arg(long, value_enum, conflicts_with = "merged_file")]
+        keep: Option<SyncSide>,
+        /// Use a locally edited file as the resolved content.
+        #[arg(long, conflicts_with = "keep")]
+        merged_file: Option<String>,
+        /// Override the merged file's media type.
+        #[arg(long, requires = "merged_file")]
+        content_type: Option<String>,
+    },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub(crate) enum SyncSide {
+    Local,
+    Remote,
 }
 
 #[derive(Subcommand)]
@@ -214,6 +248,20 @@ pub(crate) fn run() -> i32 {
                 error.exit_code()
             }
         };
+    }
+    if let Command::Sync {
+        remote_profile,
+        dry_run,
+        action,
+    } = &cli.command
+    {
+        return commands::sync::run(
+            &config,
+            cli.profile.as_deref(),
+            remote_profile.as_deref(),
+            *dry_run,
+            action.clone(),
+        );
     }
     let connection = match config.resolve(cli.profile.as_deref()) {
         Ok(connection) => connection,
@@ -298,6 +346,7 @@ pub(crate) fn run() -> i32 {
         }
         Command::Seed => commands::system::seed_template(&client),
         Command::Export { output } => commands::system::export(&client, &output),
+        Command::Sync { .. } => unreachable!("sync is handled before single-profile resolution"),
         Command::Edit { path, if_revision } => commands::files::edit(&client, &path, &if_revision),
     };
 

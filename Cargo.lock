@@ -389,6 +389,7 @@ version = "0.1.0"
 dependencies = [
  "brains-api-types",
  "brains-domain",
+ "diffy",
  "hex",
  "reqwest",
  "serde",
@@ -725,6 +726,15 @@ name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
+
+[[package]]
+name = "diffy"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e3dc2f773b6aaa63b1a7684b8589f670a8a0146a510b74d23a401c882364b49"
+dependencies = [
+ "hashbrown 0.17.1",
+]
 
 [[package]]
 name = "digest"
@@ -3112,9 +3122,9 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xidl-rust-axum"
-version = "0.96.0"
+version = "0.95.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "479c031eddac62ef5d43c6bec671bae20930e2b716f78cbe7b6e0059c7254fed"
+checksum = "0866823207c0210d69c302858ca6f559ef0260490baa8d40b718591123ca0e1f"
 dependencies = [
  "axum",
  "axum-extra",

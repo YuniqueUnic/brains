@@ -91,4 +91,20 @@ impl Config {
             }
         }
     }
+
+    /// Resolve a named profile without environment overrides. Pair commands
+    /// need two independent endpoints, so a single BRAINS_URL/TOKEN override
+    /// would make the selected pair ambiguous.
+    pub fn resolve_named(&self, name: &str) -> Result<(String, String), String> {
+        let profile = self
+            .profiles
+            .get(name)
+            .ok_or_else(|| format!("no profile `{name}`; add it with `bsx profile add`"))?;
+        if profile.url.trim().is_empty() || profile.token.is_empty() {
+            return Err(format!(
+                "profile `{name}` needs both URL and token before pair sync"
+            ));
+        }
+        Ok((profile.url.clone(), profile.token.clone()))
+    }
 }

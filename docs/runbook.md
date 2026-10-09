@@ -66,6 +66,36 @@ bsx edit note.md / add note.md        # $EDITOR 编辑后落库
 
 冲突语义与 HTTP 一致：预置条件失败返回 412（携带当前 revision），CLI 报错并提示远端当前版本；不自动重试。
 
+### 本地与云端双向同步
+
+每个 endpoint 先登记为具名 profile，并通过 stdin 保存 token：
+
+```bash
+bsx profile add local --url http://127.0.0.1:45800
+bsx --profile local login --stdin-token < local-token.txt
+bsx profile add cloud --url https://<worker>.workers.dev
+bsx --profile cloud login --stdin-token < cloud-token.txt
+```
+
+先预览再同步。第一次运行会把只存在于一端的 live 文件导入另一端；之后的运行会双向传递新版本和软删除：
+
+```bash
+bsx --profile local sync --remote-profile cloud --dry-run
+bsx --profile local sync --remote-profile cloud
+```
+
+两端对同一文本的修改没有重叠时会自动三方合并。首次同步时同路径内容不同、重叠修改、二进制双改以及删除/修改都会列为冲突，保持两边当前内容不变并以退出码 `5` 返回。选择一侧，或准备好人工合并文件后写回两端：
+
+```bash
+bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --keep local
+bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --keep remote
+bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --merged-file /tmp/guide.md
+```
+
+执行 `resolve` 前会重新读取两端 HEAD 并确认路径仍处于冲突；如果内容已经收敛或可自动合并，命令会拒绝过期决策并要求先重新运行 `sync`。
+
+同步使用每个 profile pair 独立的基线文件，默认位于 `~/.brains/sync/`，也跟随 `BRAIN_CONFIG` 的父目录。基线只记录 endpoint 指纹、revision、状态和摘要，不包含正文或 token。profile pair 同步要求配置中保存具名 profile；执行时需 unset `BRAINS_URL` 与 `BRAINS_TOKEN`，避免一个环境变量覆盖两个 endpoint。同步覆盖当前文件与软删除，不复制旧 revision 历史。永久 purge 只作用于执行端，不会被同步成另一端的删除；若 purge 与另一端的并发修改同时被发现，CLI 会跳过或报告冲突并保留内容。若保留 tombstone 的一端之后被用户明确恢复，新的 live revision 可在后续 sync 中重新导入已 purge 端。写入逐路径使用 CAS，整库操作不是原子事务。
+
 ## 模板内容（首启播种）
 
 - **本地**：`brains-server` 启动时若 vault 完全为空（无任何 HEAD，含墓碑），自动写入 4 篇模板笔记：`README.md`、`docs/brains-guide.md`（使用规则）、`docs/ai-guide.md`（AI 协作守则）、`inbox/README.md`。有任何内容即跳过，绝不覆盖。

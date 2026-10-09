@@ -3,6 +3,7 @@
 //! behind the user's back (design §12.1).
 
 pub mod export;
+pub mod sync;
 
 use brains_api_types::{
     DiffResult, Entry, FilePage, HistoryPage, LinkPage, MutationResult, PatchBody, PatchDryRun,
