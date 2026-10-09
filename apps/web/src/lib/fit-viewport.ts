@@ -31,28 +31,6 @@ export function fitIntoViewport(
   };
 }
 
-/** Preferred-side placement with flip when the preferred side has no room. */
-export function placeBeside(
-  anchor: Box,
-  size: { width: number; height: number },
-  viewport: Viewport,
-  padding = 8,
-  preferred: "bottom" | "top" = "bottom",
-): { x: number; y: number; side: "bottom" | "top" } {
-  const bottomY = anchor.y + anchor.height + padding;
-  const topY = anchor.y - size.height - padding;
-  const bottomFits = bottomY + size.height <= viewport.height - padding;
-  const topFits = topY >= padding;
-  const side: "bottom" | "top" =
-    preferred === "bottom" ? (bottomFits || !topFits ? "bottom" : "top") : topFits || !bottomFits ? "top" : "bottom";
-  const x = Math.min(
-    Math.max(anchor.x, padding),
-    Math.max(padding, viewport.width - padding - size.width),
-  );
-  const y = side === "bottom" ? bottomY : topY;
-  return { x, y, side };
-}
-
 /**
  * Horizontal placement (right preferred, flip to left) with the vertical
  * follow-clamp: the popup trails its anchor's top edge but never leaves the

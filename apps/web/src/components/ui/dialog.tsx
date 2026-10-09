@@ -48,7 +48,7 @@ export function DialogTitle({ className, ...props }: ComponentProps<"h2">) {
 
 export function DialogDescription({ className, ...props }: ComponentProps<"p">) {
   return (
-    <p className={cn("text-[12.5px] leading-relaxed text-muted-foreground", className)} {...props} />
+    <p className={cn("text-body-sm leading-relaxed text-muted-foreground", className)} {...props} />
   );
 }
 

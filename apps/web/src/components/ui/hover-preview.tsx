@@ -54,7 +54,7 @@ export function HoverPreview({
                 />
               ) : preview.kind === "text" ? (
                 <div
-                  className="markdown-preview w-full !py-4 text-[13px]"
+                  className="markdown-preview w-full !py-4 text-body"
                   dangerouslySetInnerHTML={{ __html: preview.html }}
                 />
               ) : (

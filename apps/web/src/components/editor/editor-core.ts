@@ -1,4 +1,3 @@
-import { EditorState as CodeMirrorState } from "@codemirror/state";
 import { EditorView, keymap, tooltips } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -185,6 +184,3 @@ export function baseExtensions(
     }),
   ];
 }
-
-/** Re-export for panes that build auxiliary editors from scratch. */
-export { CodeMirrorState };

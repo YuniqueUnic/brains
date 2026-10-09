@@ -24,7 +24,6 @@ import {
 } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { Toggle } from "@base-ui-components/react/toggle";
-import { ToggleGroup } from "@base-ui-components/react/toggle-group";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import { toast } from "sonner";
@@ -33,20 +32,14 @@ import { SaveIndicator } from "./SaveIndicator";
 import { Tooltip } from "./ui/tooltip";
 import { menuItemClass, menuPopupClass, MenuShortcut } from "./ui/menu";
 import { SliderRow } from "./ui/slider-row";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
-import { Input } from "./ui/input";
+import { ToggleGroupSection } from "./shell/toggle-section";
 import { fileCompletions, type CompletionFile } from "./editor/completions";
 import { referenceHover } from "./editor/reference-hover";
 import { completionPreview } from "./editor/completion-preview";
 import { MarkdownToolbar } from "./editor/markdown-toolbar";
 import { ConflictView } from "./editor/conflict-view";
+import { SaveAsDialog } from "./editor/save-as-dialog";
+import { invalidatePreview } from "./properties/preview";
 import { EditorSettingsPopover } from "./editor/editor-settings-popover";
 import {
   baseExtensions,
@@ -242,11 +235,12 @@ export default function EditorPane({
     }
 
     // Text typed while NO file was bound to the editor (the 新建 dialog is
-    // still committing) belongs to the user, not to the state replacing it:
-    // adopt it onto the freshly created base instead of wiping it. Loading
-    // transitions resync normally — that buffer belongs to another file.
+    // still committing, or a slow file is still loading) belongs to the
+    // user, not to the state replacing it: adopt it onto the freshly created
+    // base instead of wiping it.
     const viewText = view.state.doc.toString();
-    const typedBlind = previous.state.kind === "empty";
+    const typedBlind =
+      previous.state.kind === "empty" || previous.state.kind === "loading";
     if (
       typedBlind &&
       viewText !== "" &&
@@ -402,6 +396,11 @@ export default function EditorPane({
             };
       onStateChange(next);
       stateRef.current = next;
+      // The published text is canonical: any stored draft for this path is
+      // stale by definition — dropping it keeps the doc-key resync from
+      // resurrecting content the user already deleted.
+      clearDraft(current.path);
+      invalidatePreview(current.path);
     } catch (error) {
       if (!stillMine()) return;
       // An expired session is not a retryable editor error — hand it up so
@@ -460,6 +459,14 @@ export default function EditorPane({
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
+      // A modal owns ⌘S/⌘⏎: publishing or toasting from behind a dialog
+      // double-fires whatever the dialog is confirming.
+      if (
+        meta &&
+        (event.target as HTMLElement | null)?.closest?.('[role="dialog"], [role="alertdialog"]')
+      ) {
+        return;
+      }
       if (meta && event.key.toLowerCase() === "s") {
         event.preventDefault();
         stashDraft();
@@ -473,29 +480,10 @@ export default function EditorPane({
   }, [publish, stashDraft]);
 
   const [saveAsOpen, setSaveAsOpen] = useState(false);
-  const [saveAsPath, setSaveAsPath] = useState("");
   const openSaveAs = () => {
     const current = stateRef.current;
     if (current.kind !== "clean" && current.kind !== "dirty") return;
-    setSaveAsPath(current.path);
     setSaveAsOpen(true);
-  };
-  const commitSaveAs = async () => {
-    const current = stateRef.current;
-    const path = saveAsPath.trim();
-    if (current.kind !== "clean" && current.kind !== "dirty") return;
-    if (!path) return;
-    try {
-      const result = await api.saveText(path, current.text, { mode: "create" });
-      setSaveAsOpen(false);
-      onStateChange(freshEditorState(result.path, current.text, result.revision));
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        onAuthLost?.();
-        return;
-      }
-      toast.error(error instanceof Error ? error.message : String(error));
-    }
   };
 
   const openFind = () => {
@@ -551,30 +539,15 @@ export default function EditorPane({
         />
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-0.5">
-            <ToggleGroup
-              value={[viewMode]}
-              onValueChange={(groupValue) =>
-                setViewMode((groupValue[groupValue.length - 1] ?? "source") as "source" | "preview")
-              }
+            <ToggleGroupSection
+              value={viewMode}
+              onChange={(next) => setViewMode(next as "source" | "preview")}
               className="mr-1 flex items-center gap-0.5 rounded-[7px] border p-0.5"
-            >
-              <Toggle
-                value="source"
-                aria-label={t("modeSource")}
-                className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-              >
-                <SquarePen className="size-3.5 stroke-[1.5]" />
-                {t("modeSource")}
-              </Toggle>
-              <Toggle
-                value="preview"
-                aria-label={t("modePreview")}
-                className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-              >
-                <Eye className="size-3.5 stroke-[1.5]" />
-                {t("modePreview")}
-              </Toggle>
-            </ToggleGroup>
+              options={[
+                { value: "source", label: t("modeSource"), icon: <SquarePen className="size-3.5 stroke-[1.5]" /> },
+                { value: "preview", label: t("modePreview"), icon: <Eye className="size-3.5 stroke-[1.5]" /> },
+              ]}
+            />
             {viewMode === "source" && (
               <>
             <Tooltip content={t("undoTooltip")}>
@@ -707,21 +680,23 @@ export default function EditorPane({
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Sparkles className="size-5 stroke-[1.25] opacity-50" />
             <div className="text-center">
-              <p className="text-[13px] text-foreground/80">{t("emptyTitle")}</p>
+              <p className="text-body text-foreground/80">{t("emptyTitle")}</p>
               <p className="mt-1 text-xs">{t("emptyState")}</p>
             </div>
           </div>
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-[11px] text-faint">
-        <span className="font-mono">
-          {t("stats", {
-            chars: stats.chars,
-            words: stats.words,
-            lines: stats.lines,
-          })}
-        </span>
+      <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-faint">
+        {state.kind !== "empty" && state.kind !== "loading" && (
+          <span className="font-mono">
+            {t("stats", {
+              chars: stats.chars,
+              words: stats.words,
+              lines: stats.lines,
+            })}
+          </span>
+        )}
         <span className="flex-1" />
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-2">
@@ -756,33 +731,17 @@ export default function EditorPane({
         </span>
       </div>
 
-      <Dialog open={saveAsOpen} onOpenChange={setSaveAsOpen}>
-        <DialogContent data-testid="save-as-dialog">
-          <DialogHeader>
-            <DialogTitle>{t("saveAs")}</DialogTitle>
-            <DialogDescription>{t("saveAsPrompt")}</DialogDescription>
-          </DialogHeader>
-          <div className="pt-4">
-            <Input
-              data-testid="save-as-path"
-              value={saveAsPath}
-              onChange={(event) => setSaveAsPath(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void commitSaveAs();
-              }}
-              autoFocus
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveAsOpen(false)}>
-              {t("close")}
-            </Button>
-            <Button variant="default" data-testid="save-as-confirm" onClick={() => void commitSaveAs()}>
-              {t("publish")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SaveAsDialog
+        open={saveAsOpen}
+        onOpenChange={setSaveAsOpen}
+        defaultPath={state.kind === "empty" || state.kind === "loading" ? "" : state.path}
+        currentText={buffer}
+        onSaved={(result) => {
+          clearDraft(result.path);
+          onStateChange(freshEditorState(result.path, buffer, result.revision));
+        }}
+        onAuthLost={onAuthLost}
+      />
     </div>
   );
 }

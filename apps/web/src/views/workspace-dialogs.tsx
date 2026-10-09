@@ -56,8 +56,8 @@ export function WorkspaceDialogs({
   folders: string[];
   batchRunning: boolean;
   purging: boolean;
-  onConfirmNewFile: (path: string) => void;
-  onConfirmNewFolder: (path: string) => void;
+  onConfirmNewFile: (path: string) => Promise<void> | void;
+  onConfirmNewFolder: (path: string) => Promise<void> | void;
   onConfirmTrash: (paths: string[]) => void;
   onConfirmPurge: (paths: string[]) => void;
   onConfirmDiscardOpen: (path: string) => void;
@@ -67,6 +67,7 @@ export function WorkspaceDialogs({
   const { t: tCommon } = useTranslation("common");
   const [newPath, setNewPath] = useState("");
   const [moveDestination, setMoveDestination] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const isNew = dialog?.type === "new-document" || dialog?.type === "new-folder";
   // Each open starts from the target folder (`docs/` prefill); the ⌘N
   // dialog starts empty.
@@ -80,11 +81,14 @@ export function WorkspaceDialogs({
   }, [dialog?.type]);
   const moveEntryCount = dialog?.type === "move" ? dialog.targets.length : 0;
   const confirmNew = () => {
-    if (!isNew) return;
+    if (!isNew || submitting) return;
     const path = newPath.trim();
     if (!path) return;
-    if (dialog.type === "new-folder") onConfirmNewFolder(path);
-    else onConfirmNewFile(path);
+    // In-flight lock: a slow create must not double-fire on a second Enter.
+    // The parent closes the dialog on success; on failure the lock releases.
+    setSubmitting(true);
+    const done = dialog.type === "new-folder" ? onConfirmNewFolder(path) : onConfirmNewFile(path);
+    void Promise.resolve(done).finally(() => setSubmitting(false));
   };
   const confirmMove = () => {
     if (dialog?.type !== "move") return;
@@ -108,6 +112,7 @@ export function WorkspaceDialogs({
           <div className="pt-4">
             <Input
               data-testid="new-file-path"
+              aria-label={dialog?.type === "new-folder" ? t("newFolderPlaceholder") : t("newFilePlaceholder")}
               placeholder={dialog?.type === "new-folder" ? t("newFolderPlaceholder") : t("newFilePlaceholder")}
               value={newPath}
               onChange={(event) => setNewPath(event.target.value)}
@@ -121,7 +126,7 @@ export function WorkspaceDialogs({
             <Button variant="outline" onClick={onClose}>
               {tCommon("cancel")}
             </Button>
-            <Button variant="default" data-testid="new-file-confirm" onClick={confirmNew}>
+            <Button variant="default" data-testid="new-file-confirm" disabled={submitting} onClick={confirmNew}>
               {tCommon("create")}
             </Button>
           </DialogFooter>
@@ -200,6 +205,7 @@ export function WorkspaceDialogs({
           <div className="flex flex-col gap-1.5 pt-4">
             <Input
               data-testid="move-destination"
+              aria-label={t("movePlaceholder")}
               placeholder={t("movePlaceholder")}
               value={moveDestination}
               onChange={(event) => setMoveDestination(event.target.value)}
@@ -214,7 +220,7 @@ export function WorkspaceDialogs({
                   key={folder}
                   type="button"
                   onClick={() => setMoveDestination(folder)}
-                  className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-left font-mono text-[11.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  className="flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-left font-mono text-meta-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                 >
                   <FolderInput className="size-3.5 shrink-0 stroke-[1.5]" />
                   {folder === "" ? t("conflictRoot") : `${folder}/`}

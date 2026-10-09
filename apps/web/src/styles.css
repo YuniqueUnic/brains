@@ -120,6 +120,16 @@
   --shadow-overlay: var(--shadow-overlay);
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Type ramp (dense-UI steps): retune once here, everywhere follows. */
+  --text-meta-xs: 10px;
+  --text-meta-sm: 10.5px;
+  --text-meta: 11px;
+  --text-meta-lg: 11.5px;
+  --text-body-sm: 12.5px;
+  --text-body: 13px;
+  /* Parity with the pre-token arbitrary sizes (they inherited ~1.5). */
+  --text-xs--line-height: 1.5;
+  --text-sm--line-height: 1.5;
 }
 
 /* Interface zoom: #root carries the scale; the floating layer (popups,
@@ -567,10 +577,54 @@ body > *:not(#root):not(script):not(style) {
 .fade-in {
   animation: fade-in 0.12s ease-out;
 }
+/* Loading placeholder shimmer (Skeleton primitive) + panel entrance. */
+.skeleton {
+  background: color-mix(in srgb, var(--muted-foreground) 20%, transparent);
+  animation: skeleton-breathe 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.pane-in {
+  animation: pane-in 140ms ease-out;
+}
+@keyframes pane-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Mobile hit-area growth: pseudo-element overlay widens the pointer target
+   without layout shift (dense desktop rows keep their exact geometry).
+   Vertical bias: horizontal neighbors sit ~2px apart. */
+@media (max-width: 767px) {
+  .hit {
+    position: relative;
+  }
+  .hit::after {
+    content: "";
+    position: absolute;
+    inset: -5px -4px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .save-pulse,
   .overlay-in,
-  .fade-in {
+  .fade-in,
+  .skeleton,
+  .pane-in {
     animation: none;
   }
 }
@@ -600,9 +654,10 @@ body > *:not(#root):not(script):not(style) {
   font-size: 10.5px;
 }
 
-/* Editor reference hover (docs/… links, [[wiki]]): same preview language as
-   the properties panel popovers. */
-.cm-tooltip.brains-ref-tooltip {
+/* Editor reference hover (docs/… links, [[wiki]] links): same preview language as
+   the properties panel popovers. The tooltip element carries no hookable class
+   (CM's Tooltip has no class field), so key off the content child. */
+.cm-tooltip:has(> .brains-ref-hover) {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--card);
@@ -622,6 +677,12 @@ body > *:not(#root):not(script):not(style) {
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--muted-foreground);
+  /* Any scroll container this header lives in (completion card, ref tooltip):
+     scrolling a long preview must not lose track of WHAT is previewed. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
 }
 .brains-ref-hover-body {
   cursor: pointer;
@@ -662,7 +723,9 @@ body > *:not(#root):not(script):not(style) {
   position: fixed;
   left: 0;
   top: 0;
-  z-index: 60;
+  /* Under the banner (z-40) and dialog layers (z-50): an open confirm box
+     must cover the preview. */
+  z-index: 30;
 }
 .cm-completion-preview-card {
   zoom: var(--ui-zoom, 1);
@@ -670,8 +733,11 @@ body > *:not(#root):not(script):not(style) {
   left: 0;
   top: 0;
   width: min(360px, 60vw);
-  max-height: 320px;
+  max-height: min(520px, 60vh);
   overflow: auto;
+  /* The scroll affordance must be perceptible: a 10k-px document in a
+     nearly-invisible thin scrollbar reads as "content is cut off". */
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--card);
@@ -683,3 +749,4 @@ body > *:not(#root):not(script):not(style) {
   max-height: none;
   overflow: visible;
 }
+

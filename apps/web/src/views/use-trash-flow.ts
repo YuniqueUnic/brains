@@ -82,7 +82,9 @@ export function useTrashFlow({
     } catch (error) {
       fail(error);
     }
-    onTrashed(paths);
+    // Only succeeded paths: a failed trash (stale revision) must keep both
+    // the file and any editor buffer bound to it.
+    onTrashed(paths.filter((path) => !failed.includes(path)));
     if (failed.length > 0) {
       toast.warning(
         t("batchPartial", {
@@ -118,7 +120,8 @@ export function useTrashFlow({
         setBanner(t("bannerNoHistory", { path }));
         return;
       }
-      setBanner(t("bannerRestored", { path }));
+      // Success confirmation rides the toast channel (see Workspace.restoreRevision).
+      toast.success(t("bannerRestored", { path }));
       await refreshFiles();
     } catch (error) {
       fail(error);

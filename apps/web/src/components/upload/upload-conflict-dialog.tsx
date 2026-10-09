@@ -9,6 +9,7 @@ import {
   type UploadPlan,
 } from "./upload-conflict";
 import { Button } from "../ui/button";
+import { Dialog, DialogContent } from "../ui/dialog";
 import { cn } from "../../lib/utils";
 
 /*
@@ -66,12 +67,10 @@ export function UploadConflictDialog({
   const nothingToDo = rows.every((row) => row.action === "skip" || row.action === "identical");
 
   return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/35 backdrop-blur-[2px] fade-in" />
-      <div
-        className="fixed left-1/2 top-1/2 z-50 flex max-h-[86vh] w-[min(720px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-[12px] border bg-card p-5 shadow-overlay overlay-in"
-        role="dialog"
-        aria-modal="true"
+    <Dialog open onOpenChange={(open) => !open && !running && onCancel()}>
+      <DialogContent
+        data-testid="upload-conflict-dialog"
+        className="flex max-h-[86vh] w-[min(720px,94vw)] flex-col gap-3 p-5"
         aria-label={t("conflictTitle", { count: conflictCount })}
       >
       <div className="flex items-start gap-3">
@@ -82,7 +81,7 @@ export function UploadConflictDialog({
           <h2 className="text-[15px] font-semibold leading-snug tracking-tight">
             {t("conflictTitle", { count: conflictCount })}
           </h2>
-          <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
+          <p className="mt-1 text-body-sm leading-relaxed text-muted-foreground">
             {t("conflictHint")}
           </p>
         </div>
@@ -109,24 +108,24 @@ export function UploadConflictDialog({
         ) : (
           grouped.map(([dir, items]) => (
             <div key={dir}>
-              <div className="border-b bg-sidebar px-3 pt-2 pb-1 text-[11px] font-medium text-faint">
+              <div className="border-b bg-sidebar px-3 pt-2 pb-1 text-meta font-medium text-faint">
                 {dir === "" ? t("conflictRoot") : `${dir}/`}
               </div>
               {items.map(({ row, index }) => (
                 <div
                   key={row.incoming.path}
-                  className="flex items-center gap-2 border-b px-3 py-2 text-[13px] last:border-b-0"
+                  className="flex items-center gap-2 border-b px-3 py-2 text-body last:border-b-0"
                 >
                   <span className="min-w-0 flex-1 truncate" title={row.incoming.path}>
                     {row.incoming.name}
                     {row.action === "rename" && row.renameTo && (
-                      <span className="ml-1.5 font-mono text-[11px] text-muted-foreground">
+                      <span className="ml-1.5 font-mono text-meta text-muted-foreground">
                         → {row.renameTo}
                       </span>
                     )}
                   </span>
                   {row.action === "identical" ? (
-                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10.5px] text-muted-foreground">
+                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-meta-sm text-muted-foreground">
                       {t("conflictIdenticalBadge")}
                     </span>
                   ) : (
@@ -146,7 +145,7 @@ export function UploadConflictDialog({
                           }
                           aria-pressed={row.action === action}
                           className={cn(
-                            "cursor-pointer rounded-md px-2 py-1 text-[11.5px] font-medium transition-colors",
+                            "cursor-pointer rounded-md px-2 py-1 text-meta-lg font-medium transition-colors",
                             row.action === action
                               ? "bg-foreground text-background"
                               : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -184,7 +183,7 @@ export function UploadConflictDialog({
           </Button>
         </span>
       </div>
-      </div>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

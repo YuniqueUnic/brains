@@ -117,6 +117,7 @@ export function SettingsDialog({
 
           <SettingRow label={t("settingsFontSize")}>
             <SliderRow
+              ariaLabel={t("settingsFontSize")}
               value={settings.fontSize}
               min={8}
               max={32}
@@ -160,7 +161,7 @@ export function SettingsDialog({
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="shrink-0 text-[12.5px] text-foreground">{label}</span>
+      <span className="shrink-0 text-body-sm text-foreground">{label}</span>
       {children}
     </div>
   );

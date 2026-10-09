@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Group, Panel, Separator, type PanelImperativeHandle } from "react-resizable-panels";
@@ -18,6 +18,7 @@ import { expandEntry } from "../components/tree/selection";
 import { CommandPalette } from "../components/search/command-palette";
 import EditorPane from "../components/EditorPane";
 import { type EditorState } from "../components/editor/editor-core";
+import { clearDraft, readDraft, writeDraft } from "../components/editor/editor-settings";
 import { PropertiesPanel } from "../components/properties/properties-panel";
 import { TrashList } from "../components/trash/trash-list";
 import { TrashViewer } from "../components/trash/trash-viewer";
@@ -28,12 +29,14 @@ import { UploadProgress } from "../components/upload/upload-progress";
 import { useUpload } from "../components/upload/use-upload";
 import { UploadInputs } from "../components/upload/upload-inputs";
 import { Banner } from "../components/shell/banner";
+import { SidebarListSkeleton } from "../components/ui/skeleton";
 import { useTrashFlow } from "./use-trash-flow";
 import { useClipboardImport } from "./use-clipboard-import";
+import { useExternalDrag } from "./use-external-drag";
 import { useMoveBatch } from "./use-move-batch";
 import { WorkspaceDialogs, type DialogState } from "./workspace-dialogs";
-import { MobileLayout, type MobileTab } from "./mobile-layout";
-import { useIsMobile } from "../hooks/use-mobile";
+import { MobileLayout } from "./mobile-layout";
+import { useMobileTabSync } from "./use-mobile-tab-sync";
 
 /*
  * Workspace orchestrator (DESIGN.md §61-62): explicit state unions instead of
@@ -55,7 +58,7 @@ export default function Workspace({
   onLogout,
 }: {
   session: SessionInfo;
-  onLogout: () => void;
+  onLogout: (reason?: string) => void;
 }) {
   const { t } = useTranslation("workspace");
   const [mode, setMode] = useState<WorkspaceMode>("workspace");
@@ -69,7 +72,20 @@ export default function Workspace({
   const propertiesOpen = panel.type === "properties";
   const openProperties = (path: string | null, follow = true) =>
     setPanel({ type: "properties", path, follow });
-  const closeProperties = () => setPanel({ type: "none" });
+  const closeProperties = useCallback(() => {
+    // Hand-rolled ✕/Esc have no Base-UI focus restore: return focus to
+    // whoever opened the panel (the editor/toolbar trigger) when it survives.
+    const opener = document.activeElement as HTMLElement | null;
+    setPanel({ type: "none" });
+    requestAnimationFrame(() => {
+      if (opener && document.contains(opener)) {
+        opener.focus();
+        return;
+      }
+      // ✕ was focused (it unmounts with the panel): back to the document.
+      (document.querySelector(".cm-content") as HTMLElement | null)?.focus();
+    });
+  }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [searchMode, setSearchMode] = useState<"literal" | "fts">("literal");
   const [dialog, setDialog] = useState<DialogState>(null);
@@ -77,7 +93,8 @@ export default function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [batchRunning, setBatchRunning] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [dragging, setDragging] = useState(false);
+  // First vault walk: show sidebar skeletons instead of an empty list.
+  const [listLoading, setListLoading] = useState(true);
   const sidebarPanel = useRef<PanelImperativeHandle | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
@@ -98,15 +115,18 @@ export default function Workspace({
   );
   const shownFiles = mode === "workspace" ? liveFiles : trashedFiles;
 
-  const fail = (error: unknown) => {
-    // An expired session has no in-page recovery: back to login.
-    if (error instanceof ApiError && error.status === 401) {
-      setBanner(t("bannerAuthLost"));
-      onLogout();
-      return;
-    }
-    setBanner(error instanceof Error ? error.message : String(error));
-  };
+  // Stable identity matters: EditorPane reconfigures completions when these change.
+  const fail = useCallback(
+    (error: unknown) => {
+      // An expired session has no in-page recovery: back to login.
+      if (error instanceof ApiError && error.status === 401) {
+        onLogout(t("bannerAuthLost"));
+        return;
+      }
+      setBanner(error instanceof Error ? error.message : String(error));
+    },
+    [t, onLogout],
+  );
 
   const refreshFiles = async () => {
     // One walk with tombstones included: the tree shows live entries, the
@@ -129,17 +149,11 @@ export default function Workspace({
     setLiveFiles(items.filter((item) => item.state === "live"));
     setTrashedFiles(items.filter((item) => item.state === "trashed"));
     setFilesTruncated(Boolean(cursor));
+    setListLoading(false);
   };
 
   useEffect(() => {
     void refreshFiles().catch(fail);
-    const clearDrag = () => setDragging(false);
-    window.addEventListener("dragend", clearDrag);
-    window.addEventListener("drop", clearDrag);
-    return () => {
-      window.removeEventListener("dragend", clearDrag);
-      window.removeEventListener("drop", clearDrag);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -157,6 +171,7 @@ export default function Workspace({
     onFail: fail,
   });
   const { runUpload, importFromClipboard } = useClipboardImport({ upload, mode, t });
+  const { dragging, overlayHandlers } = useExternalDrag({ mode, upload, runUpload });
 
   const openUploadIntent = (intent: UploadIntent) => {
     if (intent === "files") fileInputRef.current?.click();
@@ -167,7 +182,7 @@ export default function Workspace({
   // ---- Open / guard ------------------------------------------------------
 
   const openRunRef = useRef(0);
-  const openFile = async (path: string) => {
+  const openFile = useCallback(async (path: string) => {
     const runId = openRunRef.current + 1;
     openRunRef.current = runId;
     const stale = () => openRunRef.current !== runId;
@@ -209,9 +224,10 @@ export default function Workspace({
       fail(error);
       setEditor({ kind: "empty" });
     }
-  };
+  }, [t, fail]);
 
-  const requestOpen = (path: string) => {
+  const requestOpen = useCallback(
+    (path: string) => {
     const current = editorRef.current;
     // `saving` counts too: keystrokes typed during the flight have not been
     // sent yet and would be dropped without a word.
@@ -225,7 +241,7 @@ export default function Workspace({
       return;
     }
     void openFile(path);
-  };
+  }, [openFile]);
 
   // ---- Tree actions ------------------------------------------------------
 
@@ -261,6 +277,13 @@ export default function Workspace({
           await api.move(from, to, revision);
           toast.success(t("renameDone", { from, to }));
           await refreshFiles();
+          // Drafts belong to the content: follow the rename so the old path
+          // can't resurrect it.
+          const draft = readDraft(from);
+          if (draft) {
+            clearDraft(from);
+            writeDraft(to, draft.text);
+          }
           // Batch selection follows the rename (whole subtree for folders),
           // or a subsequent Delete would target dead paths.
           setSelected((prev) => {
@@ -400,8 +423,7 @@ export default function Workspace({
   const confirmMove = (destination: string, targets: string[]) => {
     if (!destination || targets.length === 0) return;
     setDialog(null);
-    // Dialog targets are file paths or "folder/" entries; anything that is a
-    // known folder prefix moves as a folder so children keep their structure.
+    // "folder/" entries move as folders so children keep their structure.
     const entries = targets.map((raw) => ({
       path: raw,
       isFolder: raw.endsWith("/") || folderSet.has(raw.replace(/\/+$/, "")),
@@ -423,15 +445,7 @@ export default function Workspace({
         : panel.path
       : null;
 
-  // Mobile: opening a file or the properties panel jumps to its tab; the
-  // trash stays where the user is browsing.
-  const isMobile = useIsMobile();
-  const [mobileTab, setMobileTab] = useState<MobileTab>("files");
-  useEffect(() => {
-    if (!isMobile || mode !== "workspace") return;
-    if (propertiesOpen) setMobileTab("info");
-    else if (activeEditorPath) setMobileTab("editor");
-  }, [isMobile, mode, propertiesOpen, activeEditorPath]);
+  const [mobileTab, setMobileTab, isMobile] = useMobileTabSync(editor, mode, propertiesOpen);
 
   const restoreRevision = (path: string, revision: string, baseRevision: string) => {
     if (editorRef.current.kind !== "clean") {
@@ -443,7 +457,9 @@ export default function Workspace({
         await api.restore(path, revision, baseRevision);
         const { text, etag } = await api.readText(path);
         setEditor({ kind: "clean", path, text, baseText: text, baseRevision: etag });
-        setBanner(t("bannerRestoredShort"));
+        // Success confirmation rides the toast channel; banner stays for
+        // blocking/system-level states only.
+        toast.success(t("bannerRestoredShort"));
         await refreshFiles();
       } catch (error) {
         fail(error);
@@ -456,20 +472,28 @@ export default function Workspace({
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
+      // A modal dialog owns the keyboard: ⌘K/⌘I/⌘N must not fight it (⌘N
+      // over the new-file dialog would wipe the path being typed).
+      if (meta && dialog) return;
       if (meta && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setPaletteOpen((open) => !open);
       } else if (meta && event.key.toLowerCase() === "i") {
         event.preventDefault();
-        if (propertiesOpen && propertiesPath === activeEditorPath) setPanel({ type: "none" });
+        if (propertiesOpen && propertiesPath === activeEditorPath) closeProperties();
         else openProperties(activeEditorPath, true);
       } else if (meta && event.key.toLowerCase() === "n") {
         event.preventDefault();
         setDialog({ type: "new-document", folder: "" });
       } else if (
+        !dialog &&
+        !paletteOpen &&
         (event.key === "Delete" || event.key === "Backspace") &&
         selected.size > 0
       ) {
+        // A modal owns the keyboard: Delete here would SWAP the open confirm
+        // for the trash dialog and the next Enter would confirm the wrong
+        // thing.
         // Batch trash from the keyboard (Backspace = the macOS delete key) —
         // but never while typing in the editor or a form field.
         const target = event.target as HTMLElement | null;
@@ -481,7 +505,7 @@ export default function Workspace({
           event.preventDefault();
           treeActions.onTrash([...selected]);
         }
-      } else if (event.key === "Escape" && !event.defaultPrevented) {
+      } else if (event.key === "Escape" && !dialog && !paletteOpen && !event.defaultPrevented) {
         // Esc belongs to the layer that consumed it first (find panel,
         // palette, menus all preventDefault); only a "free" Esc closes the
         // properties panel and clears the batch selection.
@@ -490,14 +514,14 @@ export default function Workspace({
           target?.isContentEditable ||
           target?.closest("input, textarea, .cm-content, .cm-panel") != null;
         if (!inChrome) {
-          setPanel({ type: "none" });
+          closeProperties();
           setSelected(new Set());
         }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [activeEditorPath, propertiesOpen, propertiesPath, selected, treeActions]);
+  }, [activeEditorPath, propertiesOpen, propertiesPath, selected, treeActions, dialog, paletteOpen, closeProperties]);
 
   const toggleSidebar = () => {
     const panel = sidebarPanel.current;
@@ -522,13 +546,18 @@ export default function Workspace({
         setMode(next);
         setSelected(new Set());
         setRenaming(null);
+        // The properties panel follows the OTHER mode's context — carrying it
+        // over would only show a stale "no selection" column.
+        setPanel({ type: "none" });
         trashFlow.setTrashSelected(null);
         trashFlow.setTrashChecked(new Set());
       }}
       fileCount={shownFiles.length}
       truncated={filesTruncated}
-    >
-      {mode === "workspace" ? (
+      >
+        {listLoading ? (
+          <SidebarListSkeleton />
+        ) : mode === "workspace" ? (
         <FileTree
           files={liveFiles}
           selected={selected}
@@ -581,10 +610,7 @@ export default function Workspace({
           onOpenProperties={() => openProperties(activeEditorPath)}
           onOpenReference={requestOpen}
           completions={completionFiles}
-          onAuthLost={() => {
-            setBanner(t("bannerAuthLost"));
-            onLogout();
-          }}
+          onAuthLost={() => onLogout(t("bannerAuthLost"))}
           canTrash={canTrash}
           onTrashCurrent={() => {
             const current = editorRef.current;
@@ -639,40 +665,7 @@ export default function Workspace({
   );
 
   return (
-    <div
-      className="flex h-full min-h-0 flex-col bg-background"
-      onDragOver={(event) => {
-        // Only external file drags show the import overlay; the tree's own
-        // move-drag carries a custom payload and must not trigger it.
-        if (mode !== "workspace") return;
-        if (!event.dataTransfer.types.includes("Files")) return;
-        event.preventDefault();
-        setDragging(true);
-      }}
-      onDragLeave={(event) => {
-        if (
-          !event.relatedTarget ||
-          !(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node)
-        ) {
-          setDragging(false);
-        }
-      }}
-      onDrop={(event) => {
-        setDragging(false);
-        if (mode !== "workspace") return;
-        if (!event.dataTransfer.types.includes("Files")) return;
-        event.preventDefault();
-        const transfer = event.dataTransfer;
-        void upload.begin(transfer.items, "tree").then((summary) => {
-          // Some drop sources expose plain files but no entry objects —
-          // fall back to the flat file list before giving up.
-          if (summary === undefined && transfer.files.length > 0) {
-            return upload.begin(Array.from(transfer.files), "tree");
-          }
-          return summary;
-        }).then(runUpload);
-      }}
-    >
+    <div className="flex h-full min-h-0 flex-col bg-background" {...overlayHandlers}>
       <TopBar
         session={session}
         sidebarCollapsed={sidebarCollapsed}
@@ -694,6 +687,7 @@ export default function Workspace({
               editor: t("mobileTabEditor"),
               info: t("mobileTabInfo"),
             }}
+            name={t("mobileTabs")}
             files={sidebarPane}
             editor={mainPane}
             info={propertiesPane}
@@ -729,7 +723,7 @@ export default function Workspace({
 
       {dragging && mode === "workspace" && (
         <div className="pointer-events-none fixed inset-0 z-30 flex items-center justify-center bg-primary/4">
-          <div className="rounded-[12px] border border-dashed border-primary/50 px-8 py-6 text-[13px] font-medium text-primary">
+          <div className="rounded-[12px] border border-dashed border-primary/50 px-8 py-6 text-body font-medium text-primary">
             {t("dropHere")}
           </div>
         </div>
@@ -777,8 +771,8 @@ export default function Workspace({
         folders={folders}
         batchRunning={batchRunning}
         purging={trashFlow.purging}
-        onConfirmNewFile={(path) => void newFile(path)}
-        onConfirmNewFolder={(path) => void createFolder(path)}
+        onConfirmNewFile={(path) => newFile(path)}
+        onConfirmNewFolder={(path) => createFolder(path)}
         onConfirmTrash={(paths) => void trashFlow.trashPaths(paths)}
         onConfirmPurge={(paths) => void trashFlow.purgePaths(paths)}
         onConfirmDiscardOpen={(path) => {

@@ -266,7 +266,7 @@ export function FileTree({
                         onDragLeave={() => setDropTarget(null)}
                         onDrop={handleDrop(node.path)}
                         className={cn(
-                          "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-[13px] transition-colors",
+                          "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-body transition-colors",
                           selecting && folderState !== "none" && "bg-selected",
                           dropTarget === node.path && "ring-2 ring-inset ring-primary/50",
                           !selecting && "cursor-pointer hover:bg-muted",
@@ -336,7 +336,7 @@ export function FileTree({
                       }}
                       onClick={rowClick(entry.path, false)}
                       className={cn(
-                        "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-[13px] outline-none transition-colors",
+                        "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-body outline-none transition-colors",
                         props.isSelected || activePath === entry.path
                           ? "bg-selected text-foreground"
                           : "hover:bg-muted",
@@ -439,7 +439,7 @@ export function FileTree({
       </div>
 
       {selecting && (
-        <div className="mx-2 mb-1 flex shrink-0 items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
+        <div className="mx-2 mb-1 flex shrink-0 items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-meta text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">
             {t("selectedCount", { count: selected.size })}
           </span>
@@ -600,7 +600,7 @@ function RowMenu({
         render={
           <button
             aria-label={t("rowMenu", { path })}
-            className="pointer-events-none ml-auto size-5 shrink-0 cursor-pointer items-center justify-center rounded text-faint opacity-0 hover:bg-selected hover:text-foreground group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring/70"
+            className="hit pointer-events-none ml-auto size-5 shrink-0 cursor-pointer items-center justify-center rounded text-faint opacity-0 hover:bg-selected hover:text-foreground group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring/70"
             onClick={(event) => event.stopPropagation()}
           />
         }

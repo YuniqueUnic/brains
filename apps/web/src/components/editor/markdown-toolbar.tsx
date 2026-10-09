@@ -61,21 +61,30 @@ export function applyMarkdownAction(view: EditorView, action: MarkdownAction) {
   const { state } = view;
   const range = state.selection.main;
   if (action.kind === "hr") {
+    // The divider belongs on its own line: never split the line the cursor
+    // sits in — append below it.
     const line = state.doc.lineAt(range.head);
     const insert = line.text.trim() === "" ? "---\n" : "\n---\n";
+    const at = line.text.trim() === "" ? line.from : line.to;
     view.dispatch({
-      changes: { from: range.head, insert },
-      selection: EditorSelection.cursor(range.head + insert.length),
+      changes: { from: at, insert },
+      selection: EditorSelection.cursor(at + insert.length),
     });
     view.focus();
     return;
   }
   if (action.kind === "fence") {
+    // Fences are block-level: align the insert to whole lines so a cursor in
+    // the middle of a paragraph never produces inline ``` runs.
     const text = state.sliceDoc(range.from, range.to);
-    const insert = text === "" ? "```\n\n```" : `\`\`\`\n${text}\n\`\`\``;
+    const openLine = state.doc.lineAt(range.from);
+    const closeLine = state.doc.lineAt(range.to);
+    const pre = range.from === openLine.from ? "" : "\n";
+    const post = range.to === closeLine.to ? "" : "\n";
+    const insert = `${pre}\`\`\`\n${text}${text ? "\n" : ""}\`\`\`${post}`;
     view.dispatch({
       changes: { from: range.from, to: range.to, insert },
-      selection: EditorSelection.cursor(range.from + 4),
+      selection: EditorSelection.cursor(range.from + pre.length + 4),
     });
     view.focus();
     return;
@@ -162,27 +171,30 @@ export function MarkdownToolbar({
     ],
   ];
   return (
-    <div className="flex h-8 shrink-0 items-center gap-0.5 overflow-x-auto border-b px-2" data-testid="markdown-toolbar">
-      {open &&
-        groups.map((group, index) => (
-          <span key={index} className="flex items-center gap-0.5">
-            {index > 0 && <span className="mx-1 h-4 w-px shrink-0 bg-border" />}
-            {group.map(({ icon: Icon, label, action }) => (
-              <Tooltip key={label} content={label}>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label={label}
-                  disabled={!view}
-                  onClick={run(action)}
-                >
-                  <Icon className={cn("size-3.5 stroke-[1.5]")} />
-                </Button>
-              </Tooltip>
-            ))}
-          </span>
-        ))}
-      <span className="flex-1" />
+    <div className="flex h-8 shrink-0 items-center border-b px-2" data-testid="markdown-toolbar">
+      {/* Actions scroll; the collapse control stays pinned at the right even
+          when the groups overflow. */}
+      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+        {open &&
+          groups.map((group, index) => (
+            <span key={index} className="flex shrink-0 items-center gap-0.5">
+              {index > 0 && <span className="mx-1 h-4 w-px shrink-0 bg-border" />}
+              {group.map(({ icon: Icon, label, action }) => (
+                <Tooltip key={label} content={label}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={label}
+                    disabled={!view}
+                    onClick={run(action)}
+                  >
+                    <Icon className={cn("size-3.5 stroke-[1.5]")} />
+                  </Button>
+                </Tooltip>
+              ))}
+            </span>
+          ))}
+      </div>
       <Tooltip content={t("toolbarToggle")}>
         <Button
           variant="ghost"

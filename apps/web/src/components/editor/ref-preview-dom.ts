@@ -14,19 +14,33 @@ export interface RefPreviewLabels {
   unavailable: string;
 }
 
+/**
+ * Build the floating preview card. New call sites MUST pick a side: a
+ * clipped, scrollable container → selfClamp:false (the card owns
+ * positioning, e.g. the completion preview); anything else → true.
+ */
 export function buildRefPreviewDom(
   resolved: string,
   onOpen: ((path: string) => void) | undefined,
   labels: RefPreviewLabels,
+  /** false when the caller owns positioning inside its own clipped,
+   * scrollable card (completion preview) — a self-translating child would
+   * slide content out of that card's top edge. */
+  { selfClamp = true }: { selfClamp?: boolean } = {},
 ): HTMLElement {
   const dom = document.createElement("div");
   dom.className = "brains-ref-hover";
   // Position corrections are visual px; inside the inverse-zoomed portal
   // layer translate is scaled, so accumulated deltas are stored to re-derive
   // the local-space correction on every clamp pass.
-  const clamp = () => {
+  const clampIntoViewport = () => {
     const rect = dom.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
+    // Huge documents cap at the viewport: a 10k-px child translated to "fit"
+    // would slide its own header out of any clipped container.
+    if (rect.height > window.innerHeight - 16) {
+      dom.style.maxHeight = `${window.innerHeight - 16}px`;
+    }
     const fit = fitIntoViewport(
       { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
       { width: window.innerWidth, height: window.innerHeight },
@@ -41,6 +55,9 @@ export function buildRefPreviewDom(
       dom.dataset.dx = String(accX);
       dom.dataset.dy = String(accY);
     }
+  };
+  const clamp = () => {
+    if (selfClamp) clampIntoViewport();
   };
   const fill = (body: () => HTMLElement) => {
     const content = document.createElement("div");

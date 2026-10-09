@@ -8,7 +8,7 @@ import { cn } from "../../lib/utils";
  * single primary used by "+ New"; danger variants only for destructive acts.
  */
 const buttonVariants = cva(
-  "inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] text-[13px] font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 [&_svg]:stroke-[1.5]",
+  "inline-flex cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-[7px] text-body font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-ring/70 focus-visible:outline-offset-2 disabled:pointer-events-none disabled:opacity-45 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg]:size-4 [&_svg]:stroke-[1.5]",
   {
     variants: {
       variant: {

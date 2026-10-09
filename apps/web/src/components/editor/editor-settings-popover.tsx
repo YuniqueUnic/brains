@@ -1,11 +1,10 @@
-import { Toggle } from "@base-ui-components/react/toggle";
-import { ToggleGroup } from "@base-ui-components/react/toggle-group";
 import { Switch } from "@base-ui-components/react/switch";
 import { Popover } from "@base-ui-components/react/popover";
 import { Settings2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { SliderRow } from "../ui/slider-row";
+import { ToggleGroupSection } from "../shell/toggle-section";
 import { type EditorSettings } from "./editor-settings";
 
 /**
@@ -29,7 +28,7 @@ export function EditorSettingsPopover({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner align="end" sideOffset={6}>
-          <Popover.Popup className="z-50 w-[248px] rounded-[10px] border bg-card p-3 text-[12.5px] shadow-menu overlay-in [zoom:var(--ui-zoom,1)]">
+          <Popover.Popup className="z-50 w-[248px] rounded-[10px] border bg-card p-3 text-body-sm shadow-menu overlay-in [zoom:var(--ui-zoom,1)]">
             <SwitchRow
               label={t("lineNumbersLabel")}
               checked={settings.lineNumbers}
@@ -42,30 +41,16 @@ export function EditorSettingsPopover({
             />
             <div className="flex items-center justify-between py-1.5">
               <span>{t("fontLabel")}</span>
-              <ToggleGroup
-                value={[settings.font]}
-                onValueChange={(groupValue) =>
-                  onChange({ font: (groupValue[groupValue.length - 1] ?? "sans") as EditorSettings["font"] })
-                }
-                className="flex items-center gap-0.5 rounded-md border p-0.5"
-              >
-                {(
-                  [
-                    ["sans", t("fontSans")],
-                    ["serif", t("fontSerif")],
-                    ["mono", t("fontMono")],
-                  ] as const
-                ).map(([value, label]) => (
-                  <Toggle
-                    key={value}
-                    value={value}
-                    aria-label={label}
-                    className="cursor-pointer rounded px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-                  >
-                    {label}
-                  </Toggle>
-                ))}
-              </ToggleGroup>
+              <ToggleGroupSection
+                value={settings.font}
+                onChange={(next) => onChange({ font: next as EditorSettings["font"] })}
+                dense
+                options={[
+                  { value: "sans", label: t("fontSans") },
+                  { value: "serif", label: t("fontSerif") },
+                  { value: "mono", label: t("fontMono") },
+                ]}
+              />
             </div>
             <div className="py-1.5">
               <SliderRow

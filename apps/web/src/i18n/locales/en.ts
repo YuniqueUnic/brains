@@ -1,7 +1,9 @@
 /** English strings, same namespace/key shape as zh-CN. The e2e suite runs
  * against zh-CN only, but keep phrasing consistent with the Chinese copy. */
 const en = {
+
   common: {
+    loading: "Loading…",
     newFile: "New",
     upload: "Upload",
     logout: "Log out",
@@ -24,6 +26,7 @@ const en = {
     connecting: "Connecting…",
   },
   workspace: {
+    mobileTabs: "Workspace panes",
     mobileTabFiles: "Files",
     mobileTabEditor: "Editor",
     mobileTabInfo: "Info",
@@ -31,6 +34,7 @@ const en = {
     paletteOpen: "Search",
     paletteDocuments: "Documents",
     paletteActions: "Actions",
+    paletteSearchFailed: "Search failed — the index did not answer",
     paletteNoMatches: "No matches",
     paletteSearching: "Searching…",
     paletteNavigate: "navigate",
@@ -98,6 +102,7 @@ const en = {
     settingsLanguage: "Language",
     uploadRunning: "Uploading {{done}}/{{total}}",
     uploadDone: "Uploaded {{done}}/{{total}}",
+    uploadDoneSkipped: "Uploaded {{done}}/{{total}} · {{skipped}} skipped",
     uploadWaiting: "Waiting",
     uploadSkipped: "Skipped",
     uploadFailed: "Failed",
@@ -265,6 +270,15 @@ const en = {
     pathLabel: "Path",
     kindLabel: "Kind",
     sizeLabel: "Size",
+    generationLabel: "Generations",
+    actionPut: "Publish",
+    actionRestore: "Restore",
+    actionTrash: "To trash",
+    loadFailed: "Load failed",
+    kindNote: "Note",
+    kindText: "Text",
+    kindScript: "Script",
+    kindBinary: "Binary",
     updatedLabel: "Updated",
     links: "Links",
     history: "History (reachable chain)",

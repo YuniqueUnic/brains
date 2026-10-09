@@ -43,7 +43,7 @@ export default function App() {
     );
   }
 
-  const logout = async () => {
+  const logout = async (reason?: string) => {
     try {
       await api.deleteSession();
     } catch (error) {
@@ -52,7 +52,9 @@ export default function App() {
         // fall through to local logout either way
       }
     }
-    setState({ kind: "anonymous" });
+    // A mid-work expiry must EXPLAIN itself: the banner set in Workspace dies
+    // with it on unmount, so the reason rides into the Login screen.
+    setState({ kind: "anonymous", error: reason });
   };
 
   return (

@@ -13,6 +13,8 @@ import {
   freshEditorState,
   type EditorState,
 } from "./editor-core";
+import { clearDraft } from "./editor-settings";
+import { invalidatePreview } from "../properties/preview";
 import { cn } from "../../lib/utils";
 
 /*
@@ -121,6 +123,8 @@ export function ConflictView({
         baseRevision: state.remoteRevision,
       });
       if (!stillMine()) return;
+      clearDraft(state.path);
+      invalidatePreview(state.path);
       onChange(freshEditorState(state.path, localText, result.revision));
     } catch (error) {
       if (!stillMine()) return;
@@ -155,6 +159,7 @@ export function ConflictView({
   };
 
   const takeRemote = () => {
+    clearDraft(state.path);
     onChange({
       kind: "clean",
       path: state.path,
@@ -176,10 +181,10 @@ export function ConflictView({
       }}
     >
       <div className="flex items-start gap-2 px-3 pt-2.5">
-        <GitMerge className="mt-0.5 size-4 shrink-0 stroke-[1.5]" style={{ color: "var(--warning)" }} />
+        <GitMerge className="mt-0.5 size-4 shrink-0 stroke-[1.5] text-warning" />
         <div className="min-w-0 flex-1">
-          <p className="text-[12.5px] font-semibold">{t("conflictTitle")}</p>
-          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+          <p className="text-body-sm font-semibold">{t("conflictTitle")}</p>
+          <p className="mt-0.5 text-meta-lg text-muted-foreground">
             {t("conflictDesc", { revision: state.remoteRevision.slice(0, 8) })}
           </p>
         </div>
@@ -242,7 +247,7 @@ function ModeChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "cursor-pointer rounded px-2 py-1 text-[10.5px] font-medium transition-colors",
+        "cursor-pointer rounded px-2 py-1 text-meta-sm font-medium transition-colors",
         active
           ? "bg-primary/12 text-primary ring-1 ring-primary/30"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",

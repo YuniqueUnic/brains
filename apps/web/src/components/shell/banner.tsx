@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 export function Banner({ message, onClose }: { message: string; onClose: () => void }) {
   const { t } = useTranslation("common");
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-14 z-40 flex justify-center px-4">
+    <div className="pane-in pointer-events-none fixed inset-x-0 top-14 z-30 flex justify-center px-4">
       <div
         className="pointer-events-auto flex max-w-xl items-start gap-2 rounded-[8px] border bg-card px-3 py-2 text-xs shadow-overlay"
         data-testid="banner"
@@ -16,7 +16,7 @@ export function Banner({ message, onClose }: { message: string; onClose: () => v
         <button
           onClick={onClose}
           aria-label={t("close")}
-          className="cursor-pointer rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="hit cursor-pointer rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring/70"
         >
           <X className="size-3.5 stroke-[1.5]" />
         </button>

@@ -26,20 +26,38 @@ export function completionPreview(
       private bodyObserver = new MutationObserver(() => this.sync());
       private listObserver: MutationObserver | null = null;
 
+      private tooltipObserver: MutationObserver | null = null;
+      /** Content fills asynchronously; the card must re-seat itself when it
+       * grows (otherwise the bottom lands below the viewport edge). */
+      private resizeObserver = new ResizeObserver(() => this.place());
+
       constructor() {
         this.host.className = "cm-completion-preview-host";
         this.card.className = "cm-completion-preview-card";
+        // Decorative duplicate of the list's selection: keep it out of the
+        // accessibility tree.
+        this.card.setAttribute("aria-hidden", "true");
         this.card.style.display = "none";
         this.host.append(this.card);
         document.body.append(this.host);
+        this.resizeObserver.observe(this.card);
+        // subtree: CM may wrap the tooltip on its way into the body layer,
+        // and the sync callback is a single querySelector — cheap enough.
         this.bodyObserver.observe(document.body, { childList: true, subtree: true });
+        window.addEventListener("resize", this.replace);
       }
 
       destroy() {
         this.bodyObserver.disconnect();
         this.listObserver?.disconnect();
+        this.tooltipObserver?.disconnect();
+        this.resizeObserver.disconnect();
+        window.removeEventListener("resize", this.replace);
         this.host.remove();
       }
+
+      /** Follow CM's restyling of the tooltip (scroll, zoom, reposition). */
+      private replace = () => this.place();
 
       private sync() {
         const list = document.querySelector(".cm-tooltip-autocomplete ul");
@@ -49,6 +67,7 @@ export function completionPreview(
         }
         if (list !== this.list) {
           this.listObserver?.disconnect();
+          this.tooltipObserver?.disconnect();
           this.listObserver = new MutationObserver(() => this.sync());
           this.listObserver.observe(list, {
             attributes: true,
@@ -56,6 +75,13 @@ export function completionPreview(
             childList: true,
             subtree: true,
           });
+          const tooltip = list.closest(".cm-tooltip");
+          if (tooltip) {
+            // CM repositions the tooltip by restyling it; style-only changes
+            // emit no childList events, so watch the attribute.
+            this.tooltipObserver = new MutationObserver(() => this.place());
+            this.tooltipObserver.observe(tooltip, { attributes: true, attributeFilter: ["style"] });
+          }
           this.list = list;
         }
         const detail = list
@@ -70,7 +96,7 @@ export function completionPreview(
           this.currentPath = detail;
           this.card.textContent = "";
           this.card.style.display = "";
-          this.card.append(buildRefPreviewDom(detail, onOpen, labels));
+          this.card.append(buildRefPreviewDom(detail, onOpen, labels, { selfClamp: false }));
         }
         this.place();
       }
@@ -78,6 +104,8 @@ export function completionPreview(
       private detach() {
         this.listObserver?.disconnect();
         this.listObserver = null;
+        this.tooltipObserver?.disconnect();
+        this.tooltipObserver = null;
         this.list = null;
         this.currentPath = null;
         this.card.style.display = "none";

@@ -1,6 +1,8 @@
 import { ArchiveRestore, Copy, FileWarning, LoaderCircle, Trash2, Trash2 as TrashIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Skeleton } from "../ui/skeleton";
+import { formatDateTime } from "../../lib/format";
 import { api, isTextMedia, type Entry } from "../../api/client";
 import { markdownToSafeHtml } from "../properties/preview";
 import { newestContentful } from "./content";
@@ -38,6 +40,11 @@ export function TrashViewer({
   const [viewMode, setViewMode] = useState<"preview" | "source">("preview");
   const [content, setContent] = useState<ViewerContent>({ kind: "loading" });
   const [restoring, setRestoring] = useState(false);
+  // The restore callback is fire-and-forget; the flag only gates double
+  // clicks and MUST not outlive the item (it would brick the button).
+  useEffect(() => {
+    setRestoring(false);
+  }, [item]);
 
   useEffect(() => {
     if (!item) {
@@ -82,15 +89,15 @@ export function TrashViewer({
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
         <Trash2 className="size-5 stroke-[1.25] opacity-50" />
-        <p className="text-[13px]">{t("trashViewEmpty")}</p>
+        <p className="text-body">{t("trashViewEmpty")}</p>
       </div>
     );
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-card" data-testid="trash-viewer">
+    <div key={item.path} className="pane-in flex h-full min-h-0 flex-col bg-card" data-testid="trash-viewer">
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-2.5">
-        <span className="shrink-0 rounded-full bg-warning/12 px-2 py-0.5 text-[10.5px] text-warning">
+        <span className="shrink-0 rounded-full bg-warning/12 px-2 py-0.5 text-meta-sm text-warning">
           {t("panelTrash")}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground" title={item.path}>
@@ -143,8 +150,10 @@ export function TrashViewer({
       )}
       <div className="min-h-0 flex-1 overflow-auto">
         {content.kind === "loading" ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            <LoaderCircle className="size-5 animate-spin stroke-[1.5]" />
+          <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+            <Skeleton className="h-3 w-2/5" />
+            <Skeleton className="h-3 w-1/3" />
+            <Skeleton className="h-3 w-1/2" />
           </div>
         ) : content.kind === "image" ? (
           <div className="flex h-full items-center justify-center p-6">
@@ -152,7 +161,7 @@ export function TrashViewer({
           </div>
         ) : content.kind === "text" ? (
           viewMode === "source" ? (
-            <pre className="p-6 font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap">
+            <pre className="p-6 font-mono text-body-sm leading-relaxed whitespace-pre-wrap">
               {content.raw}
             </pre>
           ) : (
@@ -171,9 +180,9 @@ export function TrashViewer({
           </div>
         )}
       </div>
-      <div className="flex h-8 shrink-0 items-center gap-2 border-t px-3 text-[11px] text-faint">
+      <div className="flex h-8 shrink-0 items-center gap-2 border-t px-3 text-meta text-faint">
         <span>
-          {t("trashDeletedAt", { time: (item.updated_at ?? "").slice(0, 19) })}
+          {t("trashDeletedAt", { time: formatDateTime(item.updated_at) })}
         </span>
       </div>
     </div>

@@ -33,7 +33,7 @@ export function SaveIndicator({
       aria-live="polite"
       title={title}
       className={cn(
-        "inline-flex h-[22px] items-center gap-1.5 rounded-full px-2 text-[11px] font-medium",
+        "inline-flex h-[22px] items-center gap-1.5 rounded-full px-2 text-meta font-medium",
         "select-none whitespace-nowrap",
       )}
       style={{

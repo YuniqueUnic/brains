@@ -43,7 +43,7 @@ export function AlertDialogTitle({ className, ...props }: ComponentProps<"h2">) 
 
 export function AlertDialogDescription({ className, ...props }: ComponentProps<"p">) {
   return (
-    <p className={cn("text-[12.5px] leading-relaxed text-muted-foreground", className)} {...props} />
+    <p className={cn("text-body-sm leading-relaxed text-muted-foreground", className)} {...props} />
   );
 }
 
@@ -83,5 +83,3 @@ export function AlertDialogAction({
 }
 
 /** Pre-styled danger/cancel pair matching DESIGN.md §17. */
-export const alertActionClass = (extra: string) => extra;
-export const alertCancelClass = () => "";

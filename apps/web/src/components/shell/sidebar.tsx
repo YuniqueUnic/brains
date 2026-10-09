@@ -36,7 +36,7 @@ export function Sidebar({
       aria-current={mode === target ? "true" : undefined}
       onClick={() => onModeChange(target)}
       className={cn(
-        "flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-[13px] transition-colors",
+        "flex h-7 cursor-pointer items-center gap-2 rounded-md px-2 text-body transition-colors",
         "focus-visible:outline-2 focus-visible:outline-ring/70",
         mode === target
           ? "bg-selected font-medium text-foreground"
@@ -51,7 +51,7 @@ export function Sidebar({
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar">
       <div className="flex h-11 shrink-0 items-center px-3">
-        <span className="text-[11px] font-semibold tracking-wide text-faint uppercase">
+        <span className="text-meta font-semibold tracking-wide text-faint uppercase">
           {t("sidebarWorkspace")}
         </span>
       </div>
@@ -61,7 +61,7 @@ export function Sidebar({
       </nav>
       <div className="mx-3 mb-1 h-px bg-border" />
       {children}
-      <div className="flex h-8 shrink-0 items-center gap-2 px-3 text-[11px] text-faint">
+      <div className="flex h-8 shrink-0 items-center gap-2 px-3 text-meta text-faint">
         <FileText className="size-3.5 stroke-[1.5]" />
         <span>
           {mode === "workspace" ? t("footerFiles", { count: fileCount }) : t("footerItems", { count: fileCount })}
