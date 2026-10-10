@@ -53,3 +53,12 @@ export const SeedNoteViaApi = (path: string, body: string) =>
 /** Toggle the trash view in the sidebar. */
 export const ToggleTrash = () =>
   Task.where("#actor toggles the trash view", Click.on(Workbench.trashToggleButton()));
+
+/** Seed a binary through the same raw upload contract used by the browser. */
+export const SeedImageViaApi = (path: string) => Task.where(`#actor seeds the image ${path}`,
+  Interaction.where("#actor uploads a deterministic diagram", async actor => {
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160"><rect width="640" height="160" fill="#dfede4"/><circle cx="320" cy="80" r="55" fill="#668d78"/></svg>';
+    const response = await CallBrainsApi.as(actor).createBinary(path, new TextEncoder().encode(svg), "image/svg+xml");
+    if (response.status !== 200) throw new Error(`image seed failed: HTTP ${response.status}`);
+  }),
+);

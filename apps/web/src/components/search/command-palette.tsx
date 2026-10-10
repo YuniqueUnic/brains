@@ -41,7 +41,11 @@ export function CommandPalette({
   onOpenFile,
   onNewDocument,
   onUpload,
+  tag,
+  onClearTag,
 }: {
+  tag?: string | null;
+  onClearTag?: () => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   files: Entry[];
@@ -71,12 +75,33 @@ export function CommandPalette({
     const q = raw.trim();
     const runId = runIdRef.current + 1;
     runIdRef.current = runId;
-    if (!q) {
+    if (!q && !tag) {
       setFullText({ kind: "idle" });
       return;
     }
     setFullText({ kind: "running" });
     try {
+      if (tag) {
+        let cursor: string | null = null;
+        const items: SearchHit[] = [];
+        let pages = 0;
+        do {
+          const page = await api.listFiles({ source: "index", tag, cursor });
+          items.push(...page.items
+            .filter(file => `${file.path} ${file.title ?? ""}`.toLowerCase().includes(q.toLowerCase()))
+            .map(file => ({
+              path: file.path,
+              indexed_revision: file.revision,
+              snippet: file.title ?? "",
+            })));
+          cursor = page.next_cursor;
+          pages += 1;
+        } while (cursor && pages < 20 && runIdRef.current === runId);
+        if (runIdRef.current === runId) {
+          setFullText({ kind: "done", query: `#${tag}`, items, incomplete: !!cursor, building: false });
+        }
+        return;
+      }
       const page = await api.search({ q, mode: searchMode });
       let items = page.items;
       let cursor = page.next_cursor;
@@ -112,14 +137,17 @@ export function CommandPalette({
   useEffect(() => {
     if (!open) return;
     const q = query.trim();
-    if (q.length < 2) {
+    if (q.length < 2 && !tag) {
       setFullText({ kind: "idle" });
       return;
     }
     const timer = window.setTimeout(() => void runFullText(q), 300);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      runIdRef.current += 1;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, searchMode, open]);
+  }, [query, searchMode, open, tag]);
 
   const showFullText = fullText.kind === "running" || fullText.kind === "done";
 
@@ -132,6 +160,7 @@ export function CommandPalette({
         <Command shouldFilter={false} label={t("paletteOpen")} className="flex flex-col">
           <div className="flex items-center gap-2 border-b px-4">
             <Search className="size-4 shrink-0 stroke-[1.5] text-faint" />
+            {tag && <button type="button" className="document-tag" onClick={onClearTag} aria-label={t("clearTag", { tag })}>#{tag} ×</button>}
             <Command.Input
               data-testid="search-box"
               value={query}
@@ -208,7 +237,7 @@ export function CommandPalette({
               </PaletteGroup>
             )}
 
-            {!showFullText && localMatches.length > 0 && (
+            {!tag && !showFullText && localMatches.length > 0 && (
               <PaletteGroup label={t("paletteDocuments")}>
                 {localMatches.map((file) => (
                   <Command.Item
@@ -244,7 +273,7 @@ export function CommandPalette({
               </PaletteGroup>
             )}
 
-            {query.trim() === "" && (
+            {!tag && query.trim() === "" && (
               <PaletteGroup label={t("paletteActions")}>
                 <Command.Item
                   value="action new document"
@@ -299,7 +328,7 @@ export function CommandPalette({
           </Command.List>
 
           <div className="flex items-center gap-2 border-t px-3 py-2 text-meta text-faint">
-            <ModeChip
+            {!tag && <><ModeChip
               active={searchMode === "literal"}
               testid="mode-literal"
               onClick={() => onSearchModeChange("literal")}
@@ -312,7 +341,7 @@ export function CommandPalette({
               onClick={() => onSearchModeChange("fts")}
             >
               {t("modeFts")}
-            </ModeChip>
+            </ModeChip></>}
             <span className="ml-auto flex items-center gap-2">
               <span>↑↓ {t("paletteNavigate")}</span>
               <span>↵ {t("paletteOpen")}</span>

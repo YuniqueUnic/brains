@@ -26,6 +26,7 @@ const zhCN = {
     connecting: "连接中…",
   },
   workspace: {
+    clearTag: "取消标签筛选：{{tag}}",
     mobileTabs: "工作区面板",
     mobileTabFiles: "文件",
     mobileTabEditor: "编辑",
@@ -256,6 +257,13 @@ const zhCN = {
     toolbarToggle: "格式工具栏",
   },
   info: {
+    metadataTagLimit: "仅显示和索引前 64 个标签。",
+    metadataInvalid: "元信息格式有误，已保留原文显示。",
+    metadataTags: "标签",
+    previewTitle: "内容预览",
+    previewOpen: "打开",
+    previewResize: "调整预览大小（可用方向键）",
+    previewExternal: "外部网页，可点击地址在新标签页打开。",
     properties: "属性",
     openHint: "点击打开，悬停预览",
     previewLoading: "预览加载中…",

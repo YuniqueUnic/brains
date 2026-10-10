@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { Ability } from "@serenity-js/core";
 
 /**
@@ -40,6 +41,15 @@ export class CallBrainsApi extends Ability {
         ...(revision ? { "If-Match": `"${revision}"` } : { "If-None-Match": "*" }),
       },
       body,
+    });
+  }
+
+  async createBinary(path: string, body: Uint8Array, mediaType: string): Promise<Response> {
+    return fetch(`${this.baseUrl}/api/v1/file?path=${encodeURIComponent(path)}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": mediaType,
+        "If-None-Match": "*", "X-Content-SHA256": createHash("sha256").update(body).digest("hex") },
+      body: body as unknown as BodyInit,
     });
   }
 

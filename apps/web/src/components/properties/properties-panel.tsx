@@ -1,9 +1,9 @@
-import { markdownToSafeHtml } from "../markdown/render";
+import { MarkdownContent, type MarkdownContext } from "../markdown/markdown-content";
 import { ArchiveRestore, Eye, History, Link2, ListTree, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type Entry, type RevisionDto } from "../../api/client";
-import { previewFor, revisionPreviewFor } from "./preview";
+import { previewFor, revisionPreviewFor, type FilePreview } from "./preview";
 import { formatDateTime } from "../../lib/format";
 import { Skeleton } from "../ui/skeleton";
 import { HoverPreview } from "../ui/hover-preview";
@@ -34,11 +34,12 @@ import { Button } from "../ui/button";
  * click to jump / view, restore only through confirmation.
  */
 
-function BacklinkItem({ source, onOpenFile }: { source: string; onOpenFile: (path: string) => void }) {
+function BacklinkItem({ source, onOpenFile, context }: { source: string; onOpenFile: (path: string) => void; context: MarkdownContext }) {
   const { t } = useTranslation("info");
   return (
     <li>
       <HoverPreview
+        context={{ ...context, path: source }}
         load={() => previewFor(source)}
         onOpen={() => onOpenFile(source)}
         trigger={
@@ -60,15 +61,20 @@ function BacklinkItem({ source, onOpenFile }: { source: string; onOpenFile: (pat
 function HistoryRowTooltip({
   path,
   revision,
+  mediaType,
   children,
+  context,
 }: {
   path: string;
   revision: string;
+  mediaType?: string;
   children: React.ReactNode;
+  context: MarkdownContext;
 }) {
   return (
     <HoverPreview
-      load={() => revisionPreviewFor(path, revision)}
+      context={{ ...context, path }}
+      load={() => revisionPreviewFor(path, revision, mediaType)}
       trigger={<div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>}
     />
   );
@@ -76,19 +82,27 @@ function HistoryRowTooltip({
 
 export function PropertiesPanel({
   path,
+  entry,
   revision,
   onRestore,
   onClose,
   onOpenFile,
+  files,
+  onOpenTag,
 }: {
   path: string | null;
+  entry?: Entry;
   revision: string | null;
   onRestore: (revision: string) => void;
   onClose: () => void;
   onOpenFile: (path: string) => void;
+  files: readonly { path: string }[];
+  onOpenTag?: (tag: string) => void;
 }) {
   const { t } = useTranslation("info");
-  const [meta, setMeta] = useState<Entry | null>(null);
+  const context = { files, onOpen: onOpenFile, onTag: onOpenTag };
+  const [fetchedMeta, setFetchedMeta] = useState<Entry | null>(null);
+  const meta = entry ?? fetchedMeta;
   const [history, setHistory] = useState<RevisionDto[] | null>(null);
   // null = still loading (skeleton); loads that FAIL set the error flag so
   // the section says so instead of posing as an empty result.
@@ -97,23 +111,17 @@ export function PropertiesPanel({
   const [metaError, setMetaError] = useState(false);
   const [historyError, setHistoryError] = useState(false);
   // 查看: rendered/raw content of an old revision. 恢复: destructive, confirmed.
-  const [viewing, setViewing] = useState<
-    | { rev: RevisionDto; kind: "text"; html: string; raw: string }
-    | { rev: RevisionDto; kind: "image"; url: string }
-    | { rev: RevisionDto; kind: "binary" }
-    | null
-  >(null);
+  const [viewing, setViewing] = useState<({ rev: RevisionDto } & FilePreview) | null>(null);
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [confirming, setConfirming] = useState<RevisionDto | null>(null);
 
   useEffect(() => {
-    setMeta(null);
+    setFetchedMeta(null);
     setHistory(null);
     setLinks(null);
     setViewing(null);
     setConfirming(null);
     if (!path) {
-      setMeta(null);
       setHistory(null);
       return;
     }
@@ -123,14 +131,18 @@ export function PropertiesPanel({
     setMetaError(false);
     setHistoryError(false);
     setLinksError(false);
-    api.readMeta(path).then(
-      (entry) => alive && setMeta(entry),
-      () => {
-        if (!alive) return;
-        setMeta(null);
-        setMetaError(true);
-      },
-    );
+    // The workspace listing already owns metadata for live and trashed files.
+    // Search can open a path outside that bounded listing; fetch only that case.
+    if (!entry) {
+      api.readMeta(path).then(
+        (entry) => alive && setFetchedMeta(entry),
+        () => {
+          if (!alive) return;
+          setFetchedMeta(null);
+          setMetaError(true);
+        },
+      );
+    }
     collectHistory(path).then(
       (items) => alive && setHistory(items),
       () => {
@@ -151,7 +163,7 @@ export function PropertiesPanel({
     return () => {
       alive = false;
     };
-  }, [path, revision]);
+  }, [path, revision, entry]);
   const historyLoading = path !== null && history === null;
   const historyItems = history ?? [];
 
@@ -159,22 +171,10 @@ export function PropertiesPanel({
     if (!path) return;
     setViewing({ rev, kind: "binary" });
     setViewMode("preview");
-    void (async () => {
-      try {
-        if (rev.content?.media_type?.startsWith("image/")) {
-          const bytes = await api.readRevisionRaw(path, rev.revision);
-          const blob = new Blob([bytes as unknown as BlobPart], {
-            type: rev.content.media_type,
-          });
-          setViewing({ rev, kind: "image", url: URL.createObjectURL(blob) });
-          return;
-        }
-        const text = await api.readRevisionText(path, rev.revision);
-        setViewing({ rev, kind: "text", html: await markdownToSafeHtml(text), raw: text });
-      } catch {
-        setViewing({ rev, kind: "binary" });
-      }
-    })();
+    void revisionPreviewFor(path, rev.revision, rev.content?.media_type ?? "application/octet-stream").then(
+      content => setViewing({ rev, ...content }),
+      () => setViewing({ rev, kind: "binary" }),
+    );
   };
 
   return (
@@ -257,7 +257,7 @@ export function PropertiesPanel({
             {links !== null && links.backlinks.length > 0 && (
               <ul className="mt-1 space-y-0.5">
                 {links.backlinks.map((source) => (
-                  <BacklinkItem key={source} source={source} onOpenFile={onOpenFile} />
+                  <BacklinkItem context={context} key={source} source={source} onOpenFile={onOpenFile} />
                 ))}
               </ul>
             )}
@@ -308,7 +308,7 @@ export function PropertiesPanel({
                       </span>
                     </>
                   ) : (
-                    <HistoryRowTooltip path={path} revision={rev.revision}>
+                    <HistoryRowTooltip context={context} path={path} revision={rev.revision} mediaType={rev.content?.media_type}>
                       <span className="shrink-0 font-mono text-meta text-muted-foreground">
                         gen {rev.generation}
                       </span>
@@ -388,13 +388,10 @@ export function PropertiesPanel({
                   data-testid="revision-view-code"
                   className="max-h-[52vh] overflow-auto p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap"
                 >
-                  {viewing.raw}
+                  {viewing.text}
                 </pre>
               ) : (
-                <div
-                  className="markdown-preview !p-4"
-                  dangerouslySetInnerHTML={{ __html: viewing.html }}
-                />
+                <MarkdownContent text={viewing.text} path={viewing.rev.path} {...context} className="!p-4" />
               )
             ) : (
               <p className="px-4 py-8 text-center text-xs text-muted-foreground">

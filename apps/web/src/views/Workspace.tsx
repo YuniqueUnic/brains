@@ -87,6 +87,11 @@ export default function Workspace({
     });
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteTag, setPaletteTag] = useState<string | null>(null);
+  const openTag = useCallback((tag: string) => {
+    setPaletteTag(tag);
+    setPaletteOpen(true);
+  }, []);
   const [searchMode, setSearchMode] = useState<"literal" | "fts">("literal");
   const [dialog, setDialog] = useState<DialogState>(null);
   const [selecting, setSelecting] = useState(false);
@@ -629,6 +634,7 @@ export default function Workspace({
           onStateChange={changeEditor}
           onOpenProperties={() => openProperties(activeEditorPath)}
           onOpenReference={requestOpen}
+          onOpenTag={openTag}
           completions={completionFiles}
           onAuthLost={() => onLogout(t("bannerAuthLost"))}
           canTrash={canTrash}
@@ -642,6 +648,7 @@ export default function Workspace({
       </div>
     ) : (
       <TrashViewer
+        context={{ files: completionFiles, onOpen: requestOpen, onTag: openTag }}
         item={trashedFiles.find((one) => one.path === trashFlow.trashSelected) ?? null}
         onRestore={(path) => void trashFlow.restoreFromTrash(path)}
         onCopyPath={treeActions.onCopyPath}
@@ -653,8 +660,14 @@ export default function Workspace({
 
   const propertiesPane = (
     <PropertiesPanel
+      files={completionFiles}
+      onOpenTag={openTag}
       onOpenFile={requestOpen}
       path={propertiesPath}
+      entry={
+        liveFiles.find(file => file.path === propertiesPath)
+          ?? trashedFiles.find(file => file.path === propertiesPath)
+      }
       revision={
         mode === "workspace" && propertiesPath && propertiesPath === activeEditorPath
           ? (editor.kind !== "empty" && editor.kind !== "loading" && editor.kind !== "conflict"
@@ -756,7 +769,12 @@ export default function Workspace({
 
       <CommandPalette
         open={paletteOpen}
-        onOpenChange={setPaletteOpen}
+        tag={paletteTag}
+        onClearTag={() => setPaletteTag(null)}
+        onOpenChange={(open) => {
+          setPaletteOpen(open);
+          if (!open) setPaletteTag(null);
+        }}
         files={liveFiles}
         searchMode={searchMode}
         onSearchModeChange={setSearchMode}

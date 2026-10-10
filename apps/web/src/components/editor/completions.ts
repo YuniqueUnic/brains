@@ -1,6 +1,8 @@
+import { repositionTooltips } from "@codemirror/view";
 import { insertCompletionText, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
-import { buildRefPreviewDom, type RefPreviewLabels } from "./ref-preview-dom";
-import { referenceStem } from "../properties/preview";
+import { buildRefPreviewDom } from "./ref-preview-dom";
+import { referenceStem } from "../markdown/references";
+import type { MarkdownContext } from "../markdown/markdown-content";
 
 export interface CompletionFile {
   path: string;
@@ -10,8 +12,7 @@ export interface CompletionFile {
 /** File references and their previews share the editor's native completion lifecycle. */
 export function fileCompletions(
   files: CompletionFile[],
-  onOpen: ((path: string) => void) | undefined,
-  labels: RefPreviewLabels,
+  preview: MarkdownContext,
 ): (context: CompletionContext) => CompletionResult | null {
   return (context) => {
     const line = context.state.doc.lineAt(context.pos);
@@ -23,12 +24,20 @@ export function fileCompletions(
     return {
       from: context.pos - (wiki ? wiki[1] : link![2]).length,
       options: files.filter((file) => !wiki || !file.binary).map((file) => {
-        const target = wiki ? referenceStem(file.path) : encodeURI(file.path).replace(/[()]/g, (char) => `%${char.charCodeAt(0).toString(16)}`);
+        const directory = (preview.path ?? "").split("/").slice(0, -1);
+        const parts = file.path.split("/");
+        while (directory.length && parts[0] === directory[0]) { directory.shift(); parts.shift(); }
+        const relative = "../".repeat(directory.length) + parts.join("/");
+        const wikiTarget = files.filter(other => referenceStem(other.path) === referenceStem(file.path)).length > 1 ? relative : referenceStem(relative);
+        const target = wiki ? wikiTarget : relative.split("/").map(part => encodeURIComponent(part).replace(/[()]/g, (char) => `%${char.charCodeAt(0).toString(16)}`)).join("/");
         return {
           label: (wiki ? referenceStem(file.path) : file.path).split("/").pop()!,
           detail: file.path,
           type: "file",
-          info: () => buildRefPreviewDom(file.path, onOpen, labels),
+          info: () => buildRefPreviewDom({ kind: "vault", path: file.path, fragment: "" }, preview, {
+            anchor: () => context.view?.coordsAtPos(context.pos) as DOMRect | null,
+            onResize: () => context.view && repositionTooltips(context.view),
+          }),
           apply(view, _completion, from, to) {
             // Consume the existing auto-closed suffix; never leave `))`/`]]]]`.
             const line = view.state.doc.lineAt(to);

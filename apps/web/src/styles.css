@@ -647,52 +647,11 @@
   font-size: 10.5px;
 }
 
-/* Editor reference hover (docs/… links, [[wiki]] links): same preview language as
-   the properties panel popovers. The tooltip element carries no hookable class
-   (CM's Tooltip has no class field), so key off the content child. */
-.cm-tooltip:has(> .brains-ref-hover) {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
-  box-shadow: var(--shadow-overlay);
-  overflow: hidden;
-  padding: 0;
+/* CodeMirror owns placement; shared preview surface owns border and sizing. */
+.cm-tooltip:has(> .brains-ref-hover), .cm-tooltip.cm-completionInfo {
+  border: 0; background: transparent; padding: 0; box-shadow: none;
 }
-.brains-ref-hover {
-  max-width: min(380px, calc((100vw - 16px) / var(--ui-zoom, 1)));
-  max-height: min(320px, calc((100vh - 16px) / var(--ui-zoom, 1)));
-  overflow: auto;
-  font-size: 12px;
-}
-.brains-ref-hover-path {
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--muted-foreground);
-  /* Any scroll container this header lives in (completion card, ref tooltip):
-     scrolling a long preview must not lose track of WHAT is previewed. */
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--card);
-}
-.brains-ref-hover-body {
-  cursor: pointer;
-}
-.brains-ref-hover-note {
-  padding: 10px 12px;
-  color: var(--muted-foreground);
-}
-.brains-ref-hover-md {
-  padding: 8px 12px 12px !important;
-  font-size: 12.5px;
-}
-.brains-ref-hover-body img {
-  max-width: 100%;
-  max-height: 260px;
-  object-fit: contain;
-}
+.brains-ref-hover { font-size: 12px; }
 
 /* Line numbers follow the theme in both modes; the active row gets a quiet
    token-mixed wash instead of CodeMirror's light-gray base theme. */
@@ -708,11 +667,215 @@
   zoom: var(--ui-zoom, 1);
 }
 .cm-tooltip-autocomplete > ul { border-radius: 8px; }
-.cm-tooltip.cm-completionInfo {
+.cm-tooltip.cm-completionInfo { padding: 0; border: 0; background: transparent; overflow: visible; }
+
+/* Document properties are part of the document, not a second editor. */
+.document-metadata {
+  padding-bottom: 24px;
+  margin-bottom: 28px !important;
+  border-bottom: 1px solid var(--border);
+}
+.markdown-preview .document-title {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+.markdown-preview .document-description {
+  color: var(--muted-foreground);
+  margin: 0 0 16px;
+  white-space: pre-line;
+}
+.document-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.document-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 5px;
+  padding: 2px 8px;
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  color: var(--primary);
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+button.document-tag {
+  cursor: pointer;
+}
+button.document-tag:hover {
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+.markdown-preview .document-links {
+  list-style: none;
   padding: 0;
+  margin: 12px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.markdown-preview .document-links li {
+  margin: 0;
+  min-width: 0;
+}
+.document-link {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.document-link svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+}
+.metadata-warning {
+  color: var(--warning);
+  font-size: 13px;
+}
+.markdown-body {
+  overflow-wrap: anywhere;
+}
+.document-tag:focus-visible,
+.document-link:focus-visible,
+.preview-header button:focus-visible,
+.preview-resize:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Native floating layers position this surface; all previews share its size. */
+.preview-popup {
+  zoom: var(--ui-zoom, 1);
+}
+.preview-surface {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 380px;
+  height: 320px;
+  max-width: calc((100vw - 24px) / var(--ui-zoom, 1));
+  max-height: calc((100vh - 24px) / var(--ui-zoom, 1));
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--card);
+  color: var(--foreground);
   box-shadow: var(--shadow-overlay);
+  font-size: 13px;
+}
+.preview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 36px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.preview-header > span {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.preview-header button {
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.preview-scroll {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+}
+.preview-scroll > .markdown-preview {
+  padding: 16px 20px 24px;
+  font-size: 13px;
+}
+.preview-scroll .document-metadata {
+  padding-bottom: 14px;
+  margin-bottom: 16px !important;
+}
+.preview-scroll .document-title {
+  font-size: 22px;
+}
+.preview-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.preview-note {
+  padding: 16px;
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.preview-note a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.preview-resize {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  z-index: 2;
+  touch-action: none;
+  color: var(--muted-foreground);
+  border-radius: 4px;
+}
+.preview-resize::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+}
+.preview-resize:hover,
+.preview-resize:focus-visible {
+  background: var(--muted);
+  color: var(--foreground);
+}
+.preview-resize[data-corner="se"] {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+}
+.preview-resize[data-corner="nw"] {
+  left: 0;
+  top: 0;
+  transform: rotate(180deg);
+  cursor: nwse-resize;
+}
+.preview-resize[data-corner="ne"] {
+  right: 0;
+  top: 0;
+  transform: rotate(270deg);
+  cursor: nesw-resize;
+}
+.preview-resize[data-corner="sw"] {
+  left: 0;
+  bottom: 0;
+  transform: rotate(90deg);
+  cursor: nesw-resize;
+}
+.cm-tooltip-hover:has(> .brains-ref-hover) {
+  display: flex;
+  flex-direction: column;
+}
+.cm-tooltip-hover > .brains-ref-hover {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.cm-tooltip-hover > .brains-ref-hover > .preview-surface {
+  flex-shrink: 1;
 }

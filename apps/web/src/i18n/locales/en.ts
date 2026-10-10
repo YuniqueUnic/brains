@@ -26,6 +26,7 @@ const en = {
     connecting: "Connecting…",
   },
   workspace: {
+    clearTag: "Clear tag filter: {{tag}}",
     mobileTabs: "Workspace panes",
     mobileTabFiles: "Files",
     mobileTabEditor: "Editor",
@@ -262,6 +263,13 @@ const en = {
     toolbarToggle: "Formatting toolbar",
   },
   info: {
+    metadataTagLimit: "Only the first 64 tags are displayed and indexed.",
+    metadataInvalid: "Invalid metadata. The original text is shown below.",
+    metadataTags: "Tags",
+    previewTitle: "Content preview",
+    previewOpen: "Open",
+    previewResize: "Resize preview (arrow keys supported)",
+    previewExternal: "External page. Open the address in a new tab.",
     properties: "Properties",
     openHint: "Click to open, hover to preview",
     previewLoading: "Loading preview…",

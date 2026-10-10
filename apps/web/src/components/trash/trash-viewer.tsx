@@ -1,10 +1,11 @@
+import { revisionPreviewFor, type FilePreview } from "../properties/preview";
 import { Eye, SquarePen, ArchiveRestore, Copy, FileWarning, LoaderCircle, Trash2, Trash2 as TrashIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Skeleton } from "../ui/skeleton";
 import { formatDateTime } from "../../lib/format";
-import { api, isTextMedia, type Entry } from "../../api/client";
-import { markdownToSafeHtml } from "../markdown/render";
+import { type Entry } from "../../api/client";
+import { MarkdownContent, type MarkdownContext } from "../markdown/markdown-content";
 import { newestContentful } from "./content";
 import { Button } from "../ui/button";
 import { Tooltip } from "../ui/tooltip";
@@ -12,9 +13,7 @@ import { ToggleGroupSection } from "../shell/toggle-section";
 
 type ViewerContent =
   | { kind: "loading" }
-  | { kind: "text"; html: string; raw: string }
-  | { kind: "image"; url: string }
-  | { kind: "binary" }
+  | FilePreview
   | { kind: "unavailable" };
 
 /*
@@ -29,7 +28,9 @@ export function TrashViewer({
   onPurge,
   purging,
   restoring,
+  context,
 }: {
+  context: MarkdownContext;
   item: Entry | null;
   onRestore: (path: string) => void;
   onCopyPath: (path: string) => void;
@@ -56,21 +57,8 @@ export function TrashViewer({
           setContent({ kind: "unavailable" });
           return;
         }
-        const meta = await api.readMeta(item.path).catch(() => null);
-        const mediaType = meta?.media_type ?? "text/markdown";
-        if (mediaType.startsWith("image/")) {
-          const bytes = await api.readRevisionRaw(item.path, found.revision);
-          const blob = new Blob([bytes as unknown as BlobPart], { type: mediaType });
-          if (alive) setContent({ kind: "image", url: URL.createObjectURL(blob) });
-          return;
-        }
-        const raw = await api.readRevisionText(item.path, found.revision);
-        if (!alive) return;
-        setContent({
-          kind: "text",
-          raw,
-          html: isTextMedia(mediaType) ? await markdownToSafeHtml(raw) : "",
-        });
+        const preview = await revisionPreviewFor(item.path, found.revision, found.content?.media_type ?? "application/octet-stream");
+        if (alive) setContent(preview);
       } catch {
         if (alive) setContent({ kind: "unavailable" });
       }
@@ -156,13 +144,12 @@ export function TrashViewer({
         ) : content.kind === "text" ? (
           viewMode === "source" ? (
             <pre className="p-6 font-mono text-body-sm leading-relaxed whitespace-pre-wrap">
-              {content.raw}
+              {content.text}
             </pre>
           ) : (
-            <div
-              className="markdown-preview"
-              data-testid="trash-preview"
-              dangerouslySetInnerHTML={{ __html: content.html }}
+            <MarkdownContent text={content.text} {...context} path={item.path}
+              className=""
+              testId="trash-preview"
             />
           )
         ) : (

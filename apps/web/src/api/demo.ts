@@ -1,3 +1,4 @@
+import { parseMarkdownDocument } from "../lib/document-metadata";
 import {
   ApiError,
   isTextMedia,
@@ -217,10 +218,11 @@ export const demoApi = {
     for (const [path, file] of store) {
       const trashed = head(file).action === "trash";
       if (trashed && !query.include_deleted) continue;
+      if (query.tag && !parseMarkdownDocument(head(file).content?.text ?? "").metadata?.tags.includes(query.tag)) continue;
       items.push(headEntry(path, file));
     }
     items.sort((a, b) => a.path.localeCompare(b.path));
-    return { items, next_cursor: null, source: "store", consistency: "per_file" };
+    return { items, next_cursor: null, source: query.source ?? "store", consistency: "per_file" };
   },
 
   async readRaw(path: string): Promise<{ bytes: Uint8Array; etag: string }> {

@@ -1,22 +1,24 @@
-import { markdownToSafeHtml } from "../markdown/render";
 import { api, isTextMedia } from "../../api/client";
 
 /*
  * Shared hover-preview loaders (DESIGN.md §49): backlinks, history rows and
- * editor reference hovers all render the same three outcomes — sanitized
- * markdown, a blob image, or "not previewable". One-flight caches so
+ * editor reference hovers load the same three outcomes — source text,
+ * a blob image, or "not previewable". MarkdownContent owns rendering and
+ * sanitizing the source text. One-flight caches so
  * repeated hovers don't refetch.
  */
 
-export type PreviewResult =
-  | { kind: "text"; html: string }
+export type FilePreview =
+  | { kind: "text"; text: string }
   | { kind: "image"; url: string }
   | { kind: "binary" };
 
-const previewCache = new Map<string, Promise<PreviewResult>>();
+export type PreviewResult = FilePreview | { kind: "link"; url: string };
+
+const previewCache = new Map<string, Promise<FilePreview>>();
 
 /** Live (HEAD) content of a path. */
-export function previewFor(path: string): Promise<PreviewResult> {
+export function previewFor(path: string): Promise<FilePreview> {
   let cached = previewCache.get(path);
   if (!cached) {
     cached = (async () => {
@@ -28,7 +30,7 @@ export function previewFor(path: string): Promise<PreviewResult> {
       }
       if (isTextMedia(meta.media_type)) {
         const { text } = await api.readText(path);
-        return { kind: "text", html: await markdownToSafeHtml(text) } as const;
+        return { kind: "text", text } as const;
       }
       return { kind: "binary" } as const;
     })();
@@ -43,7 +45,7 @@ export function previewFor(path: string): Promise<PreviewResult> {
   return cached;
 }
 
-const revisionCache = new Map<string, Promise<PreviewResult>>();
+const revisionCache = new Map<string, Promise<FilePreview>>();
 
 /** Called after a publish: cached HEAD/revision previews for the path are
  * stale the moment new bytes land. */
@@ -55,20 +57,19 @@ export function invalidatePreview(path: string) {
 }
 
 /** Content of a specific historical revision (history hover / view dialog). */
-export function revisionPreviewFor(path: string, revision: string): Promise<PreviewResult> {
+export function revisionPreviewFor(path: string, revision: string, mediaType = "text/markdown"): Promise<FilePreview> {
   const key = `${path}@${revision}`;
   let cached = revisionCache.get(key);
   if (!cached) {
     cached = (async () => {
-      const meta = await api.readMeta(path).catch(() => null);
-      const mediaType = meta?.media_type ?? "text/markdown";
       if (mediaType.startsWith("image/")) {
         const bytes = await api.readRevisionRaw(path, revision);
         const blob = new Blob([bytes as unknown as BlobPart], { type: mediaType });
         return { kind: "image", url: URL.createObjectURL(blob) } as const;
       }
+      if (!isTextMedia(mediaType)) return { kind: "binary" } as const;
       const text = await api.readRevisionText(path, revision);
-      return { kind: "text", html: await markdownToSafeHtml(text) } as const;
+      return { kind: "text", text } as const;
     })();
     cached = cached.catch((error) => {
       revisionCache.delete(key);
@@ -77,30 +78,4 @@ export function revisionPreviewFor(path: string, revision: string): Promise<Prev
     revisionCache.set(key, cached);
   }
   return cached;
-}
-
-/**
- * Resolve a markdown/wiki reference to a vault path: exact, then any entry
- * ending with `/<target>`, then stem match ([[name]] without extension).
- */
-export const referenceStem = (path: string) => path.replace(/\.[a-z0-9]+$/i, "");
-
-export function resolveReference(
-  target: string,
-  files: { path: string }[],
-): string | null {
-  let decoded = target;
-  try {
-    decoded = decodeURIComponent(target);
-  } catch {
-    /* keep raw */
-  }
-  if (files.some((file) => file.path === decoded)) return decoded;
-  const suffixed = files.find((file) => file.path.endsWith(`/${decoded}`));
-  if (suffixed) return suffixed.path;
-  const stem = referenceStem(decoded);
-  const byStem = files.find(
-    (file) => referenceStem(file.path) === stem || referenceStem(file.path).endsWith(`/${stem}`),
-  );
-  return byStem?.path ?? null;
 }

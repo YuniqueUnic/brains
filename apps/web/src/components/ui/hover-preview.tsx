@@ -1,71 +1,59 @@
-import { useState, type ReactElement } from "react";
-import { Tooltip as TooltipPrimitive } from "@base-ui-components/react/tooltip";
-import { useTranslation } from "react-i18next";
+import { useRef, type ReactElement } from "react";
+import { Popover } from "@base-ui-components/react/popover";
 import type { PreviewResult } from "../properties/preview";
+import type { MarkdownContext } from "../markdown/markdown-content";
+import { PreviewSurface } from "./preview-surface";
 
-/*
- * HoverPreview (DESIGN.md §49): one control for the "hover a reference →
- * floating rendered preview" pattern — backlinks, history rows, anywhere a
- * path/revision resolves to content. Loader decides what is shown
- * (markdown / image / not-previewable); onOpen makes the popup click-to-jump.
- */
+/** Interactive previews use a popover; tooltips must not contain controls. */
 export function HoverPreview({
   trigger,
   load,
   side = "left",
   onOpen,
   testId,
+  context,
 }: {
-  /** The element that reveals the preview on hover (keeps its own classes). */
   trigger: ReactElement<Record<string, unknown>>;
-  /** Content loader; one-flight caching lives in the loader (preview.ts). */
   load: () => Promise<PreviewResult>;
-  side?: "left" | "right" | "top";
+  side?: "left" | "right" | "top" | "bottom";
   onOpen?: () => void;
   testId?: string;
+  context?: MarkdownContext;
 }) {
-  const { t } = useTranslation("info");
-  const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const triggerRef = useRef<HTMLElement>(null);
   return (
-    <TooltipPrimitive.Root>
-      <TooltipPrimitive.Trigger
+    <Popover.Root>
+      <Popover.Trigger
+        ref={triggerRef}
         render={trigger}
-        onMouseEnter={() => {
-          void load().then(setPreview, () => setPreview({ kind: "binary" }));
-        }}
+        nativeButton={trigger.type === "button"}
+        role={trigger.type === "a" ? "link" : undefined}
+        openOnHover
+        delay={350}
+        closeDelay={300}
       />
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Positioner side={side} sideOffset={10} align="start">
-          <TooltipPrimitive.Popup
-            className="z-50 max-h-[320px] overflow-hidden rounded-[10px] border bg-card shadow-overlay [zoom:var(--ui-zoom,1)]"
-            role="tooltip"
+      <Popover.Portal>
+        <Popover.Positioner
+          side={side}
+          sideOffset={10}
+          align="start"
+          className="z-50"
+        >
+          <Popover.Popup
+            className="preview-popup"
             data-testid={testId}
-            onClick={onOpen}
-            style={{ width: "min(360px, calc((100vw - 16px) / var(--ui-zoom, 1)))", cursor: onOpen ? "pointer" : undefined }}
+            initialFocus={false}
+            finalFocus={false}
           >
-            <div className="flex h-auto max-h-[320px] items-start justify-center overflow-auto">
-              {preview === null ? (
-                <p className="px-4 py-6 text-xs text-muted-foreground">{t("previewLoading")}</p>
-              ) : preview.kind === "image" ? (
-                <img
-                  src={preview.url}
-                  alt=""
-                  className="max-h-[320px] w-auto object-contain"
-                />
-              ) : preview.kind === "text" ? (
-                <div
-                  className="markdown-preview w-full !py-4 text-body"
-                  dangerouslySetInnerHTML={{ __html: preview.html }}
-                />
-              ) : (
-                <p className="px-4 py-6 text-xs text-muted-foreground">
-                  {t("previewUnavailable")}
-                </p>
-              )}
-            </div>
-          </TooltipPrimitive.Popup>
-        </TooltipPrimitive.Positioner>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
+            <PreviewSurface
+              load={load}
+              onOpen={onOpen}
+              context={context}
+              anchor={() => triggerRef.current?.getBoundingClientRect()}
+            />
+          </Popover.Popup>
+        </Popover.Positioner>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

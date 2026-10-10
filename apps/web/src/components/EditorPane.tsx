@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Compartment, EditorState as CodeMirrorState } from "@codemirror/state";
 import { EditorView, lineNumbers } from "@codemirror/view";
 import { autocompletion } from "@codemirror/autocomplete";
 import { unifiedMergeView } from "@codemirror/merge";
 import { openSearchPanel } from "@codemirror/search";
 import { redo, undo } from "@codemirror/commands";
-import { markdownToSafeHtml } from "./markdown/render";
+import { MarkdownContent } from "./markdown/markdown-content";
 import {
   CopyPlus,
   ChevronUp,
@@ -80,6 +80,7 @@ export default function EditorPane({
   canTrash,
   onOpenProperties,
   onOpenReference,
+  onOpenTag,
   completions,
 }: {
   state: EditorState;
@@ -94,6 +95,7 @@ export default function EditorPane({
   onOpenProperties?: () => void;
   /** Open a vault file referenced by hover (docs/… targets, [[wiki]]). */
   onOpenReference?: (path: string) => void;
+  onOpenTag?: (tag: string) => void;
   /** Vault listing for [[wiki]] / []() completions and hover previews. */
   completions?: CompletionFile[];
 }) {
@@ -120,7 +122,8 @@ export default function EditorPane({
   const lineNumComp = useRef(new Compartment());
   const wrapComp = useRef(new Compartment());
   const completionsComp = useRef(new Compartment());
-  const previewLabels = { loading: t("previewLoading"), unavailable: t("previewUnavailable") };
+  const path = state.kind === "empty" ? "" : state.path;
+  const previewContext = { path, files: completions, onOpen: onOpenReference, onTag: onOpenTag };
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -154,8 +157,8 @@ export default function EditorPane({
     const initialSettings = loadEditorSettings();
     const completionExtensions = completions
       ? [
-          autocompletion({ override: [fileCompletions(completions, onOpenReference, previewLabels)] }),
-          referenceHover(completions, onOpenReference, previewLabels),
+          autocompletion({ override: [fileCompletions(completions, previewContext)] }),
+          referenceHover(previewContext),
         ]
       : [];
     const view = new EditorView({
@@ -334,15 +337,15 @@ export default function EditorPane({
         completionsComp.current.reconfigure(
           completions
             ? [
-                autocompletion({ override: [fileCompletions(completions, onOpenReference, previewLabels)] }),
-                referenceHover(completions, onOpenReference, previewLabels),
+                autocompletion({ override: [fileCompletions(completions, previewContext)] }),
+                referenceHover(previewContext),
               ]
             : [],
         ),
       ],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings.lineNumbers, settings.wrap, completions, onOpenReference, t]);
+  }, [settings.lineNumbers, settings.wrap, completions, onOpenReference, onOpenTag, path, t]);
 
   /**
    * 发布 (the ONLY path that moves HEAD): a conditional PUT creating a new
@@ -511,10 +514,7 @@ export default function EditorPane({
   };
   const canDiff =
     (state.kind === "dirty" || state.kind === "error") && state.text !== state.baseText;
-  const previewHtml = useMemo(() => {
-    if (viewMode !== "preview" || buffer === "") return "";
-    return markdownToSafeHtml(buffer);
-  }, [viewMode, buffer]);
+
 
   return (
     <div
@@ -680,11 +680,8 @@ export default function EditorPane({
           ref={hostRef}
         />
         {!inConflict && viewMode === "preview" && (
-          <div
-            className="markdown-preview absolute inset-0 overflow-auto"
-            data-testid="markdown-preview"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
+          <MarkdownContent text={buffer} {...previewContext}
+            className="absolute inset-0 overflow-auto" testId="markdown-preview" />
         )}
         {state.kind === "empty" && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
