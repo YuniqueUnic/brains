@@ -5,12 +5,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 XIDLC=${XIDLC:?set XIDLC to the compiler installed by scripts/install-xidlc.sh}
 command -v "$XIDLC" >/dev/null
-read -r expected compiler_rev < <(python3 - <<'PY'
+expected=$(python3 - <<'PY'
 import tomllib
 with open("Cargo.toml", "rb") as manifest:
     workspace = tomllib.load(manifest)["workspace"]
-print(workspace["dependencies"]["xidl-rust-axum"]["version"].removeprefix("="),
-      workspace["metadata"]["xidl"]["compiler"]["rev"])
+print(workspace["dependencies"]["xidl-rust-axum"]["version"].removeprefix("="))
 PY
 )
 actual=$("$XIDLC" --version)
@@ -30,10 +29,6 @@ mv "$generated_dir/openapi/openapi_brains.json" "$generated_dir/openapi/brains-o
 "$XIDLC" gen --out-dir "$generated_dir/rust" rust-axum --client api/brains.idl
 mv "$generated_dir/rust/brains.rs" "$generated_dir/rust/brains_generated.rs"
 "$XIDLC" gen --out-dir "$generated_dir/contract" rust-axum --server api/brains.idl
-if ! head -n 1 "$generated_dir/contract/brains.rs" | grep -Fq "xidlc-v$expected-$compiler_rev."; then
-  echo "compiler metadata does not match pinned revision $compiler_rev" >&2
-  exit 1
-fi
 python3 - "$generated_dir" <<'PYFORMAT'
 from pathlib import Path
 import sys

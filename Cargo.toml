@@ -24,14 +24,8 @@ edition = "2024"
 license = "MIT"
 repository = "https://example.com/brains"
 
-# Temporary compiler-only pin for HEAD metadata support (#309). Remove after
-# the first official release containing it; runtimes use crates.io/npm.
-[workspace.metadata.xidl.compiler]
-git = "https://github.com/YuniqueUnic/xidl.git"
-rev = "1f8bd44591351404e7d1dfee442af16c64284fac"
-
 [workspace.dependencies]
-xidl-rust-axum = { version = "=0.98.0", default-features = false }
+xidl-rust-axum = { version = "=0.99.0", default-features = false }
 brains-domain = { path = "crates/domain" }
 brains-format = { path = "crates/format" }
 brains-ports = { path = "crates/ports" }

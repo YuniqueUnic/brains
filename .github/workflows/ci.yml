@@ -48,7 +48,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install the pinned IDL compiler
+      - name: Install the matching released IDL compiler
         run: |
           bash scripts/install-xidlc.sh "$RUNNER_TEMP/xidlc"
           echo "XIDLC=$RUNNER_TEMP/xidlc/bin/xidlc" >> "$GITHUB_ENV"

@@ -3109,18 +3109,18 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xidl-http"
-version = "0.98.0"
+version = "0.99.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04126b3f0e079a19a5eb8e90b1ee2bb07ff5433bfecf3e1afed160d4d00dfa9f"
+checksum = "d8b8930511390ecfc23c884b5359cef594916ec6143ff0df63f4361596ed0808"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "xidl-rust-axum"
-version = "0.98.0"
+version = "0.99.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2bbc25d39a5e12c7852efcd3b44ba0241070c604fb93e1e29e6889ee2864645"
+checksum = "61683e7f29ce20a1b131cf86a529829d68261b6a16ad0d146390fd3ba4da9914"
 dependencies = [
  "axum",
  "axum-extra",
