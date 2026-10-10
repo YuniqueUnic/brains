@@ -108,7 +108,7 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## 测试
 
-- **82 个 Rust 测试**——domain、format、适配器、28 个业务测试（真实 fs+SQLite，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
+- **83 个 Rust 测试**——domain、format、适配器、29 个业务测试（真实 fs+SQLite，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
 - **12 个浏览器 E2E**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
 - **独立 CLI 业务验收与快照**——离线导入、编辑、历史、分页、服务器接管与多端协作，见 `tests/local-workflows.py`；local/remote 两类来源分别与 Worker 验证归档和同步。
 - **Worker 业务冒烟**——同一验收清单对 workerd 执行（`tests/worker-smoke.sh`）。

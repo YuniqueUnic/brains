@@ -15,7 +15,7 @@ import threading
 import time
 import unittest
 
-from cli_support import Cli, REPO, native_server
+from cli_support import Cli, REPO, exercise_repeated_relations, native_server
 
 
 class LocalWorkflows(unittest.TestCase):
@@ -104,6 +104,10 @@ class LocalWorkflows(unittest.TestCase):
             cli.put("local", "000.md", f"# Match revision {number}\n".encode())
         self.assertEqual(len(self.rows("local", "history", "000.md", "--json")), 22)
         self.assertIn(b"105 files, 0 failures", cli("local", "reindex", "--all-pages", "--limit", 5))
+
+    def test_repeated_links_and_tags_remain_indexed_after_edit(self):
+        """Given repeated relations, editing a note updates search and replaces old links."""
+        exercise_repeated_relations(self.cli, "local")
 
     def test_archive_then_collaborate_with_two_servers(self):
         """Given offline history, restore it on A, edit A, then sync local and B."""

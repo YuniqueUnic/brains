@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from cli_support import Cli, native_server
+from cli_support import Cli, exercise_repeated_relations, native_server
 
 
 def exercise(root, source_mode, local_url=None, local_token=None):
@@ -111,6 +111,9 @@ def exercise(root, source_mode, local_url=None, local_token=None):
     assert next(item for item in remote_files if item["path"] == "bin/run.sh")["state"] == "trashed"
     cli("local", *sync_args, "verify")
     print("sync: dry-run, disjoint text merge, binary conflict/resolution and delete passed")
+    for profile in ("local", "cloud"):
+        exercise_repeated_relations(cli, profile)
+    print("index: repeated links/tags update, search, backlinks and reindex passed on both endpoints")
 
 
 def main():

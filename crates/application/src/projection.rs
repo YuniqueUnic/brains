@@ -5,7 +5,7 @@
 use brains_domain::{FileKind, Revision, VaultPath, detect_kind};
 use brains_ports::{FileProjection, PARSER_VERSION};
 
-use brains_format::{LinkKind, extract_links, extract_title, split_frontmatter};
+use brains_format::{extract_links, extract_title, split_frontmatter};
 
 pub fn build_projection(
     vault: &str,
@@ -62,21 +62,28 @@ pub fn build_projection(
         .map(brains_format::frontmatter::parse)
         .unwrap_or_default();
     projection.title = extract_title(fm.title.as_deref(), body).unwrap_or_default();
-    projection.tags_json = serde_json::to_string(&fm.tags).unwrap_or_else(|_| "[]".into());
-    let links: Vec<serde_json::Value> = extract_links(&path, body)
+    // Projections contain relationships, not every occurrence in the document.
+    // Both indexes key tags by (path, tag) and links by (source, target, kind).
+    let mut tags = fm.tags;
+    tags.sort_unstable();
+    tags.dedup();
+    projection.tags_json = serde_json::to_string(&tags).expect("string list serializes");
+    let mut links: Vec<_> = extract_links(&path, body)
         .into_iter()
-        .map(|link| {
+        .map(|link| (link.target, link.kind.as_str()))
+        .collect();
+    links.sort_unstable();
+    links.dedup();
+    let links: Vec<_> = links
+        .into_iter()
+        .map(|(target, kind)| {
             serde_json::json!({
-                "target": link.target,
-                "kind": match link.kind {
-                    LinkKind::Internal => "link",
-                    LinkKind::External => "external",
-                    LinkKind::OutsideVault => "outside",
-                },
+                "target": target,
+                "kind": kind,
             })
         })
         .collect();
-    projection.links_json = serde_json::to_string(&links).unwrap_or_else(|_| "[]".into());
+    projection.links_json = serde_json::to_string(&links).expect("link records serialize");
     projection.body = text.to_owned();
     let _ = vault; // vault is part of the blob key, not the index row
     projection

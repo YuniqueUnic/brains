@@ -43,6 +43,37 @@ class Cli:
         self(name, "login", "--stdin-token", data=token.encode())
 
 
+def exercise_repeated_relations(cli, profile):
+    """A normal note may repeat a link or tag; updates must still be searchable."""
+    path = "relations/source.md"
+    for tag, destination in (("first", "before.md"), ("second", "after.md")):
+        body = (f"---\ntags: [{tag}, {tag}]\n---\n# {tag}\n"
+                f"[One]({destination})\n[Again](./{destination}#section)\n").encode()
+        if tag == "first":
+            cli(profile, "put", path, "--create", data=body)
+        else:
+            cli.put(profile, path, body)
+        revision = cli.stat(profile, path)["revision"]
+        indexed = [json.loads(line) for line in
+                   cli(profile, "ls", "relations/", "--source", "index", "--tag", tag, "--json").splitlines()]
+        assert len(indexed) == 1 and indexed[0]["revision"] == revision
+        for mode in ("literal", "fts"):
+            hits = [json.loads(line) for line in
+                    cli(profile, "search", tag, "--prefix", "relations/", "--tag", tag,
+                        "--mode", mode, "--json").splitlines()]
+            assert len(hits) == 1 and hits[0]["indexed_revision"] == revision
+        links = [json.loads(line) for line in cli(profile, "links", path, "--json").splitlines()]
+        assert len(links) == 1 and links[0]["target"] == f"relations/{destination}"
+        assert links[0]["source_revision"] == revision
+        backlinks = [json.loads(line) for line in
+                     cli(profile, "links", f"relations/{destination}", "--backlinks", "--json").splitlines()]
+        assert len(backlinks) == 1 and backlinks[0]["source_revision"] == revision
+    assert cli(profile, "links", "relations/before.md", "--backlinks", "--json") == b""
+    assert cli(profile, "ls", "relations/", "--source", "index", "--tag", "first", "--json") == b""
+    cli(profile, "reindex", "--all-pages")
+    assert len(cli(profile, "links", path, "--json").splitlines()) == 1
+
+
 @contextmanager
 def native_server(root, data_dir, vault):
     token = secrets.token_urlsafe(32)

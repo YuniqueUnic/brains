@@ -132,3 +132,48 @@ async fn reindex_requires_whole_vault_admin() {
     let allowed = vault.reindex_page(&owner, None, 5).await.unwrap();
     assert_eq!(allowed.processed, 1);
 }
+
+#[tokio::test]
+async fn reindex_refreshes_old_projection_with_repeated_relations() {
+    use brains_ports::{IndexStore, PARSER_VERSION, RevisionStore};
+
+    let TestVault { vault, .. } = open_vault();
+    let owner = owner_principal();
+    let text = "---\ntags: [rust, rust]\n---\n[First](target.md) [Again](./target.md#section)";
+    let committed = put_text(&vault, &owner, "source.md", text, Precondition::Create)
+        .await
+        .unwrap();
+    let id = brains_domain::HexId::from_hex(&committed.revision).unwrap();
+    let revision = vault.revisions.get(&id).await.unwrap().unwrap();
+    let mut old = crate::projection::build_projection(
+        "default",
+        &revision,
+        Some(text.as_bytes()),
+        false,
+        vault.limits.max_text_bytes,
+    );
+    old.parser_version = PARSER_VERSION - 1;
+    old.tags_json = r#"["rust","rust"]"#.into();
+    old.links_json =
+        r#"[{"target":"target.md","kind":"link"},{"target":"target.md","kind":"link"}]"#.into();
+    vault.index.remove_path("source.md").await.unwrap();
+    vault.index.upsert(&old).await.unwrap();
+
+    // Same HEAD and generation: the parser version admits the repaired projection.
+    let rebuilt = vault.reindex_page(&owner, None, 5).await.unwrap();
+    assert!(rebuilt.failed.is_empty(), "{:?}", rebuilt.failed);
+    assert_eq!(rebuilt.processed, 1);
+    let links = vault
+        .index
+        .links_outbound("source.md", None, 50)
+        .await
+        .unwrap();
+    assert_eq!(links.len(), 1);
+    assert_eq!(links[0].source_revision, committed.revision);
+    let read = vault
+        .read_file(&owner, &VaultPath::new("source.md").unwrap())
+        .await
+        .unwrap();
+    assert_eq!(read.head.revision, id);
+    assert_eq!(read.bytes, text.as_bytes());
+}

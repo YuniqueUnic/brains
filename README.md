@@ -113,7 +113,7 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## Testing
 
-- **82 Rust tests** — domain, format, adapters, 28 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
+- **83 Rust tests** — domain, format, adapters, 29 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
 - **12 browser E2E** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
 - **Standalone CLI business scenarios and snapshot** — offline edits/history, pagination, directory ownership, and multi-server collaboration (`tests/local-workflows.py`); both local/remote sources exercise archive and sync against Worker.
 - **Worker business smoke** — the same acceptance list executed against workerd (`tests/worker-smoke.sh`).
