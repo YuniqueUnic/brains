@@ -2,7 +2,7 @@
   "name": "brains",
   "private": true,
   "packageManager": "pnpm@10.28.2",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "scripts": {
     "lint": "oxlint --deny-warnings apps/web/src apps/web/vite.config.ts tests/e2e tests/http-sdk scripts"
   },
