@@ -316,26 +316,19 @@ exception TransferConflict {
 };
 
 // -- Representation switching ----------------------------------------------
-// Media types for `@http` union cases; the discriminator travels as the
+// ContentType is built into xidl; the discriminator travels as the
 // response Content-Type, never on the wire as a tag.
-
-enum PayloadType {
-    @rename("application/json")
-    Json,
-    @rename("application/octet-stream")
-    OctetStream,
-};
 
 // GET /file: current-HEAD metadata or the raw bytes.
 @http
-union FilePayload switch (PayloadType) {
+union FilePayload switch (ContentType) {
     case Json: Entry meta;
     case OctetStream: sequence<octet> raw;
 };
 
 // GET /revision: one immutable revision's metadata or its raw bytes.
 @http
-union RevisionPayload switch (PayloadType) {
+union RevisionPayload switch (ContentType) {
     case Json: Revision meta;
     case OctetStream: sequence<octet> raw;
 };

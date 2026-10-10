@@ -1,6 +1,14 @@
 {
   "components": {
     "schemas": {
+      "ContentType": {
+        "enum": [
+          "application/json",
+          "application/octet-stream",
+          "text/plain"
+        ],
+        "type": "string"
+      },
       "Error": {
         "properties": {
           "code": {
@@ -517,13 +525,6 @@
           "error"
         ],
         "type": "object"
-      },
-      "brains.PayloadType": {
-        "enum": [
-          "application/json",
-          "application/octet-stream"
-        ],
-        "type": "string"
       },
       "brains.PreconditionFailed": {
         "properties": {
