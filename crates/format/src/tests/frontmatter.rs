@@ -64,3 +64,47 @@ fn oversized_frontmatter_warns() {
     assert!(fm.title.is_none());
     assert!(!fm.warnings.is_empty());
 }
+
+#[test]
+fn standard_yaml_strings_match_displayed_tags() {
+    let fm = parse(
+        "title: |\n  多行标题\ntags: ['a,b', '  rust  ', rust, 42]\ndescription: |\n  说明\nlinks:\n  项目: https://example.com\n",
+    );
+    assert_eq!(fm.title.as_deref(), Some("多行标题"));
+    assert_eq!(fm.tags, vec!["a,b", "rust"]);
+    assert!(fm.warnings.is_empty());
+    assert_eq!(parse("tags: rust").tags, vec!["rust"]);
+}
+
+#[test]
+fn bom_and_closing_fence_at_eof_keep_metadata_indexable() {
+    let (yaml, body) = split_frontmatter("\u{feff}---\r\ntags: rust\r\n---");
+    assert!(body.is_empty());
+    assert_eq!(parse(yaml.unwrap()).tags, vec!["rust"]);
+}
+
+#[test]
+fn invalid_or_duplicate_metadata_is_not_partially_indexed() {
+    for yaml in [
+        "tags: [broken",
+        "tags: first\ntags: second",
+        "- not a mapping",
+    ] {
+        let fm = parse(yaml);
+        assert!(fm.tags.is_empty());
+        assert!(!fm.warnings.is_empty());
+    }
+}
+
+#[test]
+fn yaml_core_schema_does_not_merge_hidden_tags_or_coerce_plain_words() {
+    let fm = parse(
+        "defaults: &base {tags: [hidden]}\n<<: *base\ntags: [yes, no, on, off, true, false, 42]",
+    );
+    assert_eq!(fm.tags, vec!["yes", "no", "on", "off"]);
+    assert!(
+        parse("defaults: &base {tags: [hidden]}\n<<: *base")
+            .tags
+            .is_empty()
+    );
+}

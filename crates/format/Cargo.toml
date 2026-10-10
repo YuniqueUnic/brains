@@ -9,5 +9,6 @@ brains-domain.workspace = true
 pulldown-cmark.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+serde-saphyr.workspace = true
 thiserror.workspace = true
 unicode-normalization.workspace = true

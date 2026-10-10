@@ -8,8 +8,8 @@ use brains_domain::{DomainResult, FileKind};
 
 /// Bump when the parser's projection shape changes; the monotonic upsert
 /// then refreshes rows at equal generation (design §10.2).
-// Version 2 projects tags and resolved link relationships as unique sets.
-pub const PARSER_VERSION: i64 = 2;
+// Version 3 reads standard YAML scalars and sequences for frontmatter tags.
+pub const PARSER_VERSION: i64 = 3;
 
 /// One searchable projection derived from a verified, committed revision.
 #[derive(Clone, Debug)]

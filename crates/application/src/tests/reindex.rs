@@ -177,3 +177,57 @@ async fn reindex_refreshes_old_projection_with_repeated_relations() {
     assert_eq!(read.head.revision, id);
     assert_eq!(read.bytes, text.as_bytes());
 }
+
+#[tokio::test]
+async fn reindex_reparses_yaml_tags_without_republishing_the_document() {
+    use brains_ports::{IndexStore, RevisionStore};
+
+    let TestVault { vault, .. } = open_vault();
+    let owner = owner_principal();
+    let text = "---\ntags: ['a,b', yes]\n---\n正文保持不变";
+    let committed = put_text(&vault, &owner, "quoted.md", text, Precondition::Create)
+        .await
+        .unwrap();
+    let id = brains_domain::HexId::from_hex(&committed.revision).unwrap();
+    let revision = vault.revisions.get(&id).await.unwrap().unwrap();
+    let mut old = crate::projection::build_projection(
+        "default",
+        &revision,
+        Some(text.as_bytes()),
+        false,
+        vault.limits.max_text_bytes,
+    );
+    // The released v2 parser split quoted commas. Keep the historical version
+    // explicit so forgetting to advance PARSER_VERSION cannot pass this check.
+    old.parser_version = 2;
+    old.tags_json = r#"["a","b","yes"]"#.into();
+    vault.index.remove_path("quoted.md").await.unwrap();
+    vault.index.upsert(&old).await.unwrap();
+
+    let rebuilt = vault.reindex_page(&owner, None, 5).await.unwrap();
+    assert!(rebuilt.failed.is_empty());
+    assert_eq!(rebuilt.processed, 1);
+    for (tag, expected) in [("a,b", 1), ("yes", 1), ("a", 0), ("b", 0)] {
+        let hits = vault
+            .search(
+                &owner,
+                crate::search::SearchQuery {
+                    q: "正文".into(),
+                    mode: crate::search::SearchMode::Literal,
+                    prefix: None,
+                    tag: Some(tag.into()),
+                    cursor: None,
+                    scan_limit: 100,
+                },
+            )
+            .await
+            .unwrap();
+        assert_eq!(hits.items.len(), expected, "tag: {tag}");
+    }
+    let read = vault
+        .read_file(&owner, &VaultPath::new("quoted.md").unwrap())
+        .await
+        .unwrap();
+    assert_eq!(read.head.revision, id);
+    assert_eq!(read.bytes, text.as_bytes());
+}
