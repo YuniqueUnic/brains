@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { Marked } from "marked";
+import { createMarkdownParser } from "../../lib/markdown-parser";
 import { resolveReference } from "./references";
 
 /** All Markdown surfaces share the same renderer and HTML trust boundary. */
@@ -7,29 +7,7 @@ export function markdownToSafeHtml(
   text: string,
   context?: { path: string; files: readonly { path: string }[] },
 ): string {
-  const renderer = new Marked();
-  renderer.use({
-    extensions: [
-      {
-        name: "wikiLink",
-        level: "inline",
-        start: (source) => source.indexOf("[["),
-        tokenizer(source) {
-          const match = /^(!?)\[\[([^\]\n]+)\]\]/.exec(source);
-          if (!match) return;
-          const [href, alias] = match[2].split("|");
-          const label = alias ?? href;
-          return {
-            type: match[1] ? "image" : "link",
-            raw: match[0],
-            href,
-            text: label,
-            tokens: [{ type: "text", raw: label, text: label }],
-          };
-        },
-      },
-    ],
-  });
+  const renderer = createMarkdownParser();
   const paths = new Map<string, string>();
   const images = new Map<string, string>();
   const headings = new Map<string, number>();
