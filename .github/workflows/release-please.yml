@@ -26,11 +26,11 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
       # Tags created with GITHUB_TOKEN do not trigger tag-push workflows.
-      # Dispatch the existing build at the released tag, using the same token.
+      # Use the default branch's build recipe with the immutable release source.
       - name: Build release assets
         if: steps.release.outputs.release_created == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.release.outputs.tag_name }}
-        run: gh workflow run release.yml --ref "$RELEASE_TAG" -f version="$RELEASE_TAG"
+        run: gh workflow run release.yml -f version="$RELEASE_TAG"
