@@ -16,7 +16,7 @@ jobs:
     name: Rust (fmt · clippy · test · wasm check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check unified product versions
         run: python3 scripts/check-versions.py
       - name: Install the repository Rust toolchain
@@ -37,14 +37,14 @@ jobs:
     name: SDK codegen drift (api/brains.idl ↔ sdk/)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 10.28.2
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Install the matching released IDL compiler
@@ -68,9 +68,9 @@ jobs:
     name: Web build + typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -85,12 +85,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -116,7 +116,7 @@ jobs:
         run: pnpm exec playwright test
       - name: Upload failure context
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-failures
           path: tests/e2e/test-results
@@ -127,12 +127,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -146,7 +146,7 @@ jobs:
           worker-build --release
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Run isolated Worker business smoke
@@ -164,12 +164,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -183,7 +183,7 @@ jobs:
           worker-build --release
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - name: Install Playwright browser
@@ -192,7 +192,7 @@ jobs:
         run: tests/e2e/run-workerd.sh
       - name: Upload failure context
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-worker-failures
           path: tests/e2e/test-results

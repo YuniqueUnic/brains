@@ -27,7 +27,7 @@ jobs:
       version: ${{ steps.identity.outputs.version }}
       sha: ${{ steps.identity.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check unified product versions
         run: python3 scripts/check-versions.py
       - name: Resolve tag, package version and commit
@@ -76,7 +76,7 @@ jobs:
             os: ubuntu-22.04
             target: x86_64-unknown-linux-musl
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.sha }}
       - name: Install the repository Rust toolchain
@@ -109,7 +109,7 @@ jobs:
           "$DIR/bsx" --version > "$DIR/VERSION"
           tar czf "$DIR.tar.gz" "$DIR"
           shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: brains-${{ matrix.id }}
           path: |
@@ -126,14 +126,14 @@ jobs:
       VERSION: ${{ needs.prepare.outputs.version }}
       RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.sha }}
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -148,7 +148,7 @@ jobs:
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
       # CI's codegen drift check owns generation. Publish this commit's contract.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: brains-openapi
           path: sdk/openapi/brains-openapi.json
@@ -171,7 +171,7 @@ jobs:
           )
         env:
           WRANGLER_SEND_METRICS: "false"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: brains-web-worker
           path: |
@@ -190,10 +190,10 @@ jobs:
       RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
       RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.sha }}
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
       - name: Verify remote release tag
