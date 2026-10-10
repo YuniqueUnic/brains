@@ -36,14 +36,19 @@ def request(method, route, body=None, headers=None, expected=200):
 def put(content, revision=None, expected=200):
     headers = {'Content-Type': 'text/markdown'}
     headers['If-Match' if revision else 'If-None-Match'] = f'"{revision}"' if revision else '*'
-    return request('PUT', file_route, content.encode(), headers, expected)[0]
+    result, response_headers = request('PUT', file_route, content.encode(), headers, expected)
+    if expected == 200:
+        assert result['created'] is (revision is None), result
+        assert result['path'] == path, result
+        assert response_headers['ETag'] == f'"{result["revision"]}"'
+    return result
 
 
 caps, _ = request('GET', '/capabilities')
 assert caps['runtime'] == 'cloudflare-rust' and caps['limits']['max_text_bytes'] > 0
 print('capabilities: cloudflare-rust with text limits', flush=True)
 first_text = '第一版内容 cache-strategy'
-first = put(first_text, expected=201)
+first = put(first_text)
 assert first['generation'] == 1
 content, headers = request('GET', file_route)
 assert content == first_text.encode() and headers['ETag'] == f'"{first["revision"]}"'
