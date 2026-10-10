@@ -8,12 +8,11 @@ import { Workbench } from "../screens/Workbench";
 export const OpenNote = (path: string) =>
   Task.where(`#actor opens ${path} from the sidebar`, Click.on(Workbench.fileItem(path)));
 
-/** Search and wait for the results panel via the mode selector. */
+/** Search with the same keyboard command a user can enter. */
 export const SearchFor = (query: string, mode: "literal" | "fts" = "literal") =>
   Task.where(`#actor searches for "${query}" (${mode})`,
     Click.on(Workbench.paletteTrigger()),
-    Click.on(mode === "fts" ? Workbench.modeFtsButton() : Workbench.modeLiteralButton()),
-    Enter.theValue(query).into(Workbench.searchBox()),
+    Enter.theValue(`/${mode === "fts" ? "fts" : "text"} ${query}`).into(Workbench.searchBox()),
     Press.the("Enter").in(Workbench.searchBox()),
   );
 

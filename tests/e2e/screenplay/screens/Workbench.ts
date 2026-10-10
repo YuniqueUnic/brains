@@ -7,10 +7,6 @@ import { By, PageElement, PageElements } from "@serenity-js/web";
 export const Workbench = {
   searchBox: () =>
     PageElement.located(By.css('[data-testid="search-box"]')).describedAs("search box"),
-  modeLiteralButton: () =>
-    PageElement.located(By.css('[data-testid="mode-literal"]')).describedAs("literal mode button"),
-  modeFtsButton: () =>
-    PageElement.located(By.css('[data-testid="mode-fts"]')).describedAs("fts mode button"),
   newFileButton: () =>
     PageElement.located(By.css('[data-testid="new-file"]')).describedAs("new file button"),
   newFileDialog: () =>

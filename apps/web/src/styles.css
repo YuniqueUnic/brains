@@ -178,7 +178,8 @@
 }
 
 /* --- CodeMirror: the document editor ------------------------------------- */
-/* Document typography (DESIGN.md §32-33): 860px measure, generous top/bottom
+/* Source follows the available pane width; reading previews keep their measure.
+   Document typography: generous top/bottom
    padding, 15px/1.75 body, headings sized via the markdown highlight style.
    The editor pane owns --editor-scale (settings scale ÷ 100): source and
    preview share it. height:100% keeps the scroller (not the host) as the
@@ -197,10 +198,45 @@
 }
 .cm-content {
   caret-color: var(--primary);
-  max-width: 860px;
-  margin: 0 auto;
   padding-top: 48px;
   padding-bottom: 120px;
+}
+.cm-editor .cm-line {
+  padding-inline: 24px;
+}
+.cm-metadata-tag {
+  color: var(--primary);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.search-mode-command {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border-block-end: 2px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  cursor: pointer;
+}
+.search-mode-command:hover {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+.search-mode-command:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.cm-tooltip .metadata-tag-action {
+  display: block;
+  padding: 8px 12px;
+  color: var(--foreground);
+  background: var(--card);
+  font: inherit;
+  cursor: pointer;
+}
+.metadata-tag-action:hover,
+.metadata-tag-action:focus-visible {
+  background: var(--muted);
 }
 /* Conflict/merge panes and the search panel are chrome, not documents:
    compact text and no document measure. */

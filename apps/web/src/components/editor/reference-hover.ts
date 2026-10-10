@@ -5,11 +5,14 @@ import { Lexer } from "marked";
 import { resolveReference } from "../markdown/references";
 import type { MarkdownContext } from "../markdown/markdown-content";
 import { buildRefPreviewDom } from "./ref-preview-dom";
+import { documentMetadata } from "./metadata-tags";
 
 /** Lezer owns Markdown ranges; marked owns destination/definition semantics. */
 export function referenceHover(context: MarkdownContext): Extension {
   return hoverTooltip(
     (view, pos, side) => {
+      const frontmatter = view.state.field(documentMetadata, false)?.frontmatter;
+      if (frontmatter && pos < frontmatter.end) return null;
       let inCode = false;
       let reference:
         | { from: number; to: number; target: string; image: boolean }

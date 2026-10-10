@@ -10,9 +10,8 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type Entry, type SearchHit } from "../../api/client";
-import { cn } from "../../lib/utils";
 import { Dialog, DialogContent } from "../ui/dialog";
-import { extractTagQuery } from "./tag-query";
+import { extractSearchQuery } from "./search-query";
 import type { UploadIntent } from "../shell/top-bar";
 
 /*
@@ -61,14 +60,15 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [fullText, setFullText] = useState<FullTextState>({ kind: "idle" });
   const runIdRef = useRef(0);
-  const composing = useRef(false);
+  const [composing, setComposing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const commitInput = (value: string, finish = false) => {
-    const parsed = extractTagQuery(value, finish);
+    const parsed = extractSearchQuery(value, finish);
     if (parsed.tags.length)
       onTagsChange([...new Set([...tags, ...parsed.tags])]);
+    if (parsed.mode) onSearchModeChange(parsed.mode);
     setQuery(parsed.query);
-    return parsed.tags.length > 0;
+    return parsed.tags.length > 0 || parsed.mode !== undefined;
   };
   const removeTag = (tag: string) => {
     onTagsChange(tags.filter((value) => value !== tag));
@@ -154,6 +154,7 @@ export function CommandPalette({
   useEffect(() => {
     if (!open) {
       setQuery("");
+      setComposing(false);
       setFullText({ kind: "idle" });
     }
   }, [open]);
@@ -161,7 +162,7 @@ export function CommandPalette({
   useEffect(() => {
     if (!open) return;
     const q = query.trim();
-    if (q.length < 2 && !tags.length) {
+    if (composing || extractSearchQuery(query).pendingToken || (q.length < 2 && !tags.length)) {
       setFullText({ kind: "idle" });
       return;
     }
@@ -172,7 +173,7 @@ export function CommandPalette({
       runIdRef.current += 1;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, searchMode, open, tags]);
+  }, [query, searchMode, open, tags, composing]);
 
   const showFullText = fullText.kind === "running" || fullText.kind === "done";
 
@@ -189,6 +190,19 @@ export function CommandPalette({
         >
           <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
             <Search className="size-4 shrink-0 stroke-[1.5] text-faint" />
+            <button
+              type="button"
+              data-testid="search-mode-command"
+              aria-label={t("switchSearchMode", { mode: t(searchMode === "fts" ? "modeLiteral" : "modeFts") })}
+              title={t("modeCommands")}
+              onClick={() => {
+                onSearchModeChange(searchMode === "fts" ? "literal" : "fts");
+                inputRef.current?.focus();
+              }}
+              className="search-mode-command"
+            >
+              {searchMode === "fts" ? "/fts" : "/text"}
+            </button>
             {tags.map((tag) => (
               <button
                 key={tag}
@@ -207,18 +221,18 @@ export function CommandPalette({
               data-testid="search-box"
               value={query}
               onValueChange={(value) => {
-                if (composing.current) setQuery(value);
+                if (composing) setQuery(value);
                 else commitInput(value);
               }}
               onCompositionStart={() => {
-                composing.current = true;
+                setComposing(true);
               }}
               onCompositionEnd={(event) => {
-                composing.current = false;
+                setComposing(false);
                 commitInput(event.currentTarget.value);
               }}
               onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing || composing.current) return;
+                if (event.nativeEvent.isComposing || composing) return;
                 if (event.key === "Backspace" && !query && tags.length) {
                   event.preventDefault();
                   event.stopPropagation();
@@ -227,7 +241,14 @@ export function CommandPalette({
                   if (commitInput(query, true)) {
                     event.preventDefault();
                     event.stopPropagation();
-                  } else if (event.key === "Enter") {
+                  } else if (
+                    event.key === "Enter" &&
+                    !event.currentTarget.closest("[cmdk-root]")?.querySelector(
+                      '[cmdk-item][aria-selected="true"]:not([aria-disabled="true"])',
+                    )
+                  ) {
+                    // cmdk owns opening the selected result; only an empty
+                    // selection needs an explicit search (including one letter).
                     event.preventDefault();
                     void runFullText(query);
                   }
@@ -393,23 +414,10 @@ export function CommandPalette({
           </Command.List>
 
           <div className="flex items-center gap-2 border-t px-3 py-2 text-meta text-faint">
-            <ModeChip
-              active={searchMode === "literal"}
-              testid="mode-literal"
-              onClick={() => onSearchModeChange("literal")}
-            >
-              {t("modeLiteral")}
-            </ModeChip>
-            <ModeChip
-              active={searchMode === "fts"}
-              testid="mode-fts"
-              onClick={() => onSearchModeChange("fts")}
-            >
-              {t("modeFts")}
-            </ModeChip>
+            <span className="min-w-0 truncate" title={t("modeCommands")}>{t("modeCommands")}</span>
             <span className="ml-auto flex items-center gap-2">
               <span>↑↓ {t("paletteNavigate")}</span>
-              <span>↵ {t("paletteOpen")}</span>
+              <span>↵ {t("paletteOpenResult")}</span>
             </span>
           </div>
         </Command>
@@ -442,35 +450,6 @@ function PaletteGroup({
         {children}
       </Command.Group>
     </div>
-  );
-}
-
-function ModeChip({
-  active,
-  testid,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  testid: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      data-testid={testid}
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "cursor-pointer rounded-md px-2 py-0.5 text-meta font-medium transition-colors",
-        active
-          ? "bg-primary/12 text-primary ring-1 ring-primary/30"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 

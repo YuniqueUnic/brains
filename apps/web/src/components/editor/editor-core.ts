@@ -1,5 +1,7 @@
 import { EditorView, keymap, tooltips } from "@codemirror/view";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
+import { yamlLanguage } from "@codemirror/lang-yaml";
+import { parseMixed } from "@lezer/common";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { tags } from "@lezer/highlight";
 import {
@@ -18,8 +20,8 @@ import { createFindPanel, type FindPanelLabels } from "./find-panel";
 import { type SaveTone } from "../SaveIndicator";
 
 /*
- * Editor core (DESIGN.md §26-34): the document is the star — 860px measure
- * (CSS), document typography, restrained markdown highlighting. Shared by
+ * Editor core (DESIGN.md §26-34): the document is the star — pane-sized source,
+ * document typography, restrained markdown highlighting. Shared by
  * EditorPane and the conflict merge views so every surface edits markdown
  * with the same state machine and the same extensions.
  *
@@ -167,7 +169,34 @@ export function baseExtensions(
   findLabels: () => FindPanelLabels,
 ) {
   return [
-    markdown({ base: markdownLanguage }),
+    markdown({
+      base: markdownLanguage,
+      extensions: {
+        defineNodes: [{ name: "Frontmatter", block: true }],
+        parseBlock: [{
+          name: "Frontmatter",
+          before: "HorizontalRule",
+          parse(context, line) {
+            if (context.lineStart !== 0 || !/^\uFEFF?---\r?$/.test(line.text)) return false;
+            let end = line.text.length;
+            // Match the document's YAML fences, including BOM and `...`.
+            // YAML itself is parsed by the library, even while incomplete.
+            while (context.nextLine()) {
+              end = context.lineStart + line.text.length;
+              if (/^(?:---|\.\.\.)\r?$/.test(line.text)) {
+                context.nextLine();
+                break;
+              }
+            }
+            context.addElement(context.elt("Frontmatter", 0, end));
+            return true;
+          },
+        }],
+        wrap: parseMixed((node) =>
+          node.name === "Frontmatter" ? { parser: yamlLanguage.parser } : null,
+        ),
+      },
+    }),
     syntaxHighlighting(markdownHighlights),
     // Wrapping is owned by wrapComp (the preference must be able to turn it
     // off) — no static EditorView.lineWrapping here.
@@ -176,7 +205,12 @@ export function baseExtensions(
     // Body-mounted wrappers use viewport coordinates; only content is scaled.
     tooltips({ parent: document.body }),
     highlightSelectionMatches(),
-    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
+    // Publishing belongs to EditorPane; do not insert a blank line first.
+    keymap.of([
+      ...defaultKeymap.filter((binding) => binding.key !== "Mod-Enter"),
+      ...historyKeymap,
+      ...searchKeymap,
+    ]),
     EditorView.updateListener.of((update) => {
       if (update.docChanged) onDocChange(update.state.doc.toString());
       onHistoryChange?.(undoDepth(update.state) > 0, redoDepth(update.state) > 0);

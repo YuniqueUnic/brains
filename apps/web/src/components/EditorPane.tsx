@@ -36,6 +36,7 @@ import { SliderRow } from "./ui/slider-row";
 import { ToggleGroupSection } from "./shell/toggle-section";
 import { fileCompletions, type CompletionFile } from "./editor/completions";
 import { referenceHover } from "./editor/reference-hover";
+import { metadataTags } from "./editor/metadata-tags";
 import { MarkdownToolbar } from "./editor/markdown-toolbar";
 import { ConflictView } from "./editor/conflict-view";
 import { SaveAsDialog } from "./editor/save-as-dialog";
@@ -155,12 +156,13 @@ export default function EditorPane({
       setRedoPossible((prev) => (prev === canRedo ? prev : canRedo));
     };
     const initialSettings = loadEditorSettings();
-    const completionExtensions = completions
-      ? [
+    const completionExtensions = [
+      ...metadataTags(onOpenTag, (tag) => t("searchMetadataTag", { tag })),
+      ...(completions ? [
           autocompletion({ override: [fileCompletions(completions, previewContext)] }),
           referenceHover(previewContext),
-        ]
-      : [];
+        ] : []),
+    ];
     const view = new EditorView({
       parent: hostRef.current,
       state: CodeMirrorState.create({
@@ -334,14 +336,13 @@ export default function EditorPane({
       effects: [
         lineNumComp.current.reconfigure(settings.lineNumbers ? lineNumbers() : []),
         wrapComp.current.reconfigure(settings.wrap ? EditorView.lineWrapping : []),
-        completionsComp.current.reconfigure(
-          completions
-            ? [
+        completionsComp.current.reconfigure([
+          ...metadataTags(onOpenTag, (tag) => t("searchMetadataTag", { tag })),
+          ...(completions ? [
                 autocompletion({ override: [fileCompletions(completions, previewContext)] }),
                 referenceHover(previewContext),
-              ]
-            : [],
-        ),
+              ] : []),
+        ]),
       ],
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -460,18 +461,16 @@ export default function EditorPane({
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
+      if (!meta || event.altKey || event.shiftKey || event.isComposing) return;
       // A modal owns ⌘S/⌘⏎: publishing or toasting from behind a dialog
       // double-fires whatever the dialog is confirming.
-      if (
-        meta &&
-        (event.target as HTMLElement | null)?.closest?.('[role="dialog"], [role="alertdialog"]')
-      ) {
+      if ((event.target as HTMLElement | null)?.closest?.('[role="dialog"], [role="alertdialog"]')) {
         return;
       }
-      if (meta && event.key.toLowerCase() === "s") {
+      if (event.key.toLowerCase() === "s") {
         event.preventDefault();
         stashDraft();
-      } else if (meta && event.key === "Enter") {
+      } else if (event.key === "Enter") {
         event.preventDefault();
         void publish();
       }

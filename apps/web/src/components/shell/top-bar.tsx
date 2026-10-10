@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { FilePlus, Folder, LogOut, PanelLeft, Search, Settings2, Upload } from "lucide-react";
+import { FilePlus, Folder, LogOut, PanelLeft, Search, Settings2, Upload, UserRound } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
 import type { SessionInfo } from "../../api/client";
@@ -50,6 +50,12 @@ export function TopBar({
 }) {
   const { t } = useTranslation("workspace");
   const { t: tCommon } = useTranslation("common");
+  const permission = session.scopes.includes("admin:/")
+    ? t("accessAdmin")
+    : session.scopes.some((scope) => /^(write|admin):/.test(scope))
+      ? t("accessWrite")
+      : t("accessRead");
+  const accountLabel = session.actor.startsWith("token:") ? permission : session.actor;
 
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:gap-2 sm:px-3">
@@ -180,14 +186,14 @@ export function TopBar({
               className="flex h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-[7px] pl-1 pr-2 text-body-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring/70"
             >
               <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-meta font-semibold text-primary">
-                {session.actor.slice(0, 1).toUpperCase()}
+                <UserRound className="size-3.5 stroke-[1.5]" aria-hidden />
               </span>
-              <span className="hidden min-w-0 max-w-[140px] truncate sm:inline">{session.actor}</span>
+              <span className="hidden min-w-0 max-w-[140px] truncate sm:inline">{accountLabel}</span>
             </button>
           }
         >
           <div className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
-            <span className="min-w-0 flex-1 truncate">{session.actor}</span>
+            <span className="min-w-0 flex-1 truncate">{t("accessPermission", { permission })}</span>
           </div>
           <Menu.Item
             className={menuItemClass({ danger: true })}
