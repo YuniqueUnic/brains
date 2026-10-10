@@ -433,6 +433,24 @@
         ],
         "type": "object"
       },
+      "brains.HeadBadRequest": {
+        "type": "object"
+      },
+      "brains.HeadForbidden": {
+        "type": "object"
+      },
+      "brains.HeadGone": {
+        "type": "object"
+      },
+      "brains.HeadInternal": {
+        "type": "object"
+      },
+      "brains.HeadNotFound": {
+        "type": "object"
+      },
+      "brains.HeadServiceUnavailable": {
+        "type": "object"
+      },
       "brains.HistoryPage": {
         "properties": {
           "anchor_revision": {
@@ -1235,7 +1253,7 @@
           {
             "in": "query",
             "name": "to",
-            "required": false,
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -1347,7 +1365,14 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -1492,7 +1517,24 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Brain-Media-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "304": {
             "description": "Error: NotModified",
@@ -1577,6 +1619,111 @@
           "Files"
         ]
       },
+      "head": {
+        "operationId": "brains.Files.head_file",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Brain-Generation": {
+                "schema": {
+                  "format": "int64",
+                  "type": "integer"
+                }
+              },
+              "X-Brain-State": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error: HeadBadRequest",
+            "headers": {
+              "X-Brain-Error-Code": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error: HeadForbidden",
+            "headers": {
+              "X-Brain-Error-Code": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error: HeadNotFound",
+            "headers": {
+              "X-Brain-Error-Code": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Error: HeadGone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Brain-Error-Code": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error: HeadInternal",
+            "headers": {
+              "X-Brain-Error-Code": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error: HeadServiceUnavailable",
+            "headers": {
+              "X-Brain-Error-Code": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "tags": [
+          "Files"
+        ]
+      },
       "patch": {
         "operationId": "brains.Files.patch_file",
         "parameters": [
@@ -1623,7 +1770,14 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -1833,7 +1987,14 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -2876,7 +3037,14 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3023,7 +3191,24 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Brain-Media-Type": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
@@ -3338,7 +3523,14 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "content": {
@@ -3406,7 +3598,14 @@
                 }
               }
             },
-            "description": "OK"
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {

@@ -374,6 +374,28 @@ fn capabilities(
     }
 }
 
+// HEAD has no JSON body, so its declared exceptions carry the error code.
+fn head_file_error(error: DomainError) -> contract::FilesHeadFileError {
+    macro_rules! failure {
+        ($variant:ident) => {
+            contract::FilesHeadFileError::$variant(contract::$variant {
+                code: error.code().to_owned(),
+            })
+        };
+    }
+    match classify(&error) {
+        Failure::BadRequest => failure!(HeadBadRequest),
+        Failure::Forbidden => failure!(HeadForbidden),
+        Failure::NotFound => failure!(HeadNotFound),
+        Failure::Gone => contract::FilesHeadFileError::HeadGone(contract::HeadGone {
+            code: error.code().to_owned(),
+            etag: etag_of(&error),
+        }),
+        Failure::ServiceUnavailable => failure!(HeadServiceUnavailable),
+        _ => failure!(HeadInternal),
+    }
+}
+
 // -- Precondition / conditional-read helpers --------------------------------
 
 /// GET freshness check (RFC 9110 §13.1.2): weak comparison; `*` and
@@ -796,6 +818,25 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
         })
     }
 
+    async fn head_file(
+        &self,
+        path: String,
+    ) -> Result<contract::FilesHeadFileResponse, contract::FilesHeadFileError> {
+        let ctx = current();
+        let path = VaultPath::new(&path).map_err(head_file_error)?;
+        let head = self
+            .state
+            .vault
+            .read_entry(ctx.auth.principal(), &path)
+            .await
+            .map_err(head_file_error)?;
+        Ok(contract::FilesHeadFileResponse {
+            etag: format!("\"{}\"", head.revision),
+            generation: head.generation,
+            state: head.state.as_str().to_owned(),
+        })
+    }
+
     async fn delete_file(
         &self,
         path: String,
@@ -1213,18 +1254,13 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
         &self,
         path: String,
         from: String,
-        to: Option<String>,
+        to: String,
     ) -> Result<contract::DiffResult, contract::FilesDiffError> {
         let ctx = current();
         let rid = ctx.request_id.as_str();
         let path = VaultPath::new(&path).map_err(|e| diff_error(e, rid))?;
         let from = HexId::from_hex(&from).map_err(|e| diff_error(e, rid))?;
-        let to = match to.as_deref() {
-            // Without `to` the diff is against the same revision: empty.
-            Some(raw) => HexId::from_hex(raw),
-            None => Ok(from.clone()),
-        }
-        .map_err(|e| diff_error(e, rid))?;
+        let to = HexId::from_hex(&to).map_err(|e| diff_error(e, rid))?;
         let diff = self
             .state
             .vault

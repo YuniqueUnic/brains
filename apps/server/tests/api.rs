@@ -118,8 +118,7 @@ async fn conditional_write_contract_end_to_end() {
         .unwrap();
     assert_eq!(cached.status(), 304);
 
-    // HEAD is served by the generated GET route (the body is stripped);
-    // errors keep their status and carry no body.
+    // The generated HEAD operation preserves the bodyless error code.
     let head = http
         .head(url("missing.md"))
         .header("Authorization", &auth)
@@ -127,6 +126,7 @@ async fn conditional_write_contract_end_to_end() {
         .await
         .unwrap();
     assert_eq!(head.status(), 404);
+    assert_eq!(head.headers()["X-Brain-Error-Code"], "NOT_FOUND");
     assert_eq!(head.bytes().await.unwrap().len(), 0);
 
     // Trash needs If-Match; reading a tombstone is 410 with its ETag.

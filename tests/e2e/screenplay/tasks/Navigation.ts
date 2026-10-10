@@ -39,8 +39,13 @@ export const SeedNoteViaApi = (path: string, body: string) =>
     Interaction.where(`#actor seeds ${path}`, async (actor) => {
       const api = CallBrainsApi.as(actor);
       const response = await api.createText(path, body);
-      if (response.status !== 201) {
+      if (response.status !== 200) {
         throw new Error(`seed failed: HTTP ${response.status}`);
+      }
+      const result = await response.json();
+      if (result.created !== true || result.path !== path ||
+          response.headers.get("ETag") !== `"${result.revision}"`) {
+        throw new Error(`seed did not create ${path} with matching revision metadata`);
       }
     }),
   );

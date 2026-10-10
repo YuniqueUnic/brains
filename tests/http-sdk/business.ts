@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { brains as sdk } from './sdk/brains.client.ts';
-import { Conflict, Forbidden, Gone, NotFound, NotModified, PreconditionFailed, UnprocessableEntity } from './sdk/brains.errors.ts';
+import { Conflict, Forbidden, Gone, HeadGone, HeadNotFound, NotFound, NotModified, PreconditionFailed, UnprocessableEntity } from './sdk/brains.errors.ts';
 
 const origin = process.env.BRAINS_TEST_ORIGIN!;
 const token = process.env.BRAINS_TEST_TOKEN!;
@@ -36,6 +36,19 @@ assert.equal(raw.etag, etag1);
 await assert.rejects(files.get_file(path, undefined, etag1),
   error => error instanceof NotModified && error.etag === etag1);
 
+// HEAD is a separate metadata operation with no body and typed error headers.
+const head = await files.head_file(path);
+assert.equal(head.etag, etag1);
+assert.equal(head.generation, 1);
+assert.equal(head.state, 'live');
+const headWire = await fetch(`${api}/file?path=${encodeURIComponent(path)}`,
+  { method: 'HEAD', headers: { Authorization: authorization } });
+assert.equal(headWire.status, 200);
+assert.equal(headWire.headers.get('ETag'), etag1);
+assert.equal((await headWire.arrayBuffer()).byteLength, 0);
+await assert.rejects(files.head_file('ts-sdk/missing.md'),
+  error => error instanceof HeadNotFound && error.code === 'NOT_FOUND');
+
 // When previewing a patch, the result is complete and the stored head is unchanged.
 const patch = (dry_run: boolean) => ({
   edits: [{ old_text: 'hello', new_text: 'hello v2', expected_matches: 1 }], dry_run,
@@ -63,6 +76,13 @@ assert.equal(afterCommit.etag, etag2);
 await assert.rejects(files.patch_file(path, etag1, undefined, patch(false)),
   error => error instanceof PreconditionFailed && error.etag === etag2
     && error.error.current_revision === revision2);
+
+// Comparing revisions requires both endpoints; missing to is not an empty diff.
+const difference = await files.diff(path, revision1, revision2);
+assert.match(difference.diff, /\+# hello v2/);
+const missingTo = await fetch(`${api}/diff?path=${encodeURIComponent(path)}&from=${revision1}`,
+  { headers: { Authorization: authorization } });
+assert.equal(missingTo.status, 400);
 
 // History, restore and trash compose with the same conditional-write contract.
 const history = await files.list_revisions(path, 10, undefined);
@@ -122,6 +142,9 @@ const trashed = await files.delete_file(path, restored.etag, undefined);
 assert.equal(trashed.etag, `"${trashed.return.revision}"`);
 await assert.rejects(files.get_file(path, undefined, undefined),
   error => error instanceof Gone && error.error.code === 'TRASHED' && error.etag === trashed.etag);
+
+await assert.rejects(files.head_file(path),
+  error => error instanceof HeadGone && error.code === 'TRASHED' && error.etag === trashed.etag);
 
 // Archive HTTP optionals must parse without turning missing values into null
 // or strings. Storage/portable archives keep the domain record's own encoding.

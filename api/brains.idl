@@ -359,6 +359,38 @@ exception TransferConflict {
     @optional ErrorDetail error;
 };
 
+// HEAD has no body; failures expose their code through a response header.
+@http(400)
+exception HeadBadRequest {
+    @header @rename("X-Brain-Error-Code") string code;
+};
+
+@http(403)
+exception HeadForbidden {
+    @header @rename("X-Brain-Error-Code") string code;
+};
+
+@http(404)
+exception HeadNotFound {
+    @header @rename("X-Brain-Error-Code") string code;
+};
+
+@http(410)
+exception HeadGone {
+    @header @rename("X-Brain-Error-Code") string code;
+    @header @rename("ETag") @optional string etag;
+};
+
+@http(503)
+exception HeadServiceUnavailable {
+    @header @rename("X-Brain-Error-Code") string code;
+};
+
+@http(500)
+exception HeadInternal {
+    @header @rename("X-Brain-Error-Code") string code;
+};
+
 // -- Representation switching ----------------------------------------------
 // ContentType is built into xidl; the discriminator travels as the
 // response Content-Type, never on the wire as a tag.
@@ -436,6 +468,15 @@ interface Files {
         @header @rename("X-Brain-Media-Type") @optional out string media_type,
         @header @rename("Content-Disposition") @optional out string content_disposition
     ) raises(BadRequest, Forbidden, NotFound, Gone, NotModified, ServiceUnavailable, Internal);
+
+    // Metadata-only probe: never fetch the content blob.
+    @head(path = "/file")
+    void head_file(
+        @query string path,
+        @header @rename("ETag") out string etag,
+        @header @rename("X-Brain-Generation") out int64 generation,
+        @header @rename("X-Brain-State") out string state
+    ) raises(HeadBadRequest, HeadForbidden, HeadNotFound, HeadGone, HeadServiceUnavailable, HeadInternal);
 
     // Conditional delete: writes a tombstone revision. 412 on stale base.
     @delete(path = "/file")
@@ -534,7 +575,7 @@ interface Files {
     DiffResult diff(
         @query string path,
         @query string from,
-        @query @optional string to
+        @query string to
     ) raises(BadRequest, Forbidden, NotFound, ServiceUnavailable, Internal);
 
     // Paged index rebuild from authoritative storage (safe anytime).
