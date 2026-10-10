@@ -1,6 +1,7 @@
-# Brains
-
-<p align="left"><img src="apps/web/public/favicon.svg" width="40" alt="Brains logo" /></p>
+<h1 align="left">
+  <img src="apps/web/public/favicon.svg" width="64" height="64" align="middle" alt="" />
+  <img src="docs/assets/brains-signature.svg" width="240" height="117" align="middle" alt="Brains" />
+</h1>
 
 **面向人类、可迁移的长期知识库——进来的是普通文件，出去的也是普通文件，且每一版都留着。**
 
@@ -119,7 +120,9 @@ remote CLI / curl ──/api/v1/*──┐
 
 ```bash
 cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo check --workspace --all-targets --all-features
 cargo test --workspace --all-features
+pnpm lint
 pnpm --dir apps/web build && pnpm --dir tests/e2e exec playwright test   # 需 BRAINS_SERVER_BIN/BRAINS_WEB_DIST
 bash tests/worker-smoke.sh                                               # 对运行中的 wrangler dev
 ```
@@ -128,10 +131,14 @@ bash tests/worker-smoke.sh                                               # 对�
 
 | Workflow | 触发 | 内容 |
 |---|---|---|
-| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · Rust 测试 · SDK 代码生成漂移检查 · wasm 检查 · web 构建 · screenplay E2E（原生 **与** Worker）· workerd 业务冒烟 |
-| [release.yml](.github/workflows/release.yml) | 打 `v*` tag **或**手动 dispatch | 构建 CLI+server（macOS arm64/x64、Linux musl）、web 产物、Worker 包 → 发布带 SHA-256 的 GitHub Release。一键：*Actions → Release → Run workflow → 填版本号* |
+| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · check · clippy `-D warnings` · Rust 测试 · SDK 代码生成漂移检查 · wasm 检查 · JS/TS lint · web 构建 · screenplay E2E（原生 **与** Worker）· workerd 业务冒烟 |
+| [pages.yml](.github/workflows/pages.yml) | push / PR / 手动 | 构建演示并执行 6 项浏览器验收；只有 `main` 可以部署到 Pages。 |
+| [release-please.yml](.github/workflows/release-please.yml) | `main` push / 手动 | 一个发布 PR 统一更新所有产品版本；合并后创建标签和发布说明，再启动产物构建。见[发版说明](docs/releasing.md)。 |
+| [release.yml](.github/workflows/release.yml) | 在已有发布标签上手动触发 | 构建 CLI+server（macOS arm64/x64、Linux musl）、web 产物和 Worker 包，校验标签后上传产物及 SHA-256。 |
 | [deploy.yml](.github/workflows/deploy.yml) | 手动 dispatch | 构建 Worker 并部署到 Cloudflare（`wrangler deploy` + 远端 D1 迁移）。需要 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets 与文件头部记载的一次性资源开通 |
 | dependabot | 每周 | cargo · npm · actions 依赖更新 |
+
+`main` 只接受通过 PR 合入的变更。`Development gates` 和 `Build web demo` 必须在最新主分支基础上通过；禁止强推和删除主分支，管理员也不能绕过。优先使用 rebase 合并，合并前须解决审查讨论。个人仓库不强制第二位审核者批准。
 
 ## 状态与如实声明
 
