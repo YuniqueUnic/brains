@@ -7,12 +7,14 @@ use brains_ports::{LinkRow, prefix_upper_bound};
 
 use crate::Vault;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SearchMode {
     Literal,
     Fts,
 }
 
+#[derive(Clone, Debug, serde::Serialize)]
 pub struct SearchQuery {
     pub q: String,
     pub mode: SearchMode,

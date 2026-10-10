@@ -1,5 +1,5 @@
 use crate::{
-    BrainClient, ClientResult,
+    BrainClient, ClientResult, Library,
     endpoint::{FileEndpoint, invalid},
     urlencode,
 };

@@ -1,9 +1,9 @@
 //! Commands that read or mutate individual vault files.
 
 use super::print_pretty;
-use brains_client::{BrainClient, ClientError, ClientResult, Precondition, TransferKind};
+use brains_client::{ClientError, ClientResult, Library, Precondition, TransferKind};
 
-pub(crate) fn cat(client: &BrainClient, path: &str) -> ClientResult<i32> {
+pub(crate) fn cat(client: &dyn Library, path: &str) -> ClientResult<i32> {
     let (bytes, _etag) = client.get_raw(path)?;
     use std::io::Write;
     std::io::stdout()
@@ -12,7 +12,7 @@ pub(crate) fn cat(client: &BrainClient, path: &str) -> ClientResult<i32> {
     Ok(0)
 }
 
-pub(crate) fn stat(client: &BrainClient, path: &str, json: bool) -> ClientResult<i32> {
+pub(crate) fn stat(client: &dyn Library, path: &str, json: bool) -> ClientResult<i32> {
     let entry = client.get_meta(path)?;
     if json {
         println!(
@@ -42,7 +42,7 @@ pub(crate) fn stat(client: &BrainClient, path: &str, json: bool) -> ClientResult
 }
 
 pub(crate) fn put(
-    client: &BrainClient,
+    client: &dyn Library,
     path: &str,
     from: Option<String>,
     create: bool,
@@ -106,7 +106,7 @@ pub(crate) fn put(
     Ok(0)
 }
 
-pub(crate) fn rm(client: &BrainClient, path: &str, if_revision: &str) -> ClientResult<i32> {
+pub(crate) fn rm(client: &dyn Library, path: &str, if_revision: &str) -> ClientResult<i32> {
     let result = client.delete(path, if_revision, None)?;
     println!(
         "trashed gen={} rev={}",
@@ -115,7 +115,7 @@ pub(crate) fn rm(client: &BrainClient, path: &str, if_revision: &str) -> ClientR
     Ok(0)
 }
 
-pub(crate) fn history(client: &BrainClient, path: &str, json: bool) -> ClientResult<i32> {
+pub(crate) fn history(client: &dyn Library, path: &str, json: bool) -> ClientResult<i32> {
     let mut cursor: Option<String> = None;
     loop {
         let page = client.history(path, cursor.as_deref(), 20)?;
@@ -146,13 +146,13 @@ pub(crate) fn history(client: &BrainClient, path: &str, json: bool) -> ClientRes
 }
 
 pub(crate) fn show(
-    client: &BrainClient,
+    client: &dyn Library,
     path: &str,
     revision: &str,
     json: bool,
 ) -> ClientResult<i32> {
     if json {
-        print_pretty(&client.revision_meta(path, revision)?)?;
+        print_pretty(&Library::revision_meta(client, path, revision)?)?;
         return Ok(0);
     }
     let bytes = client.revision_raw(path, revision)?;
@@ -164,12 +164,12 @@ pub(crate) fn show(
 }
 
 pub(crate) fn restore(
-    client: &BrainClient,
+    client: &dyn Library,
     path: &str,
     revision: &str,
     if_current: &str,
 ) -> ClientResult<i32> {
-    let result = client.restore(path, revision, if_current, None)?;
+    let result = Library::restore(client, path, revision, if_current, None)?;
     println!(
         "restored gen={} rev={}",
         result.entry.generation, result.entry.revision
@@ -178,7 +178,7 @@ pub(crate) fn restore(
 }
 
 pub(crate) fn patch(
-    client: &BrainClient,
+    client: &dyn Library,
     path: &str,
     if_revision: &str,
     old: &str,
@@ -206,7 +206,7 @@ pub(crate) fn patch(
 }
 
 pub(crate) fn transfer(
-    client: &BrainClient,
+    client: &dyn Library,
     kind: TransferKind,
     source: &str,
     target: &str,
@@ -245,13 +245,13 @@ pub(crate) fn transfer(
     Ok(0)
 }
 
-pub(crate) fn diff(client: &BrainClient, path: &str, from: &str, to: &str) -> ClientResult<i32> {
+pub(crate) fn diff(client: &dyn Library, path: &str, from: &str, to: &str) -> ClientResult<i32> {
     let result = client.diff(path, from, to)?;
     print!("{}", result.diff);
     Ok(0)
 }
 
-pub(crate) fn edit(client: &BrainClient, path: &str, if_revision: &str) -> ClientResult<i32> {
+pub(crate) fn edit(client: &dyn Library, path: &str, if_revision: &str) -> ClientResult<i32> {
     let (bytes, _etag) = client.get_raw(path)?;
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".into());
     let temp =

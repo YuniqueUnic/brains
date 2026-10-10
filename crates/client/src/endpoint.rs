@@ -1,5 +1,5 @@
 //! Shared conditional file operations for transfer, export and sync.
-use crate::{BrainClient, ClientError, ClientResult, Precondition, urlencode};
+use crate::{ClientError, ClientResult, Library, Precondition};
 use brains_api_types::{ContentRefDto, Entry, MutationResult, RevisionDto};
 use sha2::{Digest, Sha256};
 
@@ -22,18 +22,20 @@ pub trait FileEndpoint {
     -> ClientResult<MutationResult>;
 }
 
-impl FileEndpoint for BrainClient {
+impl<T: Library + ?Sized> FileEndpoint for T {
     fn current_files(&self) -> ClientResult<Vec<Entry>> {
         let mut files = Vec::new();
         let mut paths = std::collections::BTreeSet::new();
         let mut cursors = std::collections::BTreeSet::new();
         let mut cursor: Option<String> = None;
         loop {
-            let mut query = String::from("source=store&include_deleted=true&limit=100");
-            if let Some(cursor) = &cursor {
-                query.push_str("&cursor=");
-                query.push_str(&urlencode(cursor));
-            }
+            let query = brains_application::listing::ListQuery {
+                source: brains_application::listing::ListSource::Store,
+                include_deleted: true,
+                limit: 100,
+                cursor: cursor.clone(),
+                ..Default::default()
+            };
             let page = self.list_files(&query)?;
             if page.source != "store" {
                 return Err(invalid("server did not return authoritative storage"));
@@ -62,11 +64,11 @@ impl FileEndpoint for BrainClient {
     }
 
     fn revision_meta(&self, path: &str, revision: &str) -> ClientResult<RevisionDto> {
-        BrainClient::revision_meta(self, path, revision)
+        Library::revision_meta(self, path, revision)
     }
 
     fn revision_bytes(&self, path: &str, revision: &str) -> ClientResult<Vec<u8>> {
-        BrainClient::revision_raw(self, path, revision)
+        Library::revision_raw(self, path, revision)
     }
 
     fn put(
@@ -97,7 +99,7 @@ impl FileEndpoint for BrainClient {
         revision: &str,
         if_current: &str,
     ) -> ClientResult<MutationResult> {
-        BrainClient::restore(self, path, revision, if_current, None)
+        Library::restore(self, path, revision, if_current, None)
     }
 }
 

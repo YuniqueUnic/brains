@@ -5,6 +5,7 @@
 
 pub mod archive;
 pub mod commit;
+pub mod listing;
 pub mod patch;
 pub mod projection;
 pub mod query;

@@ -2,7 +2,7 @@
 
 use crate::endpoint::invalid;
 use crate::endpoint::{FileEndpoint, read_verified};
-use crate::{BrainClient, ClientResult, urlencode};
+use crate::{ClientResult, Library};
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Default, serde::Serialize)]
@@ -69,15 +69,18 @@ pub fn verify_current(
 
 /// An index rebuild can leave stale projections for absent heads. Compare
 /// identities as well as checking the rebuild's own failure list.
-pub fn verify_index(client: &BrainClient) -> ClientResult<()> {
+pub fn verify_index(client: &dyn Library) -> ClientResult<()> {
     let heads = client.current_files()?;
     let mut index = Vec::new();
     let mut cursor: Option<String> = None;
     loop {
-        let mut query = String::from("source=index&include_deleted=true&limit=100");
-        if let Some(cursor) = &cursor {
-            query.push_str(&format!("&cursor={}", urlencode(cursor)));
-        }
+        let query = brains_application::listing::ListQuery {
+            source: brains_application::listing::ListSource::Index,
+            include_deleted: true,
+            limit: 100,
+            cursor: cursor.clone(),
+            ..Default::default()
+        };
         let page = client.list_files(&query)?;
         index.extend(page.items);
         cursor = page.next_cursor;
@@ -105,7 +108,7 @@ pub fn verify_index(client: &BrainClient) -> ClientResult<()> {
 }
 
 /// Fully rebuild and compare the disposable index before accepting a target.
-pub fn rebuild_index(client: &BrainClient) -> ClientResult<()> {
+pub fn rebuild_index(client: &dyn Library) -> ClientResult<()> {
     let mut cursor = None;
     loop {
         let page = client.reindex(cursor.as_deref(), 5)?;

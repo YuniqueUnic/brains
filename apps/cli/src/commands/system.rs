@@ -3,9 +3,9 @@
 use super::print_pretty;
 use crate::cli::ProfileCommand;
 use crate::config::{Config, Profile};
-use brains_client::{BrainClient, ClientError, ClientResult, Precondition};
+use brains_client::{ClientError, ClientResult, Library, Precondition};
 
-pub(crate) fn capabilities(client: &BrainClient, json: bool) -> ClientResult<i32> {
+pub(crate) fn capabilities(client: &dyn Library, json: bool) -> ClientResult<i32> {
     let caps = client.capabilities()?;
     if json {
         print_pretty(&caps)?;
@@ -30,7 +30,7 @@ pub(crate) fn capabilities(client: &BrainClient, json: bool) -> ClientResult<i32
     Ok(0)
 }
 
-pub(crate) fn whoami(client: &BrainClient, json: bool) -> ClientResult<i32> {
+pub(crate) fn whoami(client: &dyn Library, json: bool) -> ClientResult<i32> {
     let session = client.session()?;
     if json {
         print_pretty(&session)?;
@@ -120,7 +120,7 @@ pub(crate) fn login(
     Ok(0)
 }
 
-pub(crate) fn reindex(client: &BrainClient, all_pages: bool, limit: usize) -> ClientResult<i32> {
+pub(crate) fn reindex(client: &dyn Library, all_pages: bool, limit: usize) -> ClientResult<i32> {
     let mut cursor: Option<String> = None;
     let mut processed = 0i64;
     let mut failed = 0usize;
@@ -146,7 +146,7 @@ pub(crate) fn reindex(client: &BrainClient, all_pages: bool, limit: usize) -> Cl
 }
 
 pub(crate) fn export(
-    client: &BrainClient,
+    client: &dyn Library,
     output: &std::path::Path,
     format: crate::cli::TransferFormat,
 ) -> ClientResult<i32> {
@@ -168,7 +168,7 @@ pub(crate) fn export(
 
 /// Push the built-in template notes into the target vault: existing paths are
 /// skipped, missing ones are created. Idempotent — rerun anytime.
-pub(crate) fn seed_template(client: &BrainClient) -> ClientResult<i32> {
+pub(crate) fn seed_template(client: &dyn Library) -> ClientResult<i32> {
     let mut written = 0usize;
     let mut skipped = 0usize;
     for (path, body) in brains_application::seed::template_notes() {
@@ -194,7 +194,7 @@ pub(crate) fn seed_template(client: &BrainClient) -> ClientResult<i32> {
 }
 
 pub(crate) fn import(
-    client: &BrainClient,
+    client: &dyn Library,
     input: &std::path::Path,
     format: crate::cli::TransferFormat,
     overwrite: bool,

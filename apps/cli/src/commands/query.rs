@@ -1,9 +1,9 @@
 //! Listing, search, and link query commands.
 
 use crate::cli::LsArgs;
-use brains_client::{BrainClient, ClientError, ClientResult, urlencode};
+use brains_client::{ClientError, ClientResult, Library};
 
-pub(crate) fn ls(client: &BrainClient, args: LsArgs) -> ClientResult<i32> {
+pub(crate) fn ls(client: &dyn Library, args: LsArgs) -> ClientResult<i32> {
     let LsArgs {
         mut prefix,
         json,
@@ -20,25 +20,27 @@ pub(crate) fn ls(client: &BrainClient, args: LsArgs) -> ClientResult<i32> {
     }
     let mut cursor: Option<String> = None;
     loop {
-        let mut query = format!("source={source}&limit=50");
-        if !prefix.is_empty() {
-            query.push_str(&format!("&prefix={}", urlencode(&prefix)));
-        }
-        if deleted {
-            query.push_str("&include_deleted=true");
-        }
-        if let Some(tag) = &tag {
-            query.push_str(&format!("&tag={}", urlencode(tag)));
-        }
-        if let Some(kind) = &kind {
-            query.push_str(&format!("&kind={kind}"));
-        }
-        if sort != "path" {
-            query.push_str(&format!("&sort={sort}"));
-        }
-        if let Some(cursor) = &cursor {
-            query.push_str(&format!("&cursor={}", urlencode(cursor)));
-        }
+        let query = brains_application::listing::ListQuery {
+            source: source
+                .parse()
+                .map_err(|e: brains_domain::DomainError| ClientError {
+                    status: 400,
+                    code: Some(e.code().into()),
+                    message: e.to_string(),
+                    current_revision: None,
+                })?,
+            prefix: (!prefix.is_empty()).then(|| prefix.clone()),
+            cursor: cursor.clone(),
+            tag: tag.clone(),
+            kind: kind.as_deref().and_then(brains_domain::FileKind::parse),
+            sort: if sort == "updated_desc" {
+                brains_ports::ListOrder::UpdatedDesc
+            } else {
+                brains_ports::ListOrder::Path
+            },
+            include_deleted: deleted,
+            limit: 50,
+        };
         let page = client.list_files(&query)?;
         for entry in &page.items {
             if json {
@@ -66,7 +68,7 @@ pub(crate) fn ls(client: &BrainClient, args: LsArgs) -> ClientResult<i32> {
 }
 
 pub(crate) fn search(
-    client: &BrainClient,
+    client: &dyn Library,
     query: &str,
     mode: &str,
     prefix: Option<String>,
@@ -79,16 +81,25 @@ pub(crate) fn search(
     let mut total_hits = 0usize;
     let mut complete;
     loop {
-        let mut q = format!("q={}&mode={mode}", urlencode(query));
-        if let Some(prefix) = &prefix {
-            q.push_str(&format!("&prefix={}", urlencode(prefix)));
-        }
-        if let Some(tag) = &tag {
-            q.push_str(&format!("&tag={}", urlencode(tag)));
-        }
-        if let Some(cursor) = &cursor {
-            q.push_str(&format!("&cursor={}", urlencode(cursor)));
-        }
+        let q = brains_application::search::SearchQuery {
+            q: query.to_owned(),
+            mode: match mode {
+                "literal" => brains_application::search::SearchMode::Literal,
+                "fts" => brains_application::search::SearchMode::Fts,
+                _ => {
+                    return Err(ClientError {
+                        status: 400,
+                        code: Some("INVALID_ARGUMENT".into()),
+                        message: format!("unknown search mode `{mode}`"),
+                        current_revision: None,
+                    });
+                }
+            },
+            prefix: prefix.clone(),
+            tag: tag.clone(),
+            cursor: cursor.clone(),
+            scan_limit: brains_domain::Limits::default().scan_window_max,
+        };
         let page = client.search(&q)?;
         pages += 1;
         total_hits += page.items.len();
@@ -118,7 +129,7 @@ pub(crate) fn search(
 }
 
 pub(crate) fn links(
-    client: &BrainClient,
+    client: &dyn Library,
     path: &str,
     backlinks: bool,
     json: bool,

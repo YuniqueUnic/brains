@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use brains_client::sync::{self, Resolution, SyncFailureStage, SyncState};
-use brains_client::{BrainClient, ClientError, ClientResult};
+use brains_client::{BrainClient, ClientError, ClientResult, Library};
 use sha2::{Digest, Sha256};
 
 use crate::cli::{SyncCommand, SyncSide};

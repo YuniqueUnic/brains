@@ -6,8 +6,10 @@ pub mod archive;
 pub mod endpoint;
 pub mod export;
 pub mod import;
+pub mod library;
 pub mod sync;
 pub mod verify;
+pub use library::Library;
 
 use brains_api_types::{
     DiffResult, Entry, FilePage, HistoryPage, LinkPage, MutationResult, PatchBody, PatchResult,
@@ -159,23 +161,25 @@ impl BrainClient {
         serde_json::from_str(&text)
             .map_err(|e| ClientError::transport(format!("malformed response: {e}")))
     }
+}
 
-    pub fn capabilities(&self) -> ClientResult<Capabilities> {
+impl Library for BrainClient {
+    fn capabilities(&self) -> ClientResult<Capabilities> {
         let response = self.send(self.http.get(self.url("/api/v1/capabilities", "")))?;
         self.expect_json(response)
     }
 
-    pub fn session(&self) -> ClientResult<Session> {
+    fn session(&self) -> ClientResult<Session> {
         let response = self.send(self.http.get(self.url("/api/v1/session", "")))?;
         self.expect_json(response)
     }
 
-    pub fn list_files(&self, query: &str) -> ClientResult<FilePage> {
-        let response = self.send(self.http.get(self.url("/api/v1/files", query)))?;
+    fn list_files(&self, query: &brains_application::listing::ListQuery) -> ClientResult<FilePage> {
+        let response = self.send(self.http.get(self.url("/api/v1/files", "")).query(query))?;
         self.expect_json(response)
     }
 
-    pub fn get_meta(&self, path: &str) -> ClientResult<Entry> {
+    fn get_meta(&self, path: &str) -> ClientResult<Entry> {
         let query = format!("path={}", urlencode(path));
         let response = self.send(
             self.http
@@ -185,7 +189,7 @@ impl BrainClient {
         self.expect_json(response)
     }
 
-    pub fn get_raw(&self, path: &str) -> ClientResult<(Vec<u8>, String)> {
+    fn get_raw(&self, path: &str) -> ClientResult<(Vec<u8>, String)> {
         let query = format!("path={}", urlencode(path));
         let response = self.send(self.http.get(self.url("/api/v1/file", &query)))?;
         let status = response.status().as_u16();
@@ -209,7 +213,7 @@ impl BrainClient {
     /// and sent as `X-Content-SHA256` (design §22.3) — this is what makes
     /// binary media possible from CLI: the server requires the header for
     /// non-text uploads and re-verifies it server-side before CAS.
-    pub fn put_content(
+    fn put_content(
         &self,
         path: &str,
         body: &[u8],
@@ -242,7 +246,7 @@ impl BrainClient {
         self.expect_json(response?)
     }
 
-    pub fn delete(
+    fn delete(
         &self,
         path: &str,
         if_revision: &str,
@@ -260,12 +264,7 @@ impl BrainClient {
         self.expect_json(response?)
     }
 
-    pub fn history(
-        &self,
-        path: &str,
-        cursor: Option<&str>,
-        limit: usize,
-    ) -> ClientResult<HistoryPage> {
+    fn history(&self, path: &str, cursor: Option<&str>, limit: usize) -> ClientResult<HistoryPage> {
         let mut query = format!("path={}", urlencode(path));
         if let Some(cursor) = cursor {
             query.push_str(&format!("&cursor={}", urlencode(cursor)));
@@ -275,7 +274,7 @@ impl BrainClient {
         self.expect_json(response)
     }
 
-    pub fn revision_meta(
+    fn revision_meta(
         &self,
         path: &str,
         revision: &str,
@@ -285,7 +284,7 @@ impl BrainClient {
         self.expect_json(response)
     }
 
-    pub fn revision_raw(&self, path: &str, revision: &str) -> ClientResult<Vec<u8>> {
+    fn revision_raw(&self, path: &str, revision: &str) -> ClientResult<Vec<u8>> {
         let query = format!("path={}&revision={revision}", urlencode(path));
         let response = self.send(self.http.get(self.url("/api/v1/revision", &query)))?;
         let status = response.status().as_u16();
@@ -299,7 +298,7 @@ impl BrainClient {
         Ok(bytes.to_vec())
     }
 
-    pub fn restore(
+    fn restore(
         &self,
         path: &str,
         revision: &str,
@@ -321,17 +320,12 @@ impl BrainClient {
         self.expect_json(response?)
     }
 
-    pub fn search(&self, query: &str) -> ClientResult<SearchPage> {
-        let response = self.send(self.http.get(self.url("/api/v1/search", query)))?;
+    fn search(&self, query: &brains_application::search::SearchQuery) -> ClientResult<SearchPage> {
+        let response = self.send(self.http.get(self.url("/api/v1/search", "")).query(query))?;
         self.expect_json(response)
     }
 
-    pub fn links(
-        &self,
-        path: &str,
-        backlinks: bool,
-        cursor: Option<&str>,
-    ) -> ClientResult<LinkPage> {
+    fn links(&self, path: &str, backlinks: bool, cursor: Option<&str>) -> ClientResult<LinkPage> {
         let direction = if backlinks { "backlinks" } else { "outbound" };
         let mut query = format!("path={}&direction={direction}", urlencode(path));
         if let Some(cursor) = cursor {
@@ -341,7 +335,7 @@ impl BrainClient {
         self.expect_json(response)
     }
 
-    pub fn reindex(&self, cursor: Option<&str>, limit: usize) -> ClientResult<ReindexPage> {
+    fn reindex(&self, cursor: Option<&str>, limit: usize) -> ClientResult<ReindexPage> {
         let body = serde_json::json!({"cursor": cursor, "limit": limit});
         let response = self.send(
             self.http
@@ -352,7 +346,7 @@ impl BrainClient {
         self.expect_json(response)
     }
 
-    pub fn patch(
+    fn patch(
         &self,
         path: &str,
         if_revision: &str,
@@ -373,7 +367,7 @@ impl BrainClient {
         self.expect_json(response)
     }
 
-    pub fn transfer(&self, kind: TransferKind, body: TransferBody) -> ClientResult<TransferResult> {
+    fn transfer(&self, kind: TransferKind, body: TransferBody) -> ClientResult<TransferResult> {
         let path = match kind {
             TransferKind::Copy => "/api/v1/copy",
             TransferKind::Move => "/api/v1/move",
@@ -387,7 +381,7 @@ impl BrainClient {
         self.expect_json(response)
     }
 
-    pub fn diff(&self, path: &str, from: &str, to: &str) -> ClientResult<DiffResult> {
+    fn diff(&self, path: &str, from: &str, to: &str) -> ClientResult<DiffResult> {
         let query = format!("path={}&from={from}&to={to}", urlencode(path));
         let response = self.send(self.http.get(self.url("/api/v1/diff", &query)))?;
         self.expect_json(response)

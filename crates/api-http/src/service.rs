@@ -565,124 +565,39 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
     ) -> Result<contract::FilePage, contract::FilesListFilesError> {
         let ctx = current();
         let rid = ctx.request_id.as_str();
-        let principal = ctx.auth.principal();
-        let source = source.as_deref().unwrap_or("store");
-        let tag = tag.filter(|t| !t.is_empty());
-        let kind = kind.as_deref().and_then(brains_domain::FileKind::parse);
-        let sort = sort.as_deref().unwrap_or("path");
-        let include_deleted = include_deleted.unwrap_or(false);
-        let limit = clamp_limit(
-            limit,
-            self.state.limits.list_page_default,
-            self.state.limits.list_page_max,
-        )
-        .map_err(|e| list_files_error(e, rid))?;
-        let cursor = cursor.filter(|c| !c.is_empty());
-        let prefix = prefix.filter(|p| !p.is_empty());
-
-        if source == "store" {
-            // Index-only filters must fail loudly, never be ignored (§11.1).
-            if tag.is_some() || kind.is_some() || sort == "updated_desc" {
-                return Err(list_files_error(
-                    DomainError::InvalidArgument(
-                        "tag/kind/sort=updated_desc require source=index".into(),
-                    ),
-                    rid,
-                ));
-            }
-            let page = self
-                .state
-                .vault
-                .list_from_store(
-                    principal,
-                    prefix.as_deref(),
-                    cursor.as_deref(),
-                    include_deleted,
-                    limit,
-                )
-                .await
-                .map_err(|e| list_files_error(e, rid))?;
-            return Ok(contract::FilePage {
-                items: page.items.iter().map(entry).collect(),
-                next_cursor: page.next_cursor,
-                source: "store".into(),
-                consistency: "per_file".into(),
-            });
-        }
-        if source != "index" {
-            return Err(list_files_error(
-                DomainError::InvalidArgument("source must be `store` or `index`".into()),
-                rid,
-            ));
-        }
-        use brains_ports::ListFilter;
-        let filter = ListFilter {
-            prefix,
-            tag,
-            kind,
-            include_deleted,
-            order: if sort == "updated_desc" {
+        let query = brains_application::listing::ListQuery {
+            source: source
+                .as_deref()
+                .unwrap_or("store")
+                .parse()
+                .map_err(|e| list_files_error(e, rid))?,
+            prefix: prefix.filter(|v| !v.is_empty()),
+            limit: clamp_limit(
+                limit,
+                self.state.limits.list_page_default,
+                self.state.limits.list_page_max,
+            )
+            .map_err(|e| list_files_error(e, rid))?,
+            cursor: cursor.filter(|v| !v.is_empty()),
+            tag: tag.filter(|v| !v.is_empty()),
+            kind: kind.as_deref().and_then(brains_domain::FileKind::parse),
+            sort: if sort.as_deref() == Some("updated_desc") {
                 brains_ports::ListOrder::UpdatedDesc
             } else {
                 brains_ports::ListOrder::Path
             },
-        };
-        let order = filter.order;
-        let (after_path, after_updated) = match (cursor.as_deref(), order) {
-            (None, _) => (None, None),
-            (Some(raw), brains_ports::ListOrder::UpdatedDesc) => {
-                let (updated, path) = raw
-                    .split_once('|')
-                    .ok_or_else(|| DomainError::InvalidArgument("malformed cursor".into()))
-                    .map_err(|e| list_files_error(e, rid))?;
-                (Some(path.to_owned()), Some(updated.to_owned()))
-            }
-            (Some(raw), brains_ports::ListOrder::Path) => (Some(raw.to_owned()), None),
+            include_deleted: include_deleted.unwrap_or(false),
         };
         let page = self
             .state
             .vault
-            .list_from_index(principal, filter, after_path, after_updated, limit)
+            .list_files(ctx.auth.principal(), query)
             .await
             .map_err(|e| list_files_error(e, rid))?;
-        let entries = page
-            .rows
-            .iter()
-            .map(|row| contract::Entry {
-                path: row.path.clone(),
-                revision: row.revision.clone(),
-                generation: row.generation,
-                state: if row.deleted {
-                    HeadState::Trashed.as_str().to_owned()
-                } else {
-                    HeadState::Live.as_str().to_owned()
-                },
-                updated_at: Some(row.updated_at.clone()),
-                size: Some(row.size),
-                sha256: row.sha256.clone(),
-                media_type: Some(row.media_type.clone()),
-                kind: Some(row.kind.as_str().to_owned()),
-                title: if row.title.is_empty() {
-                    None
-                } else {
-                    Some(row.title.clone())
-                },
-            })
-            .collect();
-        let next_cursor = if page.exhausted {
-            None
-        } else {
-            page.rows.last().map(|row| match order {
-                brains_ports::ListOrder::UpdatedDesc => {
-                    format!("{}|{}", row.updated_at, row.path)
-                }
-                brains_ports::ListOrder::Path => row.path.clone(),
-            })
-        };
         Ok(contract::FilePage {
-            items: entries,
-            next_cursor,
-            source: "index".into(),
+            items: page.items.iter().map(entry).collect(),
+            next_cursor: page.next_cursor,
+            source: page.source.to_string(),
             consistency: "per_file".into(),
         })
     }

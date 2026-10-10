@@ -373,6 +373,7 @@ dependencies = [
  "brains-application",
  "brains-client",
  "brains-domain",
+ "brains-ports",
  "brains-server",
  "clap",
  "clap_complete",
@@ -392,7 +393,9 @@ name = "brains-client"
 version = "0.1.0"
 dependencies = [
  "brains-api-types",
+ "brains-application",
  "brains-domain",
+ "brains-ports",
  "brains-sdk",
  "diffy",
  "hex",
