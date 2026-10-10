@@ -1,6 +1,7 @@
-# Brains
-
-<p align="left"><img src="apps/web/public/favicon.svg" width="40" alt="Brains logo" /></p>
+<h1 align="left">
+  <img src="apps/web/public/favicon.svg" width="64" height="64" align="middle" alt="" />
+  <img src="docs/assets/brains-signature.svg" width="240" height="117" align="middle" alt="Brains" />
+</h1>
 
 **A human-readable, migration-safe knowledge store — plain files in, plain files out, every revision kept.**
 
@@ -124,7 +125,9 @@ remote CLI / curl ──/api/v1/*──┐
 
 ```bash
 cargo fmt --all -- --check && cargo clippy --workspace --all-targets --all-features -- -D warnings
+cargo check --workspace --all-targets --all-features
 cargo test --workspace --all-features
+pnpm lint
 pnpm --dir apps/web build && pnpm --dir tests/e2e exec playwright test   # needs BRAINS_SERVER_BIN/BRAINS_WEB_DIST
 bash tests/worker-smoke.sh                                               # against a running `wrangler dev`
 ```
@@ -133,11 +136,14 @@ bash tests/worker-smoke.sh                                               # again
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · Rust tests · SDK codegen drift check · wasm check · web build · screenplay E2E (native **and** Worker) · workerd business smoke |
+| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · check · clippy `-D warnings` · Rust tests · SDK codegen drift check · wasm check · JS/TS lint · web build · screenplay E2E (native **and** Worker) · workerd business smoke |
+| [pages.yml](.github/workflows/pages.yml) | push / PR / manual | builds the demo and runs 6 browser scenarios; only `main` deploys to Pages. |
 | [release-please.yml](.github/workflows/release-please.yml) | `main` push / manual | one release PR updates all product versions; merging creates the tag and release notes, then dispatches the asset build. See [releasing](docs/releasing.md). |
 | [release.yml](.github/workflows/release.yml) | dispatch at an existing release tag | builds CLI+server (macOS arm64/x64, Linux musl), web dist and Worker bundle, verifies the tag and uploads assets with SHA-256s. |
 | [deploy.yml](.github/workflows/deploy.yml) | manual dispatch | builds the Worker and deploys to Cloudflare (`wrangler deploy` + remote D1 migrations). Requires `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets and the one-time provisioning documented in the file header |
 | dependabot | weekly | cargo · npm · actions updates |
+
+`main` accepts changes through pull requests only. `Development gates` and `Build web demo` must pass against the latest `main`; force pushes and branch deletion are blocked, including for administrators. Prefer rebase merging; resolve review threads before merging. A second reviewer is not required for this personal repository.
 
 ## Status & honest limits
 
