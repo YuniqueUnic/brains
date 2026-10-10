@@ -40,7 +40,7 @@ jobs:
         run: pnpm --dir tests/e2e exec playwright install --with-deps chromium
       - name: Exercise the built demo
         run: pnpm --dir tests/e2e test:demo
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: apps/web/dist
 
