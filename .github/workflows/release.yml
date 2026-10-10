@@ -1,6 +1,6 @@
 name: Release
 
-# Release Please owns the tag and notes; this workflow only builds assets.
+# The default branch owns the build recipe; the release tag owns the source.
 on:
   workflow_dispatch:
     inputs:
@@ -28,6 +28,8 @@ jobs:
       sha: ${{ steps.identity.outputs.sha }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.version }}
       - name: Check unified product versions
         run: python3 scripts/check-versions.py
       - name: Resolve tag, package version and commit
@@ -47,8 +49,6 @@ jobs:
           if tag != f"v{version}":
               raise SystemExit(f"Release tag must match Cargo workspace version: v{version}")
           sha = subprocess.check_output(["git", "rev-parse", "HEAD^{commit}"], text=True).strip()
-          if os.environ["GITHUB_REF"] != f"refs/tags/{tag}":
-              raise SystemExit("Run this workflow on the existing release tag")
           subprocess.run(["gh", "release", "view", tag], check=True, stdout=subprocess.DEVNULL)
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"tag={tag}\nversion={version}\nsha={sha}\n")

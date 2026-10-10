@@ -134,7 +134,7 @@ bash tests/worker-smoke.sh                                               # 对�
 | [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · check · clippy `-D warnings` · Rust 测试 · SDK 代码生成漂移检查 · wasm 检查 · JS/TS lint · web 构建 · screenplay E2E（原生 **与** Worker）· workerd 业务冒烟 |
 | [pages.yml](.github/workflows/pages.yml) | push / PR / 手动 | 构建演示并执行 6 项浏览器验收；只有 `main` 可以部署到 Pages。 |
 | [release-please.yml](.github/workflows/release-please.yml) | `main` push / 手动 | 一个发布 PR 统一更新所有产品版本；合并后创建标签和发布说明，再启动产物构建。见[发版说明](docs/releasing.md)。 |
-| [release.yml](.github/workflows/release.yml) | 在已有发布标签上手动触发 | 构建 CLI+server（macOS arm64/x64、Linux musl）、web 产物和 Worker 包，校验标签后上传产物及 SHA-256。 |
+| [release.yml](.github/workflows/release.yml) | 从 `main` 触发，输入已有发布标签 | 构建 CLI+server（macOS arm64/x64、Linux musl）、web 产物和 Worker 包，校验标签后上传产物及 SHA-256。 |
 | [deploy.yml](.github/workflows/deploy.yml) | 手动 dispatch | 构建 Worker 并部署到 Cloudflare（`wrangler deploy` + 远端 D1 迁移）。需要 `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets 与文件头部记载的一次性资源开通 |
 | dependabot | 每周 | cargo · npm · actions 依赖更新 |
 
