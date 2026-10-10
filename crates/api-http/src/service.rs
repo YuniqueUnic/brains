@@ -231,6 +231,7 @@ error_from_domain!(
         NotFound,
         Gone,
         PreconditionFailed,
+        UnprocessableEntity,
         ServiceUnavailable,
         Internal
     ]
@@ -244,6 +245,7 @@ error_from_domain!(
         NotFound,
         Gone,
         PreconditionFailed,
+        UnprocessableEntity,
         ServiceUnavailable,
         Internal
     ]

@@ -1,14 +1,6 @@
 {
   "components": {
     "schemas": {
-      "ContentType": {
-        "enum": [
-          "application/json",
-          "application/octet-stream",
-          "text/plain"
-        ],
-        "type": "string"
-      },
       "Error": {
         "properties": {
           "code": {
@@ -1017,6 +1009,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.UnprocessableEntity"
+                }
+              }
+            },
+            "description": "Error: UnprocessableEntity"
           },
           "500": {
             "content": {
@@ -2186,6 +2188,16 @@
                 }
               }
             }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.UnprocessableEntity"
+                }
+              }
+            },
+            "description": "Error: UnprocessableEntity"
           },
           "500": {
             "content": {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { brains as sdk } from './sdk/brains.client.ts';
-import { Forbidden, Gone, NotModified, PreconditionFailed } from './sdk/brains.errors.ts';
+import { Forbidden, Gone, NotFound, NotModified, PreconditionFailed, UnprocessableEntity } from './sdk/brains.errors.ts';
 
 const origin = process.env.BRAINS_TEST_ORIGIN!;
 const token = process.env.BRAINS_TEST_TOKEN!;
@@ -98,6 +98,26 @@ assert(movedRaw.kind === 'OctetStream');
 assert.deepEqual(movedRaw.value, original);
 assert.equal(movedRaw.etag, `"${moved.target_revision}"`);
 await assert.rejects(files.get_file('ts-sdk/copied.md', undefined, undefined), Gone);
+
+// Invalid text destinations report a typed 422 before changing either path.
+const binaryPath = 'ts-sdk/source.bin';
+const binaryBody = new Uint8Array([0xff]);
+const binary = await files.put_file(binaryPath, undefined, '*', undefined,
+  digest(binaryBody), 'application/octet-stream', binaryBody);
+for (const [index, transfer] of ['copy', 'move'].entries()) {
+  const target = `ts-sdk/invalid-${transfer}.md`;
+  const body = { source: binaryPath, target,
+    expected_source_revision: binary.return.revision,
+    operation_id: String(index + 3).repeat(32) };
+  await assert.rejects(transfer === 'copy' ? files.copy(body) : files.move(body),
+    error => error instanceof UnprocessableEntity && error.status === 422
+      && error.error.code === 'INVALID_FORMAT');
+  const source = await files.get_file(binaryPath, undefined, undefined);
+  assert(source.kind === 'OctetStream');
+  assert.deepEqual(source.value, binaryBody);
+  assert.equal(source.etag, binary.etag);
+  await assert.rejects(files.get_file(target, undefined, undefined), NotFound);
+}
 const trashed = await files.delete_file(path, restored.etag, undefined);
 assert.equal(trashed.etag, `"${trashed.return.revision}"`);
 await assert.rejects(files.get_file(path, undefined, undefined),
@@ -127,4 +147,4 @@ assert.equal(cookieCreated.return.created, true);
 const logout = await new sdk.SessionsClient(api, { headers: cookieHeaders }).logout();
 assert.equal(logout.return.ok, true);
 assert(logout.set_cookie?.includes('Max-Age=0'));
-console.log('PASS generated TypeScript SDK: upload/read/preview/commit/history/copy/move/restore/trash/session/CSRF');
+console.log('PASS generated TypeScript SDK: upload/read/preview/commit/history/copy/move/422-without-mutation/restore/trash/session/CSRF');

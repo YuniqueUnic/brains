@@ -466,14 +466,14 @@ interface Files {
     @post(path = "/copy")
     TransferResult copy(
         @flatten in TransferBody body
-    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, UnprocessableEntity, ServiceUnavailable, Internal);
 
     // Move: copy + trash source; partial outcomes are TransferConflict (409),
     // never hidden.
     @post(path = "/move")
     TransferResult move(
         @flatten in TransferBody body
-    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, UnprocessableEntity, ServiceUnavailable, Internal);
 
     // Unified diff between two revisions of one path.
     @get(path = "/diff")
