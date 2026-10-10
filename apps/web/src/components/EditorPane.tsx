@@ -5,8 +5,7 @@ import { autocompletion } from "@codemirror/autocomplete";
 import { unifiedMergeView } from "@codemirror/merge";
 import { openSearchPanel } from "@codemirror/search";
 import { redo, undo } from "@codemirror/commands";
-import { marked } from "marked";
-import DOMPurify from "dompurify";
+import { markdownToSafeHtml } from "./markdown/render";
 import {
   CopyPlus,
   ChevronUp,
@@ -514,7 +513,7 @@ export default function EditorPane({
     (state.kind === "dirty" || state.kind === "error") && state.text !== state.baseText;
   const previewHtml = useMemo(() => {
     if (viewMode !== "preview" || buffer === "") return "";
-    return DOMPurify.sanitize(marked.parse(buffer, { async: false }) as string);
+    return markdownToSafeHtml(buffer);
   }, [viewMode, buffer]);
 
   return (

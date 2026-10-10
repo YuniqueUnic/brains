@@ -1,5 +1,4 @@
-import DOMPurify from "dompurify";
-import { marked } from "marked";
+import { markdownToSafeHtml } from "../markdown/render";
 import { api, isTextMedia } from "../../api/client";
 
 /*
@@ -13,10 +12,6 @@ export type PreviewResult =
   | { kind: "text"; html: string }
   | { kind: "image"; url: string }
   | { kind: "binary" };
-
-export async function markdownToSafeHtml(text: string): Promise<string> {
-  return DOMPurify.sanitize(marked.parse(text, { async: false }) as string);
-}
 
 const previewCache = new Map<string, Promise<PreviewResult>>();
 

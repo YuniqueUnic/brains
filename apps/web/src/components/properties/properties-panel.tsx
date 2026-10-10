@@ -1,8 +1,9 @@
+import { markdownToSafeHtml } from "../markdown/render";
 import { ArchiveRestore, Eye, History, Link2, ListTree, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type Entry, type RevisionDto } from "../../api/client";
-import { markdownToSafeHtml, previewFor, revisionPreviewFor } from "./preview";
+import { previewFor, revisionPreviewFor } from "./preview";
 import { formatDateTime } from "../../lib/format";
 import { Skeleton } from "../ui/skeleton";
 import { HoverPreview } from "../ui/hover-preview";

@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Skeleton } from "../ui/skeleton";
 import { formatDateTime } from "../../lib/format";
 import { api, isTextMedia, type Entry } from "../../api/client";
-import { markdownToSafeHtml } from "../properties/preview";
+import { markdownToSafeHtml } from "../markdown/render";
 import { newestContentful } from "./content";
 import { Button } from "../ui/button";
 import { Tooltip } from "../ui/tooltip";
