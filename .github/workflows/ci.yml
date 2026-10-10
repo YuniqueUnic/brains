@@ -16,7 +16,7 @@ jobs:
     name: Rust (fmt · clippy · test · wasm check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check unified product versions
         run: python3 scripts/check-versions.py
       - name: Install the repository Rust toolchain
@@ -37,7 +37,7 @@ jobs:
     name: SDK codegen drift (api/brains.idl ↔ sdk/)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
@@ -68,7 +68,7 @@ jobs:
     name: Web build + typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -85,7 +85,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
@@ -127,7 +127,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
@@ -164,7 +164,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [rust, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
