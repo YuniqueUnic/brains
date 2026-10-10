@@ -4,7 +4,7 @@
 
 **A human-readable, migration-safe knowledge store — plain files in, plain files out, every revision kept.**
 
-[中文文档](README.zh.md) · [Architecture](docs/architecture.md) · [Runbook](docs/runbook.md) · [Verification log](docs/verification.md)
+[中文文档](README.zh.md) · [Architecture](docs/architecture.md) · [Runbook](docs/runbook.md) · [Import, sync & migration](docs/portable-workflow.md) · [Verification log](docs/verification.md)
 
 [![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
 
@@ -22,7 +22,7 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 
 ## Core properties
 
-- **Ships with content, not a blank screen.** First boot on an empty vault seeds four template notes — a welcome page, the usage guide, an **AI collaboration guide** and an inbox — so humans and agents start from working conventions (cloud instances: `bsx seed`).
+- **Ships with content, not a blank screen.** First boot on an empty vault seeds five template notes — a welcome page, the usage guide, an **AI collaboration guide**, a **self-contained memory-writing guide** and an inbox — so humans and agents start from working conventions (cloud instances: `bsx seed`).
 - **AI-friendly by construction.** [docs/ai-integration.md](docs/ai-integration.md) is a machine-first API reference (endpoints, CAS etiquette, error model), `llms.txt` indexes the project for crawlers/agents, and every vault carries the condensed etiquette inside itself (`docs/ai-guide.md`).
 
 - **Immutable revisions + one atomic commit point.** Every save writes a content-addressed blob and a revision record, then swaps the per-path HEAD with a compare-and-swap. Two writers racing on the same base: exactly one commits, the loser gets `412` with the current revision — never a silent overwrite.
@@ -30,6 +30,7 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 - **A real editor, not a textarea.** CodeMirror with find & replace (match case / regex / whole word, replace all), selection-match highlights, and a folder tree sidebar with **multi-select batch actions** (batch trash / batch restore).
 - **Delete is a tombstone; restore is a new revision.** Generations only move forward. Nothing is ever destroyed by accident, and the history panel can bring any contentful revision back.
 - **Local and cloud profiles sync in both directions.** `bsx sync` uses per-file revision bases and CAS, merges non-overlapping text edits, and leaves divergent files untouched for an explicit resolution.
+- **Portable current files and complete reachable history.** `bsx import/export` moves readable working trees; `--format archive` preserves reachable revisions and blobs across FS/SQLite and R2/D1. `profile use --verify-with` validates content and the rebuilt index before selecting the daily profile. See the [portable workflow](docs/portable-workflow.md) for the different guarantees, resumable failures, shell completion and Git-aware build versions.
 - **The on-disk layout is the backup.** `vaults/{vault}/heads|revisions|blobs` — copy the directory and you have a complete raw backup; the index (SQLite/D1) is a rebuildable projection you can delete at any time.
 - **One HTTP contract, three clients.** The Web app, the Rust CLI and `curl`/agents all speak the same versioned REST API, backed by the same axum layer on both runtimes.
 - **Bounded everything.** Literal-scan windows never fake a complete search; a lost index degrades loudly (`503` / `building`), and oversized text is stored but never indexed.
@@ -107,7 +108,7 @@ CLI / curl ──/api/v1/*──┐
 
 ## Testing
 
-- **79 Rust tests** — domain, format, adapters, 27 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
+- **80 Rust tests** — domain, format, adapters, 28 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
 - **12 browser E2E** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
 - **Worker business smoke** — the same acceptance list executed against workerd (`tests/worker-smoke.sh`).
 
@@ -122,7 +123,7 @@ bash tests/worker-smoke.sh                                               # again
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · 79 tests · SDK codegen drift check · wasm check · web build · screenplay E2E (native **and** Worker) · workerd business smoke |
+| [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · Rust tests · SDK codegen drift check · wasm check · web build · screenplay E2E (native **and** Worker) · workerd business smoke |
 | [release.yml](.github/workflows/release.yml) | tag `v*` **or** manual dispatch | builds CLI+server (macOS arm64/x64, Linux musl), web dist, Worker bundle → publishes a GitHub release with SHA-256s. One click: *Actions → Release → Run workflow → version* |
 | [deploy.yml](.github/workflows/deploy.yml) | manual dispatch | builds the Worker and deploys to Cloudflare (`wrangler deploy` + remote D1 migrations). Requires `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets and the one-time provisioning documented in the file header |
 | dependabot | weekly | cargo · npm · actions updates |

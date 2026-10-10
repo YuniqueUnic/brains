@@ -228,8 +228,11 @@ fn export_produces_a_readable_working_tree() {
     .unwrap();
     assert_eq!(manifest["format"], "brains-working-tree");
     assert_eq!(manifest["consistency"], "per_file");
-    // The four first-boot template notes plus this test's file.
-    assert_eq!(manifest["entries"].as_array().unwrap().len(), 5);
+    // Every first-boot template note plus this test's file.
+    assert_eq!(
+        manifest["entries"].as_array().unwrap().len(),
+        brains_application::seed::template_notes().len() + 1
+    );
 
     // Exporting onto an existing directory fails instead of merging.
     let output = brain(&server)

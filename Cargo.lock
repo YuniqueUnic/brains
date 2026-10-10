@@ -399,6 +399,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "time",
+ "unicase",
 ]
 
 [[package]]

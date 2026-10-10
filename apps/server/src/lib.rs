@@ -84,6 +84,15 @@ pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool),
         limits.max_attachment_bytes,
     );
     let state: SharedState = Arc::new(AppState {
+        session_cookie_policy: if config
+            .bind
+            .parse::<std::net::IpAddr>()
+            .is_ok_and(|address| address.is_loopback())
+        {
+            brains_api_http::auth::SessionCookiePolicy::LoopbackHttp
+        } else {
+            brains_api_http::auth::SessionCookiePolicy::Secure
+        },
         vault,
         security: Arc::new(security),
         limits,
@@ -122,7 +131,7 @@ where
         None => router.fallback(routes::api_not_found),
     };
     let addr = format!("{}:{}", config.bind, config.port);
-    let listener = tokio::net::TcpListener::bind(&addr)
+    let listener = tokio::net::TcpListener::bind((config.bind.as_str(), config.port))
         .await
         .map_err(|e| format!("cannot bind {addr}: {e}"))?;
     let local = listener.local_addr().map_err(|e| e.to_string())?;

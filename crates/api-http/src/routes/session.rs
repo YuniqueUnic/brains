@@ -8,7 +8,7 @@ use axum::response::{IntoResponse, Response};
 use brains_api_types::Session;
 use brains_domain::DomainError;
 
-use crate::auth::{AuthSource, SESSION_COOKIE, guard_cookie_mutation};
+use crate::auth::{AuthSource, guard_cookie_mutation};
 use crate::error::{ApiError, ApiResult};
 use crate::routes::{RequestId, json_response};
 use crate::state::{Blob, Head, Idx, Rev, SharedState};
@@ -67,10 +67,9 @@ pub async fn create_session<H: Head, R: Rev, B: Blob, I: Idx>(
         .security
         .issue_session(principal)
         .map_err(|e| ApiError::new(e, rid))?;
-    let cookie = format!(
-        "{SESSION_COOKIE}={value}; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age={}",
-        8 * 3600
-    );
+    let cookie = state
+        .session_cookie_policy
+        .cookie_header(&value, 8 * 3600, &headers);
     let mut body = session_body(principal, Some(csrf));
     body.expires_at = Some(expires_at);
     let mut response = json_response(StatusCode::OK, &body, None);
@@ -109,7 +108,7 @@ pub async fn delete_session<H: Head, R: Rev, B: Blob, I: Idx>(
         )
         .map_err(|e| ApiError::new(e, rid))?;
     }
-    let clear = format!("{SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=0");
+    let clear = state.session_cookie_policy.cookie_header("", 0, &headers);
     let mut response = Json(brains_api_types::OkResult { ok: true }).into_response();
     if let Ok(value) = header::HeaderValue::from_str(&clear) {
         response.headers_mut().insert(header::SET_COOKIE, value);

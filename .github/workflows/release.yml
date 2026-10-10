@@ -13,33 +13,70 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.version || github.ref_name }}
+  cancel-in-progress: false
 
 env:
   WASM_RUSTFLAGS: --cfg getrandom_backend="wasm_js"
 
 jobs:
+  prepare:
+    name: Validate release identity
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+      version: ${{ steps.identity.outputs.version }}
+      sha: ${{ steps.identity.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve tag, package version and commit
+        id: identity
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+          import tomllib
+
+          version = tomllib.loads(Path("Cargo.toml").read_text())["workspace"]["package"]["version"]
+          tag = os.environ["INPUT_VERSION"] if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch" else os.environ["GITHUB_REF_NAME"]
+          if tag != f"v{version}":
+              raise SystemExit(f"Release tag must match Cargo workspace version: v{version}")
+          sha = subprocess.check_output(["git", "rev-parse", "HEAD^{commit}"], text=True).strip()
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"tag={tag}\nversion={version}\nsha={sha}\n")
+          print(f"Release {tag} from {sha}")
+          PY
+
   cli-server:
     name: bsx + brains-server (${{ matrix.id }})
+    needs: prepare
     runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - id: macos-arm64
-            os: macos-14
+            os: macos-15
             target: aarch64-apple-darwin
-            archive: tar.gz
           - id: macos-x64
-            os: macos-13
+            os: macos-15-intel
             target: x86_64-apple-darwin
-            archive: tar.gz
           - id: linux-x64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-musl
-            archive: tar.gz
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -50,15 +87,23 @@ jobs:
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Build (release)
-        run: cargo build --release -p brains-server -p brains-cli --target ${{ matrix.target }}
+        run: cargo build --locked --release -p brains-server -p brains-cli --target ${{ matrix.target }}
+      - name: Verify compiled identity
+        run: |
+          actual="$(target/${{ matrix.target }}/release/bsx --version)"
+          expected="bsx ${VERSION} (git ${RELEASE_SHA:0:12})"
+          if [[ "$actual" != "$expected" ]]; then
+            printf 'Expected: %s\nActual: %s\n' "$expected" "$actual" >&2
+            exit 1
+          fi
       - name: Package
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           DIR="brains-${VERSION}-${{ matrix.id }}"
           mkdir -p "$DIR"
           cp "target/${{ matrix.target }}/release/brains-server" \
              "target/${{ matrix.target }}/release/bsx" "$DIR/"
-          cp README.md docs/runbook.md "$DIR/" 2>/dev/null || cp README.md "$DIR/"
+          cp docs/native-release.md "$DIR/README.md"
+          "$DIR/bsx" --version > "$DIR/VERSION"
           tar czf "$DIR.tar.gz" "$DIR"
           shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
@@ -68,12 +113,19 @@ jobs:
             brains-*.tar.gz
             brains-*.tar.gz.sha256
           retention-days: 7
+          if-no-files-found: error
 
   web-worker:
     name: web dist + worker bundle
+    needs: prepare
     runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -89,34 +141,34 @@ jobs:
       - name: Build worker wasm
         working-directory: apps/worker
         run: |
-          cargo install worker-build --locked
+          cargo install worker-build --locked --version 0.8.7
           worker-build --release
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
-      - name: Generate OpenAPI document
-        run: |
-          cargo install xidlc --locked --version 0.95.0 --features cli,fmt
-          bash scripts/gen-api.sh
+      # CI's codegen drift check owns generation. Publish this commit's contract.
       - uses: actions/upload-artifact@v4
         with:
           name: brains-openapi
           path: sdk/openapi/brains-openapi.json
           retention-days: 7
+          if-no-files-found: error
       - name: Package web dist
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           tar czf "brains-web-${VERSION}.tar.gz" -C apps/web dist
           shasum -a 256 "brains-web-${VERSION}.tar.gz" > "brains-web-${VERSION}.tar.gz.sha256"
       - name: Package worker bundle
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
           DIR="brains-worker-${VERSION}"
-          mkdir -p "$DIR"
-          cp -r apps/worker/build "$DIR/build"
-          cp apps/worker/wrangler.toml "$DIR/"
-          cp -r migrations "$DIR/migrations"
+          python3 scripts/package-worker.py "$DIR" --version "$VERSION" --sha "$RELEASE_SHA"
           tar czf "$DIR.tar.gz" "$DIR"
           shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
+          (
+            cd "$DIR"
+            node "$GITHUB_WORKSPACE/apps/worker/node_modules/wrangler/bin/wrangler.js" \
+              deploy --config wrangler.json --dry-run --outdir "$RUNNER_TEMP/brains-worker-dry-run"
+          )
+        env:
+          WRANGLER_SEND_METRICS: "false"
       - uses: actions/upload-artifact@v4
         with:
           name: brains-web-worker
@@ -124,27 +176,46 @@ jobs:
             brains-web-*.tar.gz*
             brains-worker-*.tar.gz*
           retention-days: 7
+          if-no-files-found: error
 
   publish:
     name: Publish GitHub release
     runs-on: ubuntu-latest
-    needs: [cli-server, web-worker]
+    needs: [prepare, cli-server, web-worker]
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
-      - name: Create tag when dispatched
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "${{ inputs.version }}" "${{ github.sha }}"
-          git push origin "${{ inputs.version }}"
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Verify remote tag or create it for dispatch
+        run: |
+          remote_tag="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG")"
+          if [[ -n "$remote_tag" ]]; then
+            git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG"
+            actual="$(git rev-parse 'FETCH_HEAD^{commit}')"
+            if [[ "$actual" != "$RELEASE_SHA" ]]; then
+              echo "Remote tag points to a different commit; refusing to publish" >&2
+              exit 1
+            fi
+          elif [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
+            git tag "$RELEASE_TAG" "$RELEASE_SHA"
+            git push origin "refs/tags/$RELEASE_TAG"
+          else
+            echo "Triggered tag no longer exists; refusing to recreate it" >&2
+            exit 1
+          fi
       - name: Publish
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "Brains ${GITHUB_REF_NAME}" \
+          gh release create "$RELEASE_TAG" \
+            --verify-tag \
+            --title "Brains $RELEASE_TAG" \
             --generate-notes \
             artifacts/*/*
         env:

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use brains_application::Vault;
 
-use crate::auth::Security;
+use crate::auth::{Security, SessionCookiePolicy};
 
 /// Compact bound aliases for handler signatures.
 pub trait Head: brains_ports::HeadStore + Send + Sync + 'static {}
@@ -20,6 +20,7 @@ impl<T: brains_ports::IndexStore + Send + Sync + 'static> Idx for T {}
 pub struct AppState<H, R, B, I> {
     pub vault: Vault<H, R, B, I>,
     pub security: Arc<dyn Security>,
+    pub session_cookie_policy: SessionCookiePolicy,
     pub limits: brains_domain::Limits,
     pub capabilities: brains_domain::Capabilities,
     /// Allowed origins for cookie flows; empty means same-origin only.

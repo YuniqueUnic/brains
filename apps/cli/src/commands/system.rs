@@ -173,7 +173,7 @@ pub(crate) fn seed_template(client: &BrainClient) -> ClientResult<i32> {
     let mut skipped = 0usize;
     for (path, body) in brains_application::seed::template_notes() {
         match client.get_meta(path) {
-            Ok(_) => skipped += 1,
+            Ok(_) | Err(ClientError { status: 410, .. }) => skipped += 1,
             Err(error) if error.status == 404 => {
                 client.put_content(
                     path,

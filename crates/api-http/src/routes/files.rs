@@ -105,7 +105,7 @@ pub async fn list_files<H: Head, R: Rev, B: Blob, I: Idx>(
             },
         };
         let order = filter.order;
-        let (after_path, after_updated) = decode_index_cursor(cursor.as_deref())
+        let (after_path, after_updated) = decode_index_cursor(cursor.as_deref(), order)
             .map_err(|e| ApiError::new(e, request_id.0.as_str()))?;
         let page = state
             .vault
@@ -163,16 +163,17 @@ pub async fn list_files<H: Head, R: Rev, B: Blob, I: Idx>(
 
 fn decode_index_cursor(
     cursor: Option<&str>,
+    order: brains_ports::ListOrder,
 ) -> brains_domain::DomainResult<(Option<String>, Option<String>)> {
-    match cursor {
-        None => Ok((None, None)),
-        Some(raw) if raw.contains('|') => {
+    match (cursor, order) {
+        (None, _) => Ok((None, None)),
+        (Some(raw), brains_ports::ListOrder::UpdatedDesc) => {
             let (updated, path) = raw
                 .split_once('|')
                 .ok_or_else(|| DomainError::InvalidArgument("malformed cursor".into()))?;
             Ok((Some(path.to_owned()), Some(updated.to_owned())))
         }
-        Some(raw) => Ok((Some(raw.to_owned()), None)),
+        (Some(raw), brains_ports::ListOrder::Path) => Ok((Some(raw.to_owned()), None)),
     }
 }
 

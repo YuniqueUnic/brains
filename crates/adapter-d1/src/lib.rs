@@ -367,7 +367,7 @@ impl IndexStore for D1Index {
                     " AND (?6 IS NULL OR updated_at < ?6 OR (updated_at = ?6 AND path > ?7))",
                 );
             } else {
-                sql.push_str(" AND (?6 IS NULL OR path > ?7)");
+                sql.push_str(" AND (?7 IS NULL OR path > ?7)");
             }
             if order_desc {
                 sql.push_str(" ORDER BY updated_at DESC, path LIMIT ?8");

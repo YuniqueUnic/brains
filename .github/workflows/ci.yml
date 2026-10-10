@@ -126,22 +126,11 @@ jobs:
           worker-build --release
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
-      - name: Apply local D1 migrations
-        working-directory: apps/worker
-        run: pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local
-      - name: Start workerd and run business smoke
-        working-directory: apps/worker
-        run: |
-          nohup pnpm exec wrangler dev --port 8799 > /tmp/wrangler-dev.log 2>&1 &
-          for i in $(seq 1 30); do
-            curl -sf -o /dev/null http://127.0.0.1:8799/healthz && break
-            sleep 2
-          done
-          curl -sf http://127.0.0.1:8799/healthz
-          bash tests/worker-smoke.sh
-      - name: Worker dev log (on failure)
-        if: failure()
-        run: tail -50 /tmp/wrangler-dev.log
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run isolated Worker business smoke
+        run: python3 scripts/run-workerd.py -- bash tests/worker-smoke.sh
 
   worker-e2e:
     name: Browser E2E against the Worker (workerd)
@@ -168,24 +157,13 @@ jobs:
           worker-build --release
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
-      - name: Apply local D1 migrations
-        working-directory: apps/worker
-        run: pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local
-      - name: Start workerd
-        working-directory: apps/worker
-        run: |
-          nohup pnpm exec wrangler dev --port 8799 > /tmp/wrangler-dev.log 2>&1 &
-          for i in $(seq 1 30); do
-            curl -sf -o /dev/null http://127.0.0.1:8799/healthz && break
-            sleep 2
-          done
-          curl -sf http://127.0.0.1:8799/healthz
-      - name: Run screenplay E2E against the Worker
-        working-directory: tests/e2e
-        env:
-          BRAINS_BASE_URL: http://127.0.0.1:8799
-          BRAINS_E2E_TOKEN: brains-dev-token-0000000000000000
-        run: pnpm exec playwright test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Playwright browser
+        run: pnpm --dir tests/e2e exec playwright install --with-deps chromium
+      - name: Run screenplay E2E against an isolated Worker
+        run: tests/e2e/run-workerd.sh
       - name: Upload failure context
         if: failure()
         uses: actions/upload-artifact@v4
@@ -193,6 +171,3 @@ jobs:
           name: playwright-worker-failures
           path: tests/e2e/test-results
           retention-days: 7
-      - name: Worker dev log (on failure)
-        if: failure()
-        run: tail -50 /tmp/wrangler-dev.log

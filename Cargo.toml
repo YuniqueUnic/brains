@@ -60,6 +60,7 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 unicode-normalization = "0.1"
+unicase = "2"
 pulldown-cmark = { version = "0.13", default-features = false }
 fs2 = "0.4"
 similar = { version = "3", features = ["text"] }

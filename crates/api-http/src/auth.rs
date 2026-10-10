@@ -16,6 +16,64 @@ use brains_domain::{DomainError, DomainResult, Principal, Scope};
 const SESSION_TTL_SECONDS: u64 = 8 * 3600;
 pub const SESSION_COOKIE: &str = "brains_session";
 
+/// The runtime opts into plain HTTP only for direct loopback browser origins.
+/// Public origins and the Worker always retain Secure cookies.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SessionCookiePolicy {
+    Secure,
+    LoopbackHttp,
+}
+
+impl SessionCookiePolicy {
+    pub(crate) fn cookie_header(
+        self,
+        value: &str,
+        max_age: u64,
+        headers: &axum::http::HeaderMap,
+    ) -> String {
+        let secure = if self.requires_secure(headers) {
+            "; Secure"
+        } else {
+            ""
+        };
+        format!(
+            "{SESSION_COOKIE}={value}; HttpOnly; SameSite=Lax{secure}; Path=/; Max-Age={max_age}"
+        )
+    }
+
+    fn requires_secure(self, headers: &axum::http::HeaderMap) -> bool {
+        use axum::http::{header, uri::Authority};
+
+        if self == Self::Secure {
+            return true;
+        }
+        let authority = headers
+            .get(header::ORIGIN)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|origin| origin.strip_prefix("http://"))
+            .and_then(|origin| origin.parse::<Authority>().ok());
+        let Some(authority) = authority else {
+            return true;
+        };
+        if authority.as_str().contains('@')
+            || headers
+                .get(header::HOST)
+                .and_then(|value| value.to_str().ok())
+                != Some(authority.as_str())
+        {
+            return true;
+        }
+        let host = authority
+            .host()
+            .trim_start_matches('[')
+            .trim_end_matches(']');
+        !(host.eq_ignore_ascii_case("localhost")
+            || host
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|address| address.is_loopback()))
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TokenRecord {
     pub id: String,

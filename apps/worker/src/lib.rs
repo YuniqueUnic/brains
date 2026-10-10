@@ -100,6 +100,7 @@ fn build_state(env: &Env) -> StateResult {
         limits.max_attachment_bytes,
     );
     Ok(Arc::new(AppState {
+        session_cookie_policy: brains_api_http::auth::SessionCookiePolicy::Secure,
         vault,
         security,
         limits,

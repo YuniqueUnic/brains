@@ -4,6 +4,7 @@
 //! consistency — never a whole-vault snapshot claim.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 use brains_domain::path::check_portable_segment;
 
@@ -96,11 +97,18 @@ fn export_into_staging(
 ) -> ClientResult<Manifest> {
     // Phase 1: enumerate the authoritative listing to the end.
     let listed = client.current_files()?;
-    check_portability(&listed.iter().map(|e| e.path.clone()).collect::<Vec<_>>())?;
+    check_portability(
+        &listed
+            .iter()
+            .filter(|entry| entry.state == "live")
+            .map(|entry| entry.path.clone())
+            .collect::<Vec<_>>(),
+    )?;
 
     // Phase 2: download each entry's recorded immutable revision.
     let mut entries: Vec<ManifestEntry> = Vec::new();
     let mut tombstones: Vec<ManifestTombstone> = Vec::new();
+    let mut directories = HashSet::new();
     for entry in &listed {
         if entry.state == "trashed" {
             tombstones.push(ManifestTombstone {
@@ -113,7 +121,7 @@ fn export_into_staging(
         // listing entries carry none): fetch it, download the immutable
         // bytes, and refuse any mismatch — the §14.5 recovery premise.
         let (bytes, content) = read_verified(client, &entry.path, &entry.revision)?;
-        write_entry_file(staging, &entry.path, &bytes)?;
+        write_entry_file(staging, &entry.path, &bytes, &mut directories)?;
         restore_executable(&staging.join(&entry.path), content.executable)?;
         entries.push(ManifestEntry {
             path: entry.path.clone(),
@@ -148,12 +156,33 @@ fn export_into_staging(
     Ok(manifest)
 }
 
-fn write_entry_file(root: &std::path::Path, logical: &str, bytes: &[u8]) -> ClientResult<()> {
-    let target = root.join(logical);
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent).map_err(io_err)?;
+fn write_entry_file(
+    root: &std::path::Path,
+    logical: &str,
+    bytes: &[u8],
+    directories: &mut HashSet<std::path::PathBuf>,
+) -> ClientResult<()> {
+    use std::io::Write;
+
+    // Unicode folding is a portability preflight, not a model of every OS.
+    // Only reuse directories created for this exact spelling. The filesystem
+    // must reject any additional alias rather than silently merge two paths.
+    if let Some((parent, _)) = logical.rsplit_once('/') {
+        let mut directory = root.to_path_buf();
+        for part in parent.split('/') {
+            directory.push(part);
+            if directories.insert(directory.clone()) {
+                std::fs::create_dir(&directory).map_err(io_err)?;
+            }
+        }
     }
-    std::fs::write(&target, bytes).map_err(io_err)
+    let target = root.join(logical);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&target)
+        .and_then(|mut file| file.write_all(bytes))
+        .map_err(io_err)
 }
 
 /// The checks export_raw.py also applies: reserved names, portable segments,
@@ -175,7 +204,7 @@ pub(crate) fn check_portability(paths: &[String]) -> ClientResult<()> {
                 current_revision: None,
             })?;
             let original = parts[..=index].join("/");
-            let folded = original.to_lowercase();
+            let folded = unicase::UniCase::new(&original).to_folded_case();
             if index + 1 < parts.len() {
                 if let Some(existing) = folded_files.get(&folded) {
                     return Err(collide(existing, &original));

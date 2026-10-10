@@ -23,9 +23,12 @@ database_name = "brains-index"
 database_id = "local"
 migrations_dir = "../../migrations/d1"
 
+[secrets]
+required = ["TOKEN_REGISTRY_JSON", "SESSION_SIGNING_KEY", "CURSOR_SIGNING_KEY"]
+
 [vars]
 VAULT_ID = "default"
 MAX_TEXT_BYTES = "262144"
 MAX_ATTACHMENT_BYTES = "8388608"
-# Production: `wrangler secret put` TOKEN_REGISTRY_JSON, SESSION_SIGNING_KEY,
-# CURSOR_SIGNING_KEY. Local dev reads the same names from .dev.vars.
+# First deployment: pass all three required secrets with `wrangler deploy --secrets-file`.
+# Local verification generates isolated .dev.vars via scripts/run-workerd.py.
