@@ -6,7 +6,7 @@
 
 [中文文档](README.zh.md) · [Architecture](docs/architecture.md) · [Runbook](docs/runbook.md) · [Import, sync & migration](docs/portable-workflow.md)
 
-[![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
+[![CI](https://github.com/YuniqueUnic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/YuniqueUnic/brains/actions/workflows/ci.yml)
 
 Brains is *not* an AI memory framework. There is no recall engine, no vector database, no context assembly. It is a versioned store for the notes you already write, built on one idea: **the database may disappear — your files and their history must not.**
 
@@ -19,6 +19,10 @@ Brains is *not* an AI memory framework. There is no recall engine, no vector dat
 | ![dark](docs/screenshots/05-dark.png) | |
 
 The web UI ships with **dark / light / system themes** and **i18n (zh-CN / English, namespace-based via i18next)** — switchable from the header; the choice persists per browser.
+
+## Live demo
+
+Try the [browser demo](https://YuniqueUnic.github.io/brains/). No account or server is needed. Demo files exist only in the current page and reset on refresh; local editor drafts may remain in your browser. Search uses a simplified in-memory implementation.
 
 ## Core properties
 
@@ -143,6 +147,6 @@ bash tests/worker-smoke.sh                                               # again
 
 ## License
 
-MIT
+[MIT](LICENSE)
 
 Native search now uses Turso 0.8.2 with optional Tantivy. See [build features and search semantics](docs/turso.md).

@@ -6,7 +6,7 @@
 
 [English](README.md) · [架构文档](docs/architecture.md) · [运行手册](docs/runbook.md) · [导入、同步与迁移](docs/portable-workflow.md)
 
-[![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
+[![CI](https://github.com/YuniqueUnic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/YuniqueUnic/brains/actions/workflows/ci.yml)
 
 Brains **不是** AI memory framework：没有召回引擎、没有向量库、没有上下文装配。它只做一件事——为已经在写的笔记提供版本化存储，核心承诺是：**数据库可以消失，正文和历史不能。**
 
@@ -19,6 +19,10 @@ Brains **不是** AI memory framework：没有召回引擎、没有向量库、�
 | ![暗色](docs/screenshots/05-dark.png) | |
 
 Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空间化 i18n（简体中文 / English，基于 i18next）**，均可在顶栏一键切换并按浏览器记忆。
+
+## 在线演示
+
+直接打开[浏览器演示](https://YuniqueUnic.github.io/brains/)，无需账号或服务器。演示文件仅保存在当前页面，刷新后重置；编辑器的本地草稿可能仍留在浏览器中。演示搜索使用简化的内存实现。
 
 ## 核心性质
 
@@ -137,6 +141,6 @@ bash tests/worker-smoke.sh                                               # 对�
 
 ## 许可
 
-MIT
+[MIT](LICENSE)
 
 原生索引使用 Turso 0.8.2，可通过 `fts` 选择是否构建 Tantivy；见[构建开关与搜索规则](docs/turso.md)。

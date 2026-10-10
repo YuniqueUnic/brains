@@ -23,7 +23,7 @@ members = [
 version = "0.2.0"
 edition = "2024"
 license = "MIT"
-repository = "https://example.com/brains"
+repository = "https://github.com/YuniqueUnic/brains"
 
 [workspace.dependencies]
 xidl-rust-axum = { version = "=0.99.0", default-features = false }

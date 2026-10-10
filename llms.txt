@@ -11,10 +11,10 @@ pointer via compare-and-swap: two writers on the same base yield exactly one
 200 and one 412. Deletes are tombstones; restores create new revisions; the
 on-disk layout IS the backup; search indexes are rebuildable projections.
 
-- Docs: [README](https://github.com/unic/brains/blob/main/README.md) ·
-  [Runbook](https://github.com/unic/brains/blob/main/docs/runbook.md) ·
-  [AI integration (agent API reference)](https://github.com/unic/brains/blob/main/docs/ai-integration.md)
-- Architecture: https://github.com/unic/brains/blob/main/docs/architecture.md
+- Docs: [README](https://github.com/YuniqueUnic/brains/blob/main/README.md) ·
+  [Runbook](https://github.com/YuniqueUnic/brains/blob/main/docs/runbook.md) ·
+  [AI integration (agent API reference)](https://github.com/YuniqueUnic/brains/blob/main/docs/ai-integration.md)
+- Architecture: https://github.com/YuniqueUnic/brains/blob/main/docs/architecture.md
 - Quickstart: `cargo build -p brains-server -p brains-cli` then
   `./target/debug/brains-server --data-dir ./brain-data --token "$TOKEN" --web-dist apps/web/dist`
   (first boot seeds template notes into the empty vault)
