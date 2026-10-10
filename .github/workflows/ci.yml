@@ -48,25 +48,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Resolve the workspace xidl version
-        id: xidl
+      - name: Install the pinned IDL compiler
         run: |
-          python3 - <<'PYVERSION' >> "$GITHUB_OUTPUT"
-          import tomllib
-          with open("Cargo.toml", "rb") as manifest:
-              dependency = tomllib.load(manifest)["workspace"]["dependencies"]["xidl-rust-axum"]
-          print(f"version={dependency['version'].removeprefix('=')}")
-          PYVERSION
-      - name: Install the matching released IDL compiler
-        env:
-          GH_TOKEN: ${{ github.token }}
-          XIDL_VERSION: ${{ steps.xidl.outputs.version }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/xidlc"
-          gh release download "v$XIDL_VERSION" --repo xidl/xidl \
-            --pattern xidlc-x86_64-unknown-linux-musl.tar.gz --dir "$RUNNER_TEMP/xidlc"
-          tar -xzf "$RUNNER_TEMP/xidlc/xidlc-x86_64-unknown-linux-musl.tar.gz" -C "$RUNNER_TEMP/xidlc"
-          echo "$RUNNER_TEMP/xidlc" >> "$GITHUB_PATH"
+          bash scripts/install-xidlc.sh "$RUNNER_TEMP/xidlc"
+          echo "XIDLC=$RUNNER_TEMP/xidlc/bin/xidlc" >> "$GITHUB_ENV"
       - name: Regenerate committed SDK artifacts
         run: bash scripts/gen-api.sh
       - name: Fail on any drift
@@ -160,6 +145,12 @@ jobs:
           python-version: '3.12'
       - name: Run isolated Worker business smoke
         run: python3 scripts/run-workerd.py -- bash tests/worker-smoke.sh
+      - name: Generated SDK against Worker
+        run: python3 scripts/run-workerd.py -- bash tests/http-sdk/run.sh
+      - name: Archive and profile-pair sync through the CLI
+        run: |
+          cargo build -p brains-server -p brains-cli
+          python3 scripts/run-workerd.py -- python3 tests/cli-workflows.py
 
   worker-e2e:
     name: Browser E2E against the Worker (workerd)
