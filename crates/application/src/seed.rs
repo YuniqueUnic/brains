@@ -26,6 +26,10 @@ pub fn template_notes() -> &'static [(&'static str, &'static str)] {
             include_str!("../template-notes/ai-guide.md"),
         ),
         (
+            "docs/memory-writing.md",
+            include_str!("../template-notes/memory-writing.md"),
+        ),
+        (
             "inbox/README.md",
             include_str!("../template-notes/inbox/README.md"),
         ),
@@ -69,7 +73,7 @@ where
                     actor: principal.actor.clone(),
                     operation_id: HexId::generate(),
                     precondition: Precondition::Create,
-                    executable: false,
+                    executable: Some(false),
                     copied_from: None,
                 },
             )

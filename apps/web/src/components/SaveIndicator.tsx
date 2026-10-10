@@ -31,9 +31,9 @@ export function SaveIndicator({
       data-testid="editor-status"
       role={tone === "error" ? "alert" : "status"}
       aria-live="polite"
-      title={title}
+      title={title ?? label}
       className={cn(
-        "inline-flex h-[22px] items-center gap-1.5 rounded-full px-2 text-[11px] font-medium",
+        "inline-flex h-[22px] items-center gap-1.5 rounded-full px-2 text-meta font-medium",
         "select-none whitespace-nowrap",
       )}
       style={{
@@ -49,7 +49,7 @@ export function SaveIndicator({
           boxShadow: `0 0 0 3px color-mix(in srgb, ${toneColor} 22%, transparent)`,
         }}
       />
-      {label}
+      <span className="sr-only sm:not-sr-only">{label}</span>
     </span>
   );
 }

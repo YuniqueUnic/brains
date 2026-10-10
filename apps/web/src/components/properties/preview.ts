@@ -37,12 +37,27 @@ export function previewFor(path: string): Promise<PreviewResult> {
       }
       return { kind: "binary" } as const;
     })();
+    // A failed preview must not be sticky: drop the entry so the next hover
+    // retries (the file may have appeared or the error been transient).
+    cached = cached.catch((error) => {
+      previewCache.delete(path);
+      throw error;
+    });
     previewCache.set(path, cached);
   }
   return cached;
 }
 
 const revisionCache = new Map<string, Promise<PreviewResult>>();
+
+/** Called after a publish: cached HEAD/revision previews for the path are
+ * stale the moment new bytes land. */
+export function invalidatePreview(path: string) {
+  previewCache.delete(path);
+  for (const key of [...revisionCache.keys()]) {
+    if (key.startsWith(`${path}@`)) revisionCache.delete(key);
+  }
+}
 
 /** Content of a specific historical revision (history hover / view dialog). */
 export function revisionPreviewFor(path: string, revision: string): Promise<PreviewResult> {
@@ -60,6 +75,10 @@ export function revisionPreviewFor(path: string, revision: string): Promise<Prev
       const text = await api.readRevisionText(path, revision);
       return { kind: "text", html: await markdownToSafeHtml(text) } as const;
     })();
+    cached = cached.catch((error) => {
+      revisionCache.delete(key);
+      throw error;
+    });
     revisionCache.set(key, cached);
   }
   return cached;
@@ -69,6 +88,8 @@ export function revisionPreviewFor(path: string, revision: string): Promise<Prev
  * Resolve a markdown/wiki reference to a vault path: exact, then any entry
  * ending with `/<target>`, then stem match ([[name]] without extension).
  */
+export const referenceStem = (path: string) => path.replace(/\.[a-z0-9]+$/i, "");
+
 export function resolveReference(
   target: string,
   files: { path: string }[],
@@ -82,9 +103,9 @@ export function resolveReference(
   if (files.some((file) => file.path === decoded)) return decoded;
   const suffixed = files.find((file) => file.path.endsWith(`/${decoded}`));
   if (suffixed) return suffixed.path;
-  const stem = decoded.replace(/\.[a-z0-9]+$/i, "");
+  const stem = referenceStem(decoded);
   const byStem = files.find(
-    (file) => file.path === stem || file.path.endsWith(`/${stem}`),
+    (file) => referenceStem(file.path) === stem || referenceStem(file.path).endsWith(`/${stem}`),
   );
   return byStem?.path ?? null;
 }

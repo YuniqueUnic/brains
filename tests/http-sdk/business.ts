@@ -16,7 +16,7 @@ const original = bytes('# hello');
 
 // Given an external client, byte uploads keep their media type and digest.
 const created = await files.put_file(path, undefined, '*', undefined,
-  digest(original), 'text/markdown', original);
+  digest(original), undefined, 'text/markdown', original);
 assert.equal(created.return.created, true);
 const revision1 = created.return.revision;
 const etag1 = created.etag;
@@ -103,7 +103,7 @@ await assert.rejects(files.get_file('ts-sdk/copied.md', undefined, undefined), G
 const binaryPath = 'ts-sdk/source.bin';
 const binaryBody = new Uint8Array([0xff]);
 const binary = await files.put_file(binaryPath, undefined, '*', undefined,
-  digest(binaryBody), 'application/octet-stream', binaryBody);
+  digest(binaryBody), undefined, 'application/octet-stream', binaryBody);
 for (const [index, transfer] of ['copy', 'move'].entries()) {
   const target = `ts-sdk/invalid-${transfer}.md`;
   const body = { source: binaryPath, target,
@@ -137,12 +137,12 @@ assert.equal(current.csrf_token, csrf);
 const noCsrfFiles = new sdk.FilesClient(api, { headers: { Cookie: cookie, Origin: origin } });
 const cookieBody = bytes('cookie write');
 await assert.rejects(noCsrfFiles.put_file('ts-sdk/cookie.md', undefined, '*', undefined,
-  digest(cookieBody), 'text/markdown', cookieBody),
+  digest(cookieBody), undefined, 'text/markdown', cookieBody),
   error => error instanceof Forbidden && error.status === 403);
 const cookieHeaders = { Cookie: cookie, Origin: origin, 'X-CSRF-Token': csrf };
 const cookieFiles = new sdk.FilesClient(api, { headers: cookieHeaders });
 const cookieCreated = await cookieFiles.put_file('ts-sdk/cookie.md', undefined, '*', undefined,
-  digest(cookieBody), 'text/markdown', cookieBody);
+  digest(cookieBody), undefined, 'text/markdown', cookieBody);
 assert.equal(cookieCreated.return.created, true);
 const logout = await new sdk.SessionsClient(api, { headers: cookieHeaders }).logout();
 assert.equal(logout.return.ok, true);

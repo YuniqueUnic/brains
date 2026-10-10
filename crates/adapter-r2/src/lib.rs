@@ -158,6 +158,57 @@ impl HeadStore for R2ContentStore {
         })
     }
 
+    /// Permanent removal. worker 0.8's R2 delete carries no conditional
+    /// form, so this is verify-then-delete with a re-check: if a head
+    /// reappears after the delete (a restore raced us), the error is raised
+    /// instead of pretending the purge won. The race window is the
+    /// get→delete span and is documented in docs/verification.md.
+    fn remove(
+        &self,
+        path: &VaultPath,
+        expected: &ExpectedHead,
+    ) -> impl Future<Output = DomainResult<CasOutcome>> + Send {
+        let bucket = self.bucket.clone();
+        let key = self.head_key(path);
+        let expected_token = match expected {
+            ExpectedHead::Absent => None,
+            ExpectedHead::StorageToken(token) => Some(token.to_owned()),
+        };
+        SendFuture::new(async move {
+            let object = bucket
+                .get(&key)
+                .execute()
+                .await
+                .map_err(|e| storage_error("head read", &key, e))?;
+            let Some(object) = object else {
+                return Ok(CasOutcome::Committed); // already gone
+            };
+            if let Some(token) = &expected_token
+                && object.etag() != *token
+            {
+                return Ok(CasOutcome::PreconditionFailed);
+            }
+            bucket
+                .delete(&key)
+                .await
+                .map_err(|e| storage_error("head remove", &key, e))?;
+            if let Some(after) = bucket
+                .get(&key)
+                .execute()
+                .await
+                .map_err(|e| storage_error("head re-read", &key, e))?
+            {
+                // A restore landed between our read and delete: the head we
+                // removed is NOT the tombstone we verified — say so loudly.
+                return Err(DomainError::RevisionConflict {
+                    path: path.as_str().to_owned(),
+                    current_revision: Some(after.etag().to_owned()),
+                });
+            }
+            Ok(CasOutcome::Committed)
+        })
+    }
+
     fn list(
         &self,
         prefix: Option<&str>,

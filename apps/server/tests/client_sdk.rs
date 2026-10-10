@@ -52,6 +52,7 @@ async fn generated_client_talks_to_generated_server() {
             Some("*".into()),
             None,
             Some(sha256_hex(b"# hello")),
+            None,
             Some("text/markdown".into()),
             b"# hello".to_vec(),
         )
@@ -72,6 +73,7 @@ async fn generated_client_talks_to_generated_server() {
             None,
             None,
             Some(sha256_hex(b"# hello v2")),
+            None,
             Some("text/markdown".into()),
             b"# hello v2".to_vec(),
         )
@@ -88,6 +90,7 @@ async fn generated_client_talks_to_generated_server() {
             None,
             None,
             Some(sha256_hex(b"stale")),
+            None,
             Some("text/markdown".into()),
             b"stale".to_vec(),
         )
@@ -229,6 +232,7 @@ async fn generated_client_talks_to_generated_server() {
             Some("*".into()),
             None,
             None,
+            None,
             Some("text/html".into()),
             b"<b>raw</b>".to_vec(),
         )
@@ -287,6 +291,7 @@ async fn generated_client_preserves_permission_and_size_failures() {
             Some("*".into()),
             None,
             None,
+            None,
             Some("text/markdown".into()),
             b"small".to_vec(),
         )
@@ -317,6 +322,7 @@ async fn generated_client_preserves_permission_and_size_failures() {
         .put_file(
             "size.md".into(),
             Some(format!("\"{revision}\"")),
+            None,
             None,
             None,
             None,

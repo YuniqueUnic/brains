@@ -22,7 +22,7 @@ export function DialogContent({
       <DialogPrimitive.Popup
         className={cn(
           "fixed left-1/2 top-1/2 z-50 w-[min(28rem,94vw)] -translate-x-1/2 -translate-y-1/2",
-          "rounded-[12px] border bg-card p-5 text-foreground shadow-overlay overlay-in",
+          "rounded-[12px] border bg-card p-5 text-foreground shadow-overlay overlay-in [zoom:var(--ui-zoom,1)]",
           className,
         )}
         {...props}
@@ -48,7 +48,7 @@ export function DialogTitle({ className, ...props }: ComponentProps<"h2">) {
 
 export function DialogDescription({ className, ...props }: ComponentProps<"p">) {
   return (
-    <p className={cn("text-[12.5px] leading-relaxed text-muted-foreground", className)} {...props} />
+    <p className={cn("text-body-sm leading-relaxed text-muted-foreground", className)} {...props} />
   );
 }
 

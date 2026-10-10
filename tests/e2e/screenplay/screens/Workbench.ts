@@ -24,6 +24,7 @@ export const Workbench = {
   logoutButton: () =>
     PageElement.located(By.css('[data-testid="logout"]')).describedAs("logout button"),
   banner: () => PageElement.located(By.css('[data-testid="banner"]')).describedAs("banner"),
+  toasts: () => PageElements.located(By.css('[data-sonner-toast]')).describedAs("toasts"),
   fileList: () =>
     PageElement.located(By.css('[data-testid="file-list"]')).describedAs("file list"),
   fileItem: (path: string) =>

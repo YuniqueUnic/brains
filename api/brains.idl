@@ -65,6 +65,13 @@ struct Entry {
     @optional string title;
 };
 
+struct PurgeResult {
+    string path;
+    boolean purged;
+    string index_state;
+    string operation_id;
+};
+
 struct MutationResult {
     string path;
     string revision;
@@ -116,6 +123,43 @@ struct Revision {
     @optional string commit_state;
     @optional ContentRef content;
 };
+
+// Lossless, administrative archive records (ordinary Revision omits keys).
+struct ArchiveContent {
+    string key;
+    string sha256;
+    int64 size;
+    string media_type;
+    boolean executable;
+};
+// HTTP optionals omit absent fields; storage/archive files keep their own encoding.
+struct ArchiveRevision {
+    uint64 schema_version;
+    string revision;
+    string path;
+    int64 generation;
+    @optional string parent;
+    string action;
+    string actor;
+    string operation_id;
+    string created_at;
+    @optional string restores_revision;
+    @optional CopiedFrom copied_from;
+    @optional ArchiveContent content;
+};
+struct ArchiveHead {
+    uint64 schema_version;
+    string path;
+    string revision;
+    int64 generation;
+    string state;
+    string updated_at;
+};
+struct ArchivePublished {
+    ArchiveHead head;
+    string index_state;
+};
+struct ArchiveBlobStored { boolean stored; };
 
 struct HistoryPage {
     sequence<Revision> items;
@@ -372,6 +416,8 @@ interface Files {
         @header @rename("If-None-Match") @optional string if_none_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("X-Content-SHA256") @optional string content_sha256,
+        // Omitted preserves the existing executable flag.
+        @header @rename("X-Executable") @optional boolean executable,
         @header @rename("Content-Type") @optional string content_type,
         @header @rename("ETag") @optional out string etag,
         in sequence<octet> body
@@ -399,6 +445,14 @@ interface Files {
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("ETag") @optional out string etag
     ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
+
+    // Permanently remove a tombstoned path; live files fail with 409.
+    @delete(path = "/trash")
+    PurgeResult purge_file(
+        @query string path,
+        @header @rename("If-Match") @optional string if_match,
+        @header @rename("X-Operation-ID") @optional string operation_id
+    ) raises(BadRequest, Forbidden, NotFound, Conflict, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
 
     // Patch text in place. Dry-run previews the same edits without changing
     // HEAD; committed contains the new mutation only after a successful write.
@@ -493,6 +547,31 @@ interface Files {
     // (design §22.5).
     @post(path = "/maintenance/validate")
     void validate() raises(NotImplemented);
+};
+
+// Authentication and cookie mutation protection share Files middleware.
+@no_security
+interface Archives {
+    // Administrative archive transport. HTTP optional fields are omitted when
+    // absent; immutable storage records are converted at the service boundary.
+    @get(path = "/maintenance/archive/revision")
+    ArchiveRevision archive_revision(@query string path, @query string revision)
+        raises(BadRequest, Forbidden, NotFound, UnprocessableEntity, ServiceUnavailable, Internal);
+
+    @post(path = "/maintenance/archive/revision")
+    ArchiveRevision import_archive_revision(@flatten in ArchiveRevision body)
+        raises(BadRequest, Forbidden, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
+
+    @put(path = "/maintenance/archive/blob")
+    ArchiveBlobStored import_archive_blob(
+        @query string path, @query string revision, in sequence<octet> body
+    ) raises(BadRequest, Forbidden, NotFound, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
+
+    // Publish exactly one source generation with CAS; reindex after replay.
+    @post(path = "/maintenance/archive/head")
+    ArchivePublished import_archive_head(@query string path, @query string revision)
+        raises(BadRequest, Forbidden, NotFound, PreconditionFailed, UnprocessableEntity, ServiceUnavailable, Internal);
+
 };
 
 // Session exchange for browser flows: token -> signed cookie + CSRF token.

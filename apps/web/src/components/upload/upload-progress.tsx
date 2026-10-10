@@ -13,15 +13,25 @@ export function UploadProgress({
 }) {
   const { t } = useTranslation("workspace");
   const done = items.filter((item) => item.status === "done").length;
+  const skipped = items.filter((item) => item.status === "skipped").length;
   const total = items.length;
+  // Progress counts every SETTLED item — skipped uploads must not leave the
+  // bar stuck at 90% forever.
+  const settled = items.filter(
+    (item) => item.status === "done" || item.status === "failed" || item.status === "skipped",
+  ).length;
   const finished = items.every(
     (item) => item.status === "done" || item.status === "failed" || item.status === "skipped",
   );
   return (
-    <div className="fixed bottom-3 right-3 z-40 w-[300px] overflow-hidden rounded-[10px] border bg-card shadow-overlay fade-in">
+    <div role="status" className="fixed bottom-3 right-3 z-30 w-[300px] overflow-hidden rounded-[10px] border bg-card shadow-overlay fade-in">
       <div className="flex items-center gap-2 border-b px-3 py-2">
-        <span className="flex-1 text-[12.5px] font-semibold">
-          {finished ? t("uploadDone", { done, total }) : t("uploadRunning", { done, total })}
+        <span className="flex-1 text-body-sm font-semibold">
+          {finished
+            ? skipped > 0
+              ? t("uploadDoneSkipped", { done, skipped, total })
+              : t("uploadDone", { done, total })
+            : t("uploadRunning", { done, total })}
         </span>
         {finished && (
           <button
@@ -36,16 +46,13 @@ export function UploadProgress({
       <div className="h-0.5 bg-muted">
         <div
           className="h-full bg-primary transition-[width] duration-300"
-          style={{ width: `${total === 0 ? 100 : (done / total) * 100}%` }}
+          style={{ width: `${total === 0 ? 100 : (settled / total) * 100}%` }}
         />
       </div>
       <ul className="max-h-44 overflow-y-auto p-1">
         {items.map((item) => (
-          <li
-            key={item.path}
-            className="flex items-center gap-2 rounded-md px-2 py-1 text-[11.5px]"
-            title={item.note}
-          >
+          <li key={item.path} className="px-2 py-1 text-meta-lg">
+            <div className="flex items-center gap-2" title={item.note}>
             <span className="min-w-0 flex-1 truncate font-mono">{item.path}</span>
             {item.status === "uploading" && (
               <LoaderCircle className="size-3.5 shrink-0 animate-spin stroke-[1.5] text-faint" />
@@ -61,6 +68,10 @@ export function UploadProgress({
             )}
             {item.status === "failed" && (
               <span className={cn("shrink-0 text-destructive")}>{t("uploadFailed")}</span>
+            )}
+            </div>
+            {item.status === "failed" && item.note && (
+              <p className="mt-0.5 truncate pl-0.5 text-meta-sm text-destructive/80">{item.note}</p>
             )}
           </li>
         ))}

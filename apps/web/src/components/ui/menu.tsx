@@ -8,7 +8,9 @@ import { cn } from "../../lib/utils";
  */
 
 export const menuPopupClass = cn(
-  "z-50 min-w-[184px] overflow-hidden rounded-[8px] border bg-card p-1 text-[13px] text-foreground shadow-menu overlay-in",
+  "z-50 min-w-[184px] overflow-hidden rounded-[8px] border bg-card p-1 text-body text-foreground shadow-menu overlay-in",
+  // portal layer is inverse-zoomed; scale content back to the interface size
+  "[zoom:var(--ui-zoom,1)]",
 );
 
 export function menuItemClass(options?: { danger?: boolean; className?: string }) {

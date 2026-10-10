@@ -1,6 +1,7 @@
 import type { Extension } from "@codemirror/state";
 import { hoverTooltip } from "@codemirror/view";
-import { previewFor, resolveReference } from "../properties/preview";
+import { resolveReference } from "../properties/preview";
+import { buildRefPreviewDom } from "./ref-preview-dom";
 import type { CompletionFile } from "./completions";
 
 /*
@@ -15,7 +16,7 @@ export function referenceHover(
   labels: { loading: string; unavailable: string },
 ): Extension {
   return hoverTooltip(
-    (view, pos) => {
+    async (view, pos) => {
       const line = view.state.doc.lineAt(pos);
       const text = line.text;
       const offset = pos - line.from;
@@ -32,74 +33,14 @@ export function referenceHover(
       if (!hit) return null;
       const resolved = resolveReference(hit.target, files);
       if (!resolved) return null;
+      const dom = await buildRefPreviewDom(resolved, onOpen, labels);
       return {
         pos: line.from + hit.from,
         end: line.from + hit.to,
         above: true,
-        create: () => ({ dom: buildHoverDom(resolved, onOpen, labels) }),
+        create: () => ({ dom }),
       };
     },
     { hoverTime: 350 },
   );
-}
-
-function buildHoverDom(
-  resolved: string,
-  onOpen: ((path: string) => void) | undefined,
-  labels: { loading: string; unavailable: string },
-): HTMLElement {
-  const dom = document.createElement("div");
-  dom.className = "brains-ref-hover";
-  const fill = (body: () => HTMLElement) => {
-    const content = document.createElement("div");
-    content.className = "brains-ref-hover-body";
-    content.append(body());
-    dom.append(content);
-    if (onOpen) {
-      content.addEventListener("click", () => onOpen(resolved));
-      content.setAttribute("title", resolved);
-    }
-  };
-  const note = (text: string) => () => {
-    const p = document.createElement("p");
-    p.className = "brains-ref-hover-note";
-    p.textContent = text;
-    return p;
-  };
-  dom.dataset.resolved = resolved;
-  dom.append(Object.assign(document.createElement("p"), {
-    className: "brains-ref-hover-note",
-    textContent: labels.loading,
-  }));
-  void previewFor(resolved).then(
-    (preview) => {
-      dom.textContent = "";
-      const head = document.createElement("p");
-      head.className = "brains-ref-hover-path";
-      head.textContent = resolved;
-      dom.append(head);
-      if (preview.kind === "image") {
-        fill(() => {
-          const img = document.createElement("img");
-          img.src = preview.url;
-          img.alt = resolved;
-          return img;
-        });
-      } else if (preview.kind === "text") {
-        fill(() => {
-          const div = document.createElement("div");
-          div.className = "markdown-preview brains-ref-hover-md";
-          div.innerHTML = preview.html;
-          return div;
-        });
-      } else {
-        fill(note(labels.unavailable));
-      }
-    },
-    () => {
-      dom.textContent = "";
-      fill(note(labels.unavailable));
-    },
-  );
-  return dom;
 }

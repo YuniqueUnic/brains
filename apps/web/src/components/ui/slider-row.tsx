@@ -56,7 +56,7 @@ export function SliderRow({
           <Slider.Thumb className="size-3 cursor-pointer rounded-full border border-border bg-card shadow-menu" />
         </Slider.Control>
       </Slider.Root>
-      <span className="w-11 shrink-0 text-right font-mono text-[11px] tabular-nums">
+      <span className="w-11 shrink-0 text-right font-mono text-meta tabular-nums">
         {value}
         {suffix}
       </span>

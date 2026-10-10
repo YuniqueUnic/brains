@@ -37,11 +37,11 @@ export function HoverPreview({
       <TooltipPrimitive.Portal>
         <TooltipPrimitive.Positioner side={side} sideOffset={10} align="start">
           <TooltipPrimitive.Popup
-            className="z-50 max-h-[320px] w-[min(360px,80vw)] overflow-hidden rounded-[10px] border bg-card shadow-overlay"
+            className="z-50 max-h-[320px] overflow-hidden rounded-[10px] border bg-card shadow-overlay [zoom:var(--ui-zoom,1)]"
             role="tooltip"
             data-testid={testId}
             onClick={onOpen}
-            style={onOpen ? { cursor: "pointer" } : undefined}
+            style={{ width: "min(360px, calc((100vw - 16px) / var(--ui-zoom, 1)))", cursor: onOpen ? "pointer" : undefined }}
           >
             <div className="flex h-auto max-h-[320px] items-start justify-center overflow-auto">
               {preview === null ? (
@@ -54,7 +54,7 @@ export function HoverPreview({
                 />
               ) : preview.kind === "text" ? (
                 <div
-                  className="markdown-preview w-full !py-4 text-[13px]"
+                  className="markdown-preview w-full !py-4 text-body"
                   dangerouslySetInnerHTML={{ __html: preview.html }}
                 />
               ) : (

@@ -22,12 +22,17 @@ pub fn build_router<H: Head, R: Rev, B: Blob, I: Idx>(state: SharedState<H, R, B
     let files = crate::contract::brains::FilesServer::new(crate::service::FilesService {
         state: state.clone(),
     });
+    let archives =
+        crate::contract::brains::ArchivesServer::new(crate::service::archive::ArchiveService {
+            state: state.clone(),
+        });
     let session = crate::contract::brains::SessionsServer::new(crate::service::SessionService {
         state: state.clone(),
     });
     let api = files
         .into_router()
         .merge(session.into_router())
+        .merge(archives.into_router())
         .layer(axum::middleware::from_fn(serving_safety))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),

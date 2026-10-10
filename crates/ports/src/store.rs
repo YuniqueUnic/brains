@@ -57,6 +57,16 @@ pub trait HeadStore {
         new_head: &Head,
     ) -> impl Future<Output = DomainResult<CasOutcome>> + Send;
 
+    /// Atomic removal of the HEAD entry (permanent delete of a tombstone —
+    /// the entry vanishes from every listing and its history chain becomes
+    /// unreachable). `Committed` means the entry is gone; it is the caller's
+    /// job to require a tombstone first.
+    fn remove(
+        &self,
+        path: &VaultPath,
+        expected: &ExpectedHead,
+    ) -> impl Future<Output = DomainResult<CasOutcome>> + Send;
+
     /// Heads ordered by logical path, strictly after `after` (exclusive),
     /// under `prefix` if given. Returns at most `limit` records; the caller
     /// advances pagination by the last returned path.

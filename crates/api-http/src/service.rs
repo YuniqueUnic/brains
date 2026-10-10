@@ -41,7 +41,7 @@ fn classify(err: &DomainError) -> Failure {
     match err {
         DomainError::InvalidArgument(_) => Failure::BadRequest,
         DomainError::NotFound { .. } => Failure::NotFound,
-        DomainError::EditMismatch { .. } => Failure::Conflict,
+        DomainError::EditMismatch { .. } | DomainError::PurgeLive { .. } => Failure::Conflict,
         DomainError::Trashed { .. } => Failure::Gone,
         DomainError::RevisionConflict { .. } => Failure::PreconditionFailed,
         DomainError::TooLarge { .. } => Failure::PayloadTooLarge,
@@ -151,6 +151,20 @@ error_from_domain!(
         Forbidden,
         NotFound,
         Gone,
+        PreconditionRequired,
+        PreconditionFailed,
+        ServiceUnavailable,
+        Internal
+    ]
+);
+error_from_domain!(
+    purge_file_error,
+    FilesPurgeFileError,
+    [
+        BadRequest,
+        Forbidden,
+        NotFound,
+        Conflict,
         PreconditionRequired,
         PreconditionFailed,
         ServiceUnavailable,
@@ -469,6 +483,8 @@ fn parse_operation_id(raw: Option<&String>) -> Result<HexId, DomainError> {
     }
 }
 
+pub(crate) mod archive;
+
 // -- Services ---------------------------------------------------------------
 
 pub struct FilesService<H: Head, R: Rev, B: Blob, I: Idx> {
@@ -590,16 +606,16 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             },
         };
         let order = filter.order;
-        let (after_path, after_updated) = match cursor.as_deref() {
-            None => (None, None),
-            Some(raw) if raw.contains('|') => {
+        let (after_path, after_updated) = match (cursor.as_deref(), order) {
+            (None, _) => (None, None),
+            (Some(raw), brains_ports::ListOrder::UpdatedDesc) => {
                 let (updated, path) = raw
                     .split_once('|')
                     .ok_or_else(|| DomainError::InvalidArgument("malformed cursor".into()))
                     .map_err(|e| list_files_error(e, rid))?;
                 (Some(path.to_owned()), Some(updated.to_owned()))
             }
-            Some(raw) => (Some(raw.to_owned()), None),
+            (Some(raw), brains_ports::ListOrder::Path) => (Some(raw.to_owned()), None),
         };
         let page = self
             .state
@@ -656,6 +672,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
         if_none_match: Option<String>,
         operation_id: Option<String>,
         content_sha256: Option<String>,
+        executable: Option<bool>,
         content_type: Option<String>,
         body: Vec<u8>,
     ) -> Result<contract::FilesPutFileResponse, contract::FilesPutFileError> {
@@ -717,7 +734,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
                     actor: ctx.auth.principal().actor.clone(),
                     operation_id: op_id,
                     precondition,
-                    executable: false,
+                    executable,
                     copied_from: None,
                 },
             )
@@ -807,6 +824,38 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
         Ok(contract::FilesDeleteFileResponse {
             r#return: mutation_result(&outcome),
             etag: Some(format!("\"{}\"", outcome.revision)),
+        })
+    }
+
+    async fn purge_file(
+        &self,
+        path: String,
+        if_match: Option<String>,
+        operation_id: Option<String>,
+    ) -> Result<contract::PurgeResult, contract::FilesPurgeFileError> {
+        let ctx = current();
+        let rid = ctx.request_id.as_str();
+        let path = VaultPath::new(&path).map_err(|e| purge_file_error(e, rid))?;
+        let revision =
+            required_if_match(if_match.as_deref()).map_err(|e| purge_file_error(e, rid))?;
+        let operation_id =
+            parse_operation_id(operation_id.as_ref()).map_err(|e| purge_file_error(e, rid))?;
+        let outcome = self
+            .state
+            .vault
+            .purge_file(
+                ctx.auth.principal(),
+                &path,
+                Precondition::IfRevision(revision),
+                operation_id,
+            )
+            .await
+            .map_err(|e| purge_file_error(e, rid))?;
+        Ok(contract::PurgeResult {
+            path: outcome.path,
+            purged: true,
+            index_state: outcome.index_state.as_str().to_owned(),
+            operation_id: outcome.operation_id,
         })
     }
 
@@ -1335,11 +1384,10 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Sessions for SessionService<H, 
                     error: detail(&e, rid),
                 })
             })?;
-        let cookie = format!(
-            "{}={value}; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age={}",
-            crate::auth::SESSION_COOKIE,
-            8 * 3600
-        );
+        let cookie = self
+            .state
+            .session_cookie_policy
+            .cookie_header(&value, 8 * 3600, &ctx.headers);
         Ok(contract::SessionsLoginResponse {
             r#return: contract::Session {
                 actor: principal.actor.clone(),
@@ -1374,9 +1422,10 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Sessions for SessionService<H, 
     async fn logout(&self) -> ::xidl_rust_axum::Result<contract::SessionsLogoutResponse> {
         Ok(contract::SessionsLogoutResponse {
             r#return: contract::OkResult { ok: true },
-            set_cookie: Some(format!(
-                "{}=; HttpOnly; SameSite=Lax; Secure; Path=/; Max-Age=0",
-                crate::auth::SESSION_COOKIE
+            set_cookie: Some(self.state.session_cookie_policy.cookie_header(
+                "",
+                0,
+                &current().headers,
             )),
         })
     }

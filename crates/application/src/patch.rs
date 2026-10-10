@@ -96,7 +96,7 @@ where
                     actor,
                     operation_id,
                     precondition: Precondition::IfRevision(revision.revision.clone()),
-                    executable: content_ref.executable,
+                    executable: Some(content_ref.executable),
                     copied_from: None,
                 },
             )

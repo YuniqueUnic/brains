@@ -9,7 +9,7 @@ use brains_domain::{
 use brains_ports::{CasOutcome, ExpectedHead};
 
 use crate::projection;
-use crate::{IndexState, MutationOutcome, Precondition, SizeClass, Vault, conflict};
+use crate::{IndexState, MutationOutcome, Precondition, PurgeOutcome, SizeClass, Vault, conflict};
 
 pub struct CommitInput<'a> {
     pub path: &'a VaultPath,
@@ -19,7 +19,8 @@ pub struct CommitInput<'a> {
     pub actor: String,
     pub operation_id: HexId,
     pub precondition: Precondition,
-    pub executable: bool,
+    /// None preserves the current live revision flag; a new file defaults to false.
+    pub executable: Option<bool>,
     /// `Some` turns the commit into a `copy` revision with this provenance.
     pub copied_from: Option<brains_domain::CopyProvenance>,
 }
@@ -50,6 +51,17 @@ where
         let current = self
             .check_precondition(input.path, &input.precondition)
             .await?;
+        let executable = match (input.executable, &current) {
+            (Some(value), _) => value,
+            (None, Some(stored)) => self
+                .revisions
+                .get(&stored.head.revision)
+                .await?
+                .ok_or_else(|| DomainError::Internal("HEAD revision is missing".into()))?
+                .content
+                .is_some_and(|content| content.executable),
+            (None, None) => false,
+        };
         let created = current.is_none();
         let (generation, parent) = match &current {
             Some(stored) => (
@@ -89,7 +101,7 @@ where
                 sha256: sha256.clone(),
                 size: input.content.len() as i64,
                 media_type,
-                executable: input.executable,
+                executable,
             }),
         )?;
         self.revisions.create(&revision).await?;
@@ -209,6 +221,51 @@ where
             created: false,
             index_state,
             operation_id: revision.operation_id.as_str().to_owned(),
+        })
+    }
+
+    /// Permanent delete (owner decision, 2026-10: tombstones are no longer
+    /// forever): removes the tombstone HEAD entry so the path vanishes from
+    /// every listing and its history chain becomes unreachable. Only a
+    /// trashed entry may be purged, on its tombstone revision. Blobs stay
+    /// behind until the (future) GC pass — the source of truth shrinks now.
+    pub async fn purge_file(
+        &self,
+        principal: &Principal,
+        path: &VaultPath,
+        precondition: Precondition,
+        operation_id: HexId,
+    ) -> DomainResult<PurgeOutcome> {
+        self.require_scope(principal, AccessLevel::Write, path)?;
+        let current = self.check_precondition(path, &precondition).await?;
+        let Some(stored) = current else {
+            return Err(DomainError::NotFound {
+                path: path.as_str().to_owned(),
+            });
+        };
+        if stored.head.state != HeadState::Trashed {
+            return Err(DomainError::PurgeLive {
+                path: path.as_str().to_owned(),
+            });
+        }
+        match self.heads.remove(path, &stored.expected()).await? {
+            CasOutcome::Committed => {}
+            CasOutcome::PreconditionFailed => {
+                let now_current = self.current_head(path).await?;
+                return Err(conflict(
+                    path,
+                    now_current.as_ref().map(|s| s.head.revision.as_str()),
+                ));
+            }
+        }
+        let index_state = match self.index.remove_path(path.as_str()).await {
+            Ok(()) => IndexState::Ready,
+            Err(_) => IndexState::Pending,
+        };
+        Ok(PurgeOutcome {
+            path: path.as_str().to_owned(),
+            index_state,
+            operation_id: operation_id.as_str().to_owned(),
         })
     }
 

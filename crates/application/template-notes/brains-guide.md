@@ -8,14 +8,14 @@ tags: [meta, guide]
 ## 路径与文件
 
 - 路径是 vault 内相对路径，如 `notes/cache.md`、`inbox/idea.md`；按主题分目录，文件名即主题。
-- 文本文件（markdown 等）在网页端直接编辑；二进制用 CLI `put`/`get`（上传走顶栏「上传」按钮，落到 `attachments/`）。
+- 文本文件（markdown 等）在网页端直接编辑；二进制用 CLI `put --from`/`cat`，如 `bsx cat attachments/image.png > image.png`；上传也可走顶栏「上传」。
 - 在正文里用 `[[wiki-link]]` 互链，信息面板会统计出链与反链。
 
 ## 保存与冲突（CAS）
 
 - 每次保存都基于某个基线修订；两个人同时基于同一版本修改，**恰好一人成功，另一人收到 412 版本冲突**。
 - 冲突不会自动覆盖：冲突工作台提供分栏 / 内联 diff，由你决定「以本地保存」或「采用远端」。
-- 网页端 Ctrl/Cmd+S 保存；工具条上的 diff 按钮可以随时查看未保存的改动。
+- 网页端明确区分本地草稿与发布到服务器；发布按钮或 Ctrl/Cmd+Enter 才执行远端条件写。未发布的内容不能当成已同步；编辑器工具栏或更多菜单可查看未发布改动。
 
 ## 回收站与历史
 
@@ -24,11 +24,14 @@ tags: [meta, guide]
 
 ## 搜索
 
-- **字面**模式：大小写敏感的 UTF-8 子串匹配，永不漏报（结果标注是否翻完全库）。
+- **字面**模式：大小写敏感的 UTF-8 子串匹配，结果标注是否完整；扫描预算耗尽时必须继续处理明确的不完整结果，不能声称全库无匹配。
 - **FTS** 模式：英文按词元、中文按字的显式分词搜索，速度快但依赖索引。
-- 索引只是投影：删掉索引文件后 `bsx reindex` 即可完整重建。
+- 索引只是投影：需要重建时使用 `bsx reindex --all-pages`，检查失败项；不要为日常操作主动删除真实索引。
 
 ## 备份与恢复
 
-- 目录即备份：`vaults/{vault}/heads|revisions|blobs` 三个目录复制走就是完整原始备份。
-- 恢复：把目录放回去（或新机器同位置），启动即用；索引按需 reindex。
+- 原始备份包含完整 `vaults/{vault}/`（含format.json、HEAD、revision、blob），停止写入后复制，保留源库。跨runtime使用 `export/import --format archive`，不会复制认证秘密或数据库索引。
+- archive恢复要求空目标或精确同历史前缀，本地空目标以 `--no-seed` 启动；不能覆盖另一条历史。恢复失败后目标可能有合法前缀，重跑同一archive，最终实读全部历史及索引通过后再使用。
+- `bsx import ./notes` 默认只创建或跳过相同文件，冲突不自动覆盖；普通import/export与sync只处理当前内容，不保留两端相同revision身份。
+- 本地写入后：`bsx --profile local sync --remote-profile cloud`，再 `bsx --profile local sync --remote-profile cloud verify`；确认正文一致后用 `bsx profile use cloud --verify-with local` 验证索引并显式切换。先配置两端profile，不要把示例名称当成已有远端。
+- 内容组织和来源保存见 [自包含记忆写作](memory-writing.md)，条件写与失败处理见 [AI协作守则](ai-guide.md)。

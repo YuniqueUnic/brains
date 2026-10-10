@@ -1,11 +1,13 @@
-# Brains 运行手册（local-rust profile）
+# Brains 运行手册（native 与 Cloudflare Worker）
 
-面向本机运行与排障。协议与架构见 [architecture.md](architecture.md)；本文只讲"怎么跑、怎么备份、怎么修索引"。
+面向本机运行、隔离 Worker 验收、真实云部署准备与排障。协议与架构见 [architecture.md](architecture.md)；本文只讲"怎么跑、怎么备份、怎么修索引"。
+
+可读目录导入导出、完整历史 archive、profile 同步与验收后切库、Git 构建身份和五种 shell 补全见 [可移植工作流](portable-workflow.md)。
 
 ## 构建
 
 ```bash
-cargo build -p brains-server -p brains-cli   # 服务端 + CLI（二进制名 bsx）
+mbx build -p brains-server -p brains-cli   # 服务端 + CLI（二进制名 bsx）
 pnpm --dir apps/web build                            # Web 前端（产物 apps/web/dist）
 ```
 
@@ -16,16 +18,15 @@ pnpm --dir apps/web build                            # Web 前端（产物 apps/
   --data-dir ./brain-data \
   --vault default \
   --bind 127.0.0.1 --port 45800 \
-  --token "$BRAINS_TOKEN" \
   --web-dist apps/web/dist
 ```
 
-- `--token`：注册（或替换）全库 root token；也可用环境变量 `BRAINS_TOKEN`。省略时**生成一个并打印一次**，落在 `--data-dir` 下（见下）。
+- 推荐通过环境变量 `BRAINS_TOKEN` 提供全库 root token，避免值进入进程参数。`--token` 同样注册或替换 root token；首次启动且没有配置时生成并打印一次，之后使用数据目录内的注册表。
 - `--web-dist`：同源托管 Web 应用；缺省时纯 API 服务。
 - `--origin`：额外允许的 cookie 流 Origin；默认仅同源。
 - 服务启动时自动应用 `migrations/` 内嵌 SQL（索引库）；无需手工迁移。
 
-认证模型：root token 存 `auth.json`（0600）；Web 登录后发 HMAC 签名会话 cookie `brains_session`（HttpOnly, SameSite=Lax），cookie 变更请求要求 CSRF token + Origin 校验；API 直连用 `Authorization: Bearer`。详见 [architecture.md](architecture.md)。
+认证模型：root token 存 `auth.json`（0600）；Web 登录后发 HMAC 签名会话 cookie `brains_session`（HttpOnly, SameSite=Lax），cookie 变更请求要求 CSRF token + Origin 校验；API 直连用 `Authorization: Bearer`。native 仅在实际配置绑定 loopback IP，且请求为同源 loopback HTTP 时省略 `Secure`，使 WebKit 可在本机登录；HTTPS、公共 Host、跨源 allowlist、非 loopback 绑定和 Worker 始终保留 `Secure`。转发头不会放宽策略。IPv6 本机绑定使用 `--bind ::1`，浏览器使用 `http://[::1]:<port>`。详见 [architecture.md](architecture.md)。
 
 ## 数据布局（即裸备份布局）
 
@@ -45,56 +46,138 @@ pnpm --dir apps/web build                            # Web 前端（产物 apps/
 
 ## CLI
 
-`bsx --help`。常用链路：
+`bsx --help`。先登记 profile；后面的片段是独立命令示例，不是顺序执行的脚本。`BASE_REVISION` 从当前 `stat --json` 读取，`OLD_REVISION` / `NEW_REVISION` 从 `history --json` 选择；每次成功写入后重新读取基线。
 
 ```bash
-bsx login --base-url http://127.0.0.1:45800 --token "$BRAINS_TOKEN"  # 写 ~/.brains/config.json
-bsx capabilities && bsx whoami
-bsx ls ""                              # `ls /` 同义；LsArgs 支持 --prefix/--limit 等
-bsx put note.md --file local.md       # 文本自动判型；二进制自动携带 X-Content-SHA256
-bsx cat note.md / stat note.md / history note.md / show <revision>
-bsx search "关键词" --mode literal|fts
-bsx links note.md --kind outbound|backlinks
-bsx patch note.md --set-kind note ...
-bsx cp a.md b.md / mv a.md b.md / diff a.md b.md
-bsx restore note.md --revision <hex>
-bsx reindex --all-pages                # 重建索引投影（不碰 store）
-bsx seed                              # 推送内置模板笔记（已存在的跳过，幂等）
-bsx export ./worktree                 # 导出可读工作树（两阶段 revision 锚定 + manifest + casefold/便携名检查）
-bsx edit note.md / add note.md        # $EDITOR 编辑后落库
+unset BRAINS_URL BRAINS_TOKEN
+bsx profile add local --url http://127.0.0.1:45800
+bsx --profile local login --stdin-token < /absolute/private/local-token.txt
+bsx --profile local capabilities
+bsx --profile local whoami
+bsx --profile local ls ""                       # prefix 是位置参数；自动遍历所有页
+bsx --profile local put note.md --from local.md --create
+bsx --profile local cat note.md
+bsx --profile local stat note.md --json
+bsx --profile local history note.md --json
+bsx --profile local show note.md --revision "$OLD_REVISION"
+bsx --profile local search "关键词" --mode literal
+bsx --profile local links note.md               # 默认出链；反链加 --backlinks
+bsx --profile local patch note.md --if-revision "$BASE_REVISION" --old "old text" --new "new text"
+bsx --profile local cp note.md copy.md --if-revision "$BASE_REVISION"
+bsx --profile local mv note.md moved.md --if-revision "$BASE_REVISION"
+bsx --profile local diff note.md --from "$OLD_REVISION" --to "$NEW_REVISION"
+bsx --profile local restore note.md --revision "$OLD_REVISION" --if-revision "$BASE_REVISION"
+bsx --profile local reindex --all-pages         # 重建索引投影，不改权威历史
+bsx --profile local seed                        # 已有路径或墓碑跳过
+bsx --profile local export ./worktree           # 可读工作树；输出目录必须不存在
+bsx --profile local edit note.md --if-revision "$BASE_REVISION"  # 用 $EDITOR 编辑已有文件
 ```
 
 冲突语义与 HTTP 一致：预置条件失败返回 412（携带当前 revision），CLI 报错并提示远端当前版本；不自动重试。
 
+### 本地与云端双向同步
+
+每个 endpoint 先登记为具名 profile，并通过 stdin 保存 token。下面是当前状态同步；如果要迁移完整历史，直接使用后面的 archive 流程，不能先对空目标执行 sync：
+
+```bash
+unset BRAINS_URL BRAINS_TOKEN
+bsx profile add local --url http://127.0.0.1:45800
+bsx --profile local login --stdin-token < local-token.txt
+bsx profile add cloud --url https://<worker>.workers.dev
+bsx --profile cloud login --stdin-token < cloud-token.txt
+```
+
+先预览再同步。第一次运行会把只存在于一端的 live 文件导入另一端；之后的运行会双向传递新版本和软删除：
+
+```bash
+bsx --profile local sync --remote-profile cloud --dry-run
+bsx --profile local sync --remote-profile cloud
+```
+
+两端对同一文本的修改没有重叠时会自动三方合并。首次同步时同路径内容不同、重叠修改、二进制双改以及删除/修改都会列为冲突，保持两边当前内容不变并以退出码 `5` 返回。选择一侧，或准备好人工合并文件后写回两端：
+
+```bash
+bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --keep local
+bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --keep remote
+bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --merged-file /tmp/guide.md
+```
+
+执行 `resolve` 前会重新读取两端 HEAD 并确认路径仍处于冲突；如果内容已经收敛或可自动合并，命令会拒绝过期决策并要求先重新运行 `sync`。
+
+同步使用每个 profile pair 独立的基线文件，默认位于 `~/.brains/sync/`，也跟随 `BRAIN_CONFIG` 的父目录。基线只记录 endpoint 指纹、revision、状态和摘要，不包含正文或 token。profile pair 同步要求配置中保存具名 profile；执行时需 unset `BRAINS_URL` 与 `BRAINS_TOKEN`，避免一个环境变量覆盖两个 endpoint。同步覆盖当前文件与软删除，不复制旧 revision 历史。永久 purge 只作用于执行端，不会被同步成另一端的删除；若 purge 与另一端的并发修改同时被发现，CLI 会跳过或报告冲突并保留内容。若保留 tombstone 的一端之后被用户明确恢复，新的 live revision 可在后续 sync 中重新导入已 purge 端。写入逐路径使用 CAS，整库操作不是原子事务。
+
 ## 模板内容（首启播种）
 
-- **本地**：`brains-server` 启动时若 vault 完全为空（无任何 HEAD，含墓碑），自动写入 4 篇模板笔记：`README.md`、`docs/brains-guide.md`（使用规则）、`docs/ai-guide.md`（AI 协作守则）、`inbox/README.md`。有任何内容即跳过，绝不覆盖。
-- **云端**（Worker 首次部署后是空库）：`bsx --profile <cloud> seed` 推送同一套模板；已存在的路径自动跳过，可重复执行。
+- **本地**：`brains-server` 启动时若 vault 完全为空（无任何 HEAD，含墓碑），自动写入 5 篇模板笔记：`README.md`、`docs/brains-guide.md`（使用规则）、`docs/ai-guide.md`（AI 协作守则）、`docs/memory-writing.md`（自包含记忆写法）、`inbox/README.md`。有任何内容即跳过，绝不覆盖。
+- **新建独立云库**：Worker 不自动播种；明确要新库模板时运行 `bsx --profile <cloud> seed`，已有路径和墓碑都会跳过。**用于完整历史迁移的目标保持空库**，先执行 archive restore，不能先 seed、sync 或工作树 import。native 迁移目标用 `--no-seed`。
 
 ## GitHub 自动 Release / 部署清单（真实运行所需）
 
-仓库内三个工作流已就绪，真实运行只需一次性配置：
+仓库提供 Release、Deploy 与 CI 工作流；工作流文件存在不代表已有 GitHub remote、云账号或生产资源。本机当前部署条件见 [2026-10-10 续验记录](evidence/2026-10-10-continuation/README.md)。
 
-**1. 自动发布（`.github/workflows/release.yml`）** — 无需任何 secret：
+**1. 自动发布（`.github/workflows/release.yml`）** — 使用 GitHub 自动提供的 `GITHUB_TOKEN`；只有 publish job 需要 `contents: write`，不需要 Cloudflare 凭据：
 ```bash
 git tag v0.1.0 && git push origin v0.1.0     # 或 Actions 页手动 dispatch 填版本号
 ```
-产物：macOS arm64/x64 与 Linux musl 的 server+CLI tar.gz（含 sha256）、web dist、worker bundle，自动创建 GitHub Release。注意 `Cargo.toml` / `package.json` 版本号需先手动 bump。
+先更新根 `Cargo.toml` 的 `[workspace.package].version`，并确保同一提交已通过 CI（含 SDK codegen drift）。tag 与手动输入都必须是 `v<workspace version>`；例如当前 `0.1.0` 只接受 `v0.1.0`。prepare 统一输出 tag、version、commit SHA，所有构建 job 固定检出该 SHA。Web/Worker 的 package.json 是私有构建工具配置，不承担公开 Release 版本。
 
-**2. 自动部署 Cloudflare Worker（`.github/workflows/deploy.yml`）** — 需要一次性准备：
+产物包括 macOS arm64/x64 与 Linux musl 的 server+CLI tar.gz、web dist、完整 Worker bundle 和已提交的 OpenAPI；每个 tar.gz 都带 SHA-256 文件。native job 会实际运行 `bsx --version`，精确核对 SemVer、Git SHA 前 12 位和 clean 状态，再打包 `VERSION` 与自包含的 [native 使用说明](native-release.md)。macOS 使用 `macos-15`/`macos-15-intel`，当前 workflow 不执行代码签名或公证。[GitHub runner 说明](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 
-| 步骤 | 命令 / 位置 |
+publish 会把远端 tag 解引用到 commit 后与构建 SHA 比较，支持 annotated tag。已有同 SHA tag 可用于失败后的重跑；指向其它提交时拒绝发布，绝不强推。仅手动 dispatch 可以创建缺失的 tag；tag push 触发的运行若发现标签被删除，会失败而不是自动重建。`gh release create --verify-tag` 阻止 CLI 自动创建错误标签；已经正式发布的 Release 不会被自动覆盖，再次 create 将明确失败，需先检查既有发布状态。[GitHub CLI 说明](https://cli.github.com/manual/gh_release_create)
+
+Worker 包含 `build/`（含 shim、JS、Wasm）、`web/dist/`、`migrations/d1/`、`wrangler.json`、`release.json` 和独立部署 README。`scripts/package-worker.py` 从开发配置生成包内相对路径，移除源码 `[build]`，保留 binding、路由、限制和 required secrets；Wrangler 精确版本取自 frozen-lockfile 安装结果并写入 README。解包后不需要 Rust 源码或另一个 Web 包。首次部署仍需填写真实 D1 ID、R2 目标和实例 secrets；包内不附凭据。[Wrangler 配置](https://developers.cloudflare.com/workers/wrangler/configuration/)
+
+本地包验收必须在源码目录外解压，再从该目录使用包内 `wrangler.json` 做 dry-run、本地 D1 migration、静态资源和 Worker 业务 smoke；不能改回源码目录的 assets/migrations 路径来得到通过。当前本地实测、Git tag 失败分支和系统 Safari 限制见 [Release 验收记录](evidence/2026-10-10-release-readiness/README.md)。GitHub 托管矩阵及实际发布尚需配置 remote 后触发验证。
+
+**2. Cloudflare Worker 部署（`.github/workflows/deploy.yml`）**：首次部署与后续工作流部署分开准备。
+
+| 前置 | 要求 |
 |---|---|
-| repo secrets | `CLOUDFLARE_API_TOKEN`（Workers/R2/D1 编辑权限）、`CLOUDFLARE_ACCOUNT_ID`（GitHub → Settings → Secrets and variables → Actions） |
-| 资源开通（一次） | `pnpm --dir apps/worker exec wrangler r2 bucket create brains-data` |
-| | `pnpm --dir apps/worker exec wrangler d1 create brains-index` → 把输出的 `database_id` 填进 `apps/worker/wrangler.toml` |
-| 实例密钥（一次，永不入库） | `cd apps/worker && pnpm exec wrangler secret put TOKEN_REGISTRY_JSON`（内容形如 `{"tokens":[{"id":"default","name":"owner","token_sha256":"<sha256(token)>","scopes":["read:/","write:/","admin:/"],"enabled":true}]}`） |
-| | `wrangler secret put SESSION_SIGNING_KEY`（64 位 hex）、`wrangler secret put CURSOR_SIGNING_KEY`（64 位 hex） |
-| 可选 var | `wrangler.toml` 的 `[vars]` 追加 `ALLOWED_ORIGINS = "https://a.example,https://b.example"`（跨域 cookie 白名单，缺省仅同源） |
-| 触发部署 | Actions → Deploy → Run workflow（可选先应用远程 D1 迁移），或本地 `pnpm --dir apps/worker exec wrangler deploy` |
-| 部署后 | 给空库灌内容：`bsx profile add cloud --url https://<worker>.workers.dev --token <token> && bsx --profile cloud seed` |
+| 账号权限 | Cloudflare API token 具有目标账号 Workers/R2/D1 编辑权限，已确认 account ID |
+| 独立资源 | 创建 `brains-data` R2 bucket 与 `brains-index` D1，把实际 D1 ID 写入 `apps/worker/wrangler.toml`，不能带着 `database_id = "local"` 上云 |
+| 目标隔离 | 一个实例管理一个 vault；D1 表的主键是 path，没有 vault 列，因此换 `VAULT_ID` 不能把复用的 D1 变成空目标。新目标使用独立 D1；独立 R2 bucket 也便于验收和回滚 |
+| 三个实例 secret | `TOKEN_REGISTRY_JSON`、`SESSION_SIGNING_KEY`、`CURSOR_SIGNING_KEY`，配置的 `secrets.required` 会让缺失 secret 的部署失败 |
+| GitHub 部署 | 配置 repository remote 和 Actions secrets `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`，再运行 Deploy workflow；此前应完成首次 secret 初始化 |
 
-**3. CI（`.github/workflows/ci.yml`）**：push/PR 自动跑 Rust 全门禁 + web build + 双运行时 e2e + worker smoke，无 secret 依赖。
+`TOKEN_REGISTRY_JSON` 的值是 JSON 字符串，内容为 `{"tokens":[{"id":"owner","name":"owner","token_sha256":"<sha256 of bearer token>","scopes":["read:/","write:/","admin:/"],"enabled":true}]}`；两个签名 key 各为 32 字节随机数的 64 位 hex 表示。保管原始 Bearer token，以便 CLI 登录；不要把它写入 Git 或命令参数。将三项值写在仓库外、权限 0600 的 JSON secret 文件中，使用绝对路径。
+
+首次部署时将三项 secret 与代码一起上传；这是实际部署，会修改云资源。`wrangler secret put` 同样会创建并立即部署版本，不能作为无副作用的准备步骤。[Cloudflare secrets 官方说明](https://developers.cloudflare.com/workers/configuration/secrets/)
+
+```bash
+pnpm --dir apps/worker exec wrangler whoami
+pnpm --dir apps/worker exec wrangler r2 bucket create brains-data
+pnpm --dir apps/worker exec wrangler d1 create brains-index
+# 将返回的 D1 ID 填入配置，并准备上述私有 secret 文件后：
+pnpm --dir apps/web build
+mbx install worker-build --locked
+pnpm --dir apps/worker exec wrangler d1 migrations apply BRAINS_INDEX --remote
+RUSTFLAGS='--cfg getrandom_backend="wasm_js"' \
+  pnpm --dir apps/worker exec wrangler deploy --secrets-file /absolute/private/brains-secrets.json
+```
+
+Wrangler 的 `[build]` 会在 dev/deploy 时执行 `worker-build --release`。Deploy workflow 只预构建 Web 并安装工具，由 Wrangler 构建一次 wasm，避免重复编译。[Cloudflare custom builds](https://developers.cloudflare.com/workers/wrangler/custom-builds/)
+
+完整历史迁移先确认两端 URL、vault，源端与目标端的 `whoami` 均拥有全库 `admin:/`，且目标真实索引查询成功；`/healthz` 不会验证 D1，空库 dry-run 也不能代替 admin 权限检查。操作窗口暂停源库写入，保留 archive 后再导入：
+
+```bash
+unset BRAINS_URL BRAINS_TOKEN
+bsx --profile local whoami
+bsx profile add cloud --url https://<worker>.workers.dev
+bsx --profile cloud login --stdin-token < /absolute/private/cloud-token.txt
+bsx --profile cloud capabilities
+bsx --profile cloud whoami
+bsx --profile cloud ls "" --deleted --json
+bsx --profile cloud ls "" --source index --json
+bsx --profile local export ./before-cloud.archive --format archive
+bsx --profile cloud import ./before-cloud.archive --format archive --dry-run
+bsx --profile cloud import ./before-cloud.archive --format archive
+bsx --profile local sync --remote-profile cloud verify
+bsx profile use cloud --verify-with local
+```
+
+归档导入会验证全部历史、blob、HEAD 与重建后的索引；目标必须为空或是同一归档的精确历史前缀。`sync verify` 与受验证切主关注当前状态，不能替代 archive 的完整历史验收。切主只在命令与人工读回验收均通过后执行；保留本地源库与迁移归档。更完整的语义和故障恢复见 [可移植工作流](portable-workflow.md)。
+
+**3. CI（`.github/workflows/ci.yml`）**：push/PR 自动跑 Rust 门禁、Web build、两种运行时 E2E 和 Worker smoke。两个 Worker job 复用下述隔离 runner，自行生成一次性测试凭据，不依赖 checkout 中的真实 `.dev.vars` 或云凭据。
 
 ## E2E（screenplay pattern）
 
@@ -104,29 +187,31 @@ pnpm --dir tests/e2e exec playwright test
 
 `tests/e2e/playwright.config.ts` 自动拉起独立服务实例（端口 18799、独立数据目录 `/tmp/brains-e2e-data`），需环境变量 `BRAINS_SERVER_BIN`（服务端二进制）与 `BRAINS_WEB_DIST`（前端产物）。本机注意：若 build-cache 守护进程会清理 `target/` 内二进制，把构建与测试放在同一条命令内执行。
 
-## Cloudflare 本地模拟（wrangler dev，无需云凭据）
+## Cloudflare 本地验收（无需云凭据）
 
-Worker（cloudflare-rust profile）与 native 共享同一 axum HTTP 层，仅换装配：R2（HEAD/revision/blob）+ D1（索引）+ 环境变量密钥。本地模拟由 workerd 提供 R2/D1，真实模拟协议行为：
+Worker 与 native 共享 axum HTTP 层，存储装配为本地 workerd 模拟的 R2/D1。预先构建 Web 与 Worker，再由 Python 3.11+ runner 负责迁移、认证就绪、测试和回收。该 runner 面向 macOS/Linux；CI 显式安装 Python 3.12。
 
 ```bash
 rustup target add wasm32-unknown-unknown
-cargo install worker-build --locked
+mbx install worker-build --locked
 pnpm --dir apps/web build
-cd apps/worker
-RUSTFLAGS='--cfg getrandom_backend="wasm_js"' worker-build --release   # 产物 build/worker/shim.mjs
-pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local            # 幂等 schema（migrations/d1/）
-pnpm exec wrangler dev --port 8799                                    # 本地 workerd，静态资源 + /api 同域
+(cd apps/worker && RUSTFLAGS='--cfg getrandom_backend="wasm_js"' mbx exec --project-root ../.. worker-build --release)
+python3 scripts/run-workerd.py -- bash tests/worker-smoke.sh
+pnpm --dir tests/e2e exec playwright install chromium
+tests/e2e/run-workerd.sh
 ```
 
-- 本地密钥在 `apps/worker/.dev.vars`（TOKEN_REGISTRY_JSON 存 token 的 SHA-256 哈希；SESSION/CURSOR_SIGNING_KEY 为 64 位 hex）。生产用 `wrangler secret put` 同名注入，禁止明文入库。
-- **`wrangler dev` 不自动应用 D1 迁移**：首次运行或清空 `.wrangler/state` 后，必须先执行上面的 `migrations apply`，否则索引为空、搜索恒 0 命中（服务端不伪装成功）。
-- 验收速查：`bash tests/worker-smoke.sh`（workerd 运行中执行）覆盖 CAS 竞争、条件写、字面/FTS+prefix、trash→restore、历史链。
-- 浏览器 e2e 对 workerd：`tests/e2e/run-workerd.sh`（自动重启 wrangler → 就绪探测 → playwright）。**重建 `apps/web/dist` 后必须重启 wrangler dev**：资产清单在启动时快照，在跑实例对新 hash 会落 SPA fallback 返回 text/html（浏览器报 MIME module script 错）。脚本会幂等确保 `.dev.vars` 注册表包含 e2e token 的 SHA-256（id: e2e）。
-- CLI 对接：`bsx profile add worker --url http://127.0.0.1:8799 --token <token>` 后加 `--profile worker`，导出与 reindex 语义一致。
+每次运行生成随机 token 与签名 key，使用独立 config、cwd、日志、D1/R2 state 和两个动态端口。先应用 D1 migration，再以 Bearer 验证 capabilities、session 和索引查询，最后把 `BRAINS_BASE_URL`、`BRAINS_E2E_TOKEN` 传给子命令。结束时无论成功、非零退出或中断，都只回收自己启动的进程组和临时目录；不会按端口清理已有实例，也不改真实 `.dev.vars`。
+
+`tests/worker-smoke.sh` 逐项断言既有业务：条件创建与更新、正文/ETag、CAS 竞争、字面/FTS/prefix 过滤、回收站恢复与完整历史链。指定已运行实例时必须显式提供 URL/token 环境变量；失败不会被打印日志或 `|| true` 掩盖。E2E 入口接受 Playwright 参数，例如 `tests/e2e/run-workerd.sh --grep 'trash'`。
+
+Worker 始终设置 Secure Cookie。WebKit 浏览器验证需 HTTPS，可用 `python3 scripts/run-workerd.py --protocol https -- <验证命令>` 启动隔离入口；runner 仅对本机 readiness 接受 Wrangler 自签证书，验收客户端需要明确自己的本机证书策略，不能将证书校验全局关闭。
+
+手动长期开发实例可继续用 `wrangler dev`，需要自己准备开发凭据、应用 D1 migration 并管理其进程。重建 `apps/web/dist` 后重启实例，因为资产清单在启动时快照。本地模拟通过不能替代真实 Cloudflare 上的权限、R2 条件写、D1 配额和延迟验收。
 
 ## 排障
 
-- **搜索结果落后/缺失**：索引是有界投影，可能短暂落后于 HEAD（`complete=false` 或 503 Pending）。运行 `bsx reindex` 重建；无需重启。
+- **搜索结果落后/缺失**：索引是有界投影，可能短暂落后于 HEAD（`complete=false` 或 503 Pending）。运行 `bsx reindex --all-pages` 重建；无需重启。
 - **412 VersionConflict**：另一客户端已推进 HEAD。重新读取后基于新基线重做；Web 端冲突视图提供三栏比较。
 - **token 丢失**：`--token` 重新注册即替换 root token；`secret.key` 删除会使所有 Web 会话失效（重登录即可），不影响数据。
 - **误删文件**：删除是墓碑（tombstone），历史保留；`bsx restore` 或 Web 回收站恢复，恢复产生新修订（generation 只前进）。

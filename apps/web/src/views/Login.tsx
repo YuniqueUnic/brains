@@ -59,6 +59,8 @@ export default function Login({
             className="h-9 pl-8"
             value={token}
             onChange={(e) => setToken(e.target.value)}
+            aria-invalid={message !== null}
+            aria-describedby={message !== null ? "login-error" : undefined}
             autoFocus
           />
         </div>
@@ -75,6 +77,7 @@ export default function Login({
         {message && (
           <p
             className="mt-3 rounded-md px-2.5 py-1.5 text-center text-xs"
+            id="login-error"
             data-testid="login-error"
             role="alert"
             style={{

@@ -74,6 +74,45 @@ impl HeadStore for FsHeadStore {
         outcome
     }
 
+    /// Lock → verify token → remove the file → unlock (mirror of `cas`).
+    async fn remove(&self, path: &VaultPath, expected: &ExpectedHead) -> DomainResult<CasOutcome> {
+        let target = self.store.head_file(path);
+        let lock_path = lock_file(&self.store.locks_dir(), path.as_str());
+        if let Some(parent) = lock_path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| DomainError::StorageUnavailable(format!("locks dir: {e}")))?;
+        }
+        let mut lock = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&lock_path)
+            .map_err(|e| DomainError::StorageUnavailable(format!("lock open: {e}")))?;
+        lock.lock_exclusive()
+            .map_err(|e| DomainError::StorageUnavailable(format!("lock acquire: {e}")))?;
+        let matches = match (self.read_current(path)?, expected) {
+            (None, _) => true, // already gone — removal achieved
+            (Some(current), ExpectedHead::StorageToken(token)) => current.storage_token == *token,
+            (Some(_), ExpectedHead::Absent) => false,
+        };
+        let outcome = if matches {
+            match std::fs::remove_file(&target) {
+                Ok(()) => CasOutcome::Committed,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => CasOutcome::Committed,
+                Err(e) => Err(DomainError::StorageUnavailable(format!(
+                    "head remove {}: {e}",
+                    target.display()
+                )))?,
+            }
+        } else {
+            CasOutcome::PreconditionFailed
+        };
+        let _ = lock.seek(std::io::SeekFrom::Start(0));
+        let _ = lock.unlock();
+        Ok(outcome)
+    }
+
     async fn list(
         &self,
         prefix: Option<&str>,

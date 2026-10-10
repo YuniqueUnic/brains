@@ -22,6 +22,7 @@ import type { UploadIntent } from "../shell/top-bar";
 
 type FullTextState =
   | { kind: "idle" }
+  | { kind: "error" }
   | { kind: "running" }
   | {
       kind: "done";
@@ -95,7 +96,8 @@ export function CommandPalette({
         building: page.index_state === "building",
       });
     } catch {
-      if (runIdRef.current === runId) setFullText({ kind: "idle" });
+      // A failed search must not pose as "no matches".
+      if (runIdRef.current === runId) setFullText({ kind: "error" });
     }
   };
 
@@ -141,7 +143,7 @@ export function CommandPalette({
                 }
               }}
               placeholder={t("palettePlaceholder")}
-              className="h-12 flex-1 bg-transparent text-[14px] text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="h-12 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
               autoFocus
             />
             {fullText.kind === "running" && (
@@ -151,9 +153,16 @@ export function CommandPalette({
           </div>
 
           <Command.List className="max-h-[380px] overflow-y-auto p-1.5">
-            <Command.Empty className="px-3 py-6 text-center text-xs text-muted-foreground">
-              {t("paletteNoMatches")}
-            </Command.Empty>
+            {fullText.kind !== "error" && fullText.kind !== "running" && (
+              <Command.Empty className="px-3 py-6 text-center text-xs text-muted-foreground">
+                {t("paletteNoMatches")}
+              </Command.Empty>
+            )}
+            {fullText.kind === "error" && (
+              <div className="px-3 py-6 text-center text-xs text-muted-foreground" role="status">
+                {t("paletteSearchFailed")}
+              </div>
+            )}
 
             {showFullText && (
               <PaletteGroup
@@ -190,7 +199,7 @@ export function CommandPalette({
                         <span className="block truncate font-mono text-xs text-foreground">
                           {hit.path}
                         </span>
-                        <span className="mt-0.5 block truncate text-[11.5px] text-muted-foreground">
+                        <span className="mt-0.5 block truncate text-meta-lg text-muted-foreground">
                           <Snippet text={hit.snippet} query={fullText.query} />
                         </span>
                       </button>
@@ -220,8 +229,8 @@ export function CommandPalette({
                       <span className="min-w-0 flex-1 truncate">
                         {file.title ? (
                           <>
-                            <span className="text-[13px]">{file.title}</span>
-                            <span className="ml-2 font-mono text-[11px] text-faint">
+                            <span className="text-body">{file.title}</span>
+                            <span className="ml-2 font-mono text-meta text-faint">
                               {file.path}
                             </span>
                           </>
@@ -247,7 +256,7 @@ export function CommandPalette({
                 >
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] outline-none aria-selected:bg-muted"
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-body outline-none aria-selected:bg-muted"
                   >
                     <FilePlus2 className="size-4 stroke-[1.5] text-faint" />
                     {t("newDocument")}
@@ -263,7 +272,7 @@ export function CommandPalette({
                 >
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] outline-none aria-selected:bg-muted"
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-body outline-none aria-selected:bg-muted"
                   >
                     <Upload className="size-4 stroke-[1.5] text-faint" />
                     {t("uploadFiles")}
@@ -279,7 +288,7 @@ export function CommandPalette({
                 >
                   <button
                     type="button"
-                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] outline-none aria-selected:bg-muted"
+                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-body outline-none aria-selected:bg-muted"
                   >
                     <Upload className="size-4 stroke-[1.5] text-faint" />
                     {t("uploadFolder")}
@@ -289,7 +298,7 @@ export function CommandPalette({
             )}
           </Command.List>
 
-          <div className="flex items-center gap-2 border-t px-3 py-2 text-[11px] text-faint">
+          <div className="flex items-center gap-2 border-t px-3 py-2 text-meta text-faint">
             <ModeChip
               active={searchMode === "literal"}
               testid="mode-literal"
@@ -330,7 +339,7 @@ function PaletteGroup({
     <div data-testid={testid} className={testid ? "contents" : undefined}>
       <Command.Group
         heading={
-          <div className="truncate px-2.5 pt-2 pb-1 text-[11px] font-medium text-faint">
+          <div className="truncate px-2.5 pt-2 pb-1 text-meta font-medium text-faint">
             {label}
           </div>
         }
@@ -360,7 +369,7 @@ function ModeChip({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "cursor-pointer rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
+        "cursor-pointer rounded-md px-2 py-0.5 text-meta font-medium transition-colors",
         active
           ? "bg-primary/12 text-primary ring-1 ring-primary/30"
           : "text-muted-foreground hover:bg-muted hover:text-foreground",
@@ -375,7 +384,7 @@ function ModeChip({
 function Snippet({ text, query }: { text: string; query: string }) {
   const q = query.trim();
   if (!q) return <>{text.slice(0, 160)}</>;
-  const index = text.indexOf(q);
+  const index = text.toLowerCase().indexOf(q.toLowerCase());
   if (index < 0) return <>{text.slice(0, 160)}</>;
   const start = Math.max(0, index - 40);
   const prefix = start > 0 ? "…" : "";

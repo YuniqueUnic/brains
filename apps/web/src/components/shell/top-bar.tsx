@@ -1,4 +1,4 @@
-import { Folder, LogOut, PanelLeft, Search, Settings2, Upload } from "lucide-react";
+import { FilePlus, Folder, LogOut, PanelLeft, Search, Settings2, Upload } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
 import type { SessionInfo } from "../../api/client";
@@ -49,7 +49,7 @@ export function TopBar({
   const { t: tCommon } = useTranslation("common");
 
   return (
-    <header className="flex h-[52px] shrink-0 items-center gap-2 border-b bg-background px-3">
+    <header className="flex h-[52px] shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:gap-2 sm:px-3">
       <Tooltip content={sidebarCollapsed ? t("expandSidebar") : t("collapseSidebar")}>
         <Button
           size="icon"
@@ -61,22 +61,34 @@ export function TopBar({
         </Button>
       </Tooltip>
 
-      <span className="flex items-center gap-1.5 pr-1 text-[14px] font-semibold tracking-tight">
+      <span className="hidden items-center gap-1.5 pr-1 text-sm font-semibold tracking-tight min-[440px]:flex">
         <BrandMark className="size-4 text-foreground" />
         Brains
       </span>
 
-      {/* ⌘K trigger, styled as the palette it opens. */}
+      {/* ⌘K trigger, styled as the palette it opens; compact icon form on
+          narrow screens where the full bar cannot fit. */}
       <button
         data-testid="palette-trigger"
         onClick={onOpenPalette}
         aria-label={t("paletteOpen")}
-        className="group flex h-8 w-[300px] cursor-pointer items-center gap-2 rounded-[7px] border border-input bg-muted/60 px-2.5 text-[13px] text-muted-foreground transition-colors hover:border-input hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring/70"
+        className="group hidden h-8 w-[220px] cursor-pointer items-center gap-2 rounded-[7px] border border-input bg-muted/60 px-2.5 text-body text-muted-foreground transition-colors hover:border-input hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring/70 md:flex lg:w-[300px]"
       >
         <Search className="size-3.5 stroke-[1.5]" />
         <span className="flex-1 truncate text-left">{t("palettePlaceholder")}</span>
         <kbd>⌘K</kbd>
       </button>
+      <Tooltip content={t("paletteOpen")}>
+        <Button
+          size="icon"
+          aria-label={t("paletteOpen")}
+          data-testid="palette-trigger-compact"
+          onClick={onOpenPalette}
+          className="md:hidden"
+        >
+          <Search />
+        </Button>
+      </Tooltip>
 
       <div className="ml-auto flex items-center gap-1.5">
         <Button
@@ -85,15 +97,16 @@ export function TopBar({
           aria-label={tCommon("newFile")}
           onClick={onNewDocument}
         >
-          {tCommon("newFile")}
-          <MenuShortcut>⌘N</MenuShortcut>
+          <FilePlus />
+          <span className="hidden sm:inline">{tCommon("newFile")}</span>
+          <span className="hidden sm:inline"><MenuShortcut>⌘N</MenuShortcut></span>
         </Button>
 
         <HoverMenu
           trigger={
             <Button variant="outline" aria-label={tCommon("upload")}>
               <Upload />
-              {tCommon("upload")}
+              <span className="hidden md:inline">{tCommon("upload")}</span>
             </Button>
           }
         >
@@ -139,7 +152,7 @@ export function TopBar({
             rel="noreferrer"
             aria-label="GitHub"
             data-testid="github-link"
-            className="inline-flex size-8 items-center justify-center rounded-[7px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring/70"
+            className="hidden size-8 items-center justify-center rounded-[7px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring/70 md:inline-flex"
           >
             <GitHubMark />
           </a>
@@ -152,12 +165,12 @@ export function TopBar({
             <button
               data-testid="account-button"
               aria-label={t("accountMenu")}
-              className="flex h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-[7px] pl-1 pr-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring/70"
+              className="flex h-8 min-w-0 cursor-pointer items-center gap-1.5 rounded-[7px] pl-1 pr-2 text-body-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring/70"
             >
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-semibold text-primary">
+              <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-meta font-semibold text-primary">
                 {session.actor.slice(0, 1).toUpperCase()}
               </span>
-              <span className="min-w-0 max-w-[140px] truncate">{session.actor}</span>
+              <span className="hidden min-w-0 max-w-[140px] truncate sm:inline">{session.actor}</span>
             </button>
           }
         >

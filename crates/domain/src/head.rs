@@ -27,7 +27,7 @@ impl HeadState {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Head {
     pub schema_version: u64,
     pub path: String,

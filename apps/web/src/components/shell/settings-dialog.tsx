@@ -46,12 +46,12 @@ export function loadUiSettings(): UiSettings {
 }
 
 function applyUiSettings(settings: UiSettings) {
-  document.documentElement.style.setProperty("--font-sans", FONT_STACKS[settings.font]);
-  // Interface size zooms the whole shell (px classes don't follow the body
-  // font-size; zoom scales text, spacing and icons together). Portals live
-  // inside body, so dialogs/toasts scale with everything else.
-  document.body.style.setProperty("--ui-font-size", `${settings.fontSize}px`);
-  document.body.style.zoom = String(settings.fontSize / 13);
+  const root = document.documentElement;
+  const zoom = settings.fontSize / 13;
+  root.style.setProperty("--font-sans", FONT_STACKS[settings.font]);
+  root.style.setProperty("--ui-font-size", `${settings.fontSize}px`);
+  // Positioning wrappers stay in viewport coordinates; content scales once.
+  root.style.setProperty("--ui-zoom", `${zoom}`);
 }
 
 export function UiSettingsProvider({ children }: { children: React.ReactNode }) {
@@ -112,6 +112,7 @@ export function SettingsDialog({
 
           <SettingRow label={t("settingsFontSize")}>
             <SliderRow
+              ariaLabel={t("settingsFontSize")}
               value={settings.fontSize}
               min={8}
               max={32}
@@ -155,7 +156,7 @@ export function SettingsDialog({
 function SettingRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="shrink-0 text-[12.5px] text-foreground">{label}</span>
+      <span className="shrink-0 text-body-sm text-foreground">{label}</span>
       {children}
     </div>
   );

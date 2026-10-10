@@ -75,6 +75,14 @@ fn kind_from(raw: &str) -> FileKind {
 }
 
 impl IndexStore for SqliteIndex {
+    async fn remove_path(&self, path: &str) -> DomainResult<()> {
+        // The files_ad trigger cascades the FTS row, links and tags.
+        let conn = self.conn.lock().map_err(|_| poisoned())?;
+        conn.execute("DELETE FROM files WHERE path = ?1", params![path])
+            .map_err(index_err)?;
+        Ok(())
+    }
+
     async fn upsert(&self, projection: &FileProjection) -> DomainResult<()> {
         let conn = self.conn.lock().map_err(|_| poisoned())?;
         conn.execute(
@@ -205,7 +213,7 @@ impl IndexStore for SqliteIndex {
         if order_desc {
             sql.push_str(" AND (?6 IS NULL OR updated_at < ?6 OR (updated_at = ?6 AND path > ?7))");
         } else {
-            sql.push_str(" AND (?6 IS NULL OR path > ?7)");
+            sql.push_str(" AND (?7 IS NULL OR path > ?7)");
         }
         if order_desc {
             sql.push_str(" ORDER BY updated_at DESC, path LIMIT ?8");

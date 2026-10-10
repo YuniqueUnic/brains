@@ -58,10 +58,11 @@ impl Capabilities {
             ("move".into(), true),
             ("diff".into(), true),
             ("export".into(), true),
+            ("archive".into(), true),
             ("reindex".into(), true),
             ("server_side_validate".into(), false), // P1 `brain doctor`
-            ("checkout_push_pull".into(), false),   // P1 worktree sync
-            ("git_mirror".into(), false),           // manual export only
+            ("checkout_push_pull".into(), false), // server-side sync endpoint; the CLI composes existing APIs
+            ("git_mirror".into(), false),         // manual export only
             ("presigned_attachment_upload".into(), false),
         ]);
         Self {

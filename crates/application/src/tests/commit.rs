@@ -280,7 +280,7 @@ async fn text_limits_reject_non_utf8_and_demote_oversize() {
                 actor: owner.actor.clone(),
                 operation_id: brains_domain::HexId::generate(),
                 precondition: Precondition::Create,
-                executable: false,
+                executable: Some(false),
                 copied_from: None,
             },
         )
@@ -430,4 +430,87 @@ async fn head_and_revision_timestamps_agree() {
     let rev: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(rev_file).unwrap()).unwrap();
     assert_eq!(head["updated_at"], rev["created_at"]);
+}
+
+#[tokio::test]
+async fn purge_removes_tombstone_and_rejects_live_paths() {
+    let TestVault { vault, .. } = open_vault();
+    let owner = owner_principal();
+    let path = brains_domain::VaultPath::new("purge-me.md").unwrap();
+
+    let created = put_text(
+        &vault,
+        &owner,
+        "purge-me.md",
+        "content",
+        Precondition::Create,
+    )
+    .await
+    .unwrap();
+    let tombstone = brains_domain::HexId::from_hex(&created.revision).unwrap();
+
+    // A live path must not purge — trash first, always.
+    let live = vault
+        .purge_file(
+            &owner,
+            &path,
+            Precondition::IfRevision(tombstone.clone()),
+            brains_domain::HexId::generate(),
+        )
+        .await;
+    assert!(matches!(live, Err(DomainError::PurgeLive { .. })));
+
+    let trashed = vault
+        .trash_file(
+            &owner,
+            &path,
+            Precondition::IfRevision(tombstone),
+            owner.actor.clone(),
+            brains_domain::HexId::generate(),
+        )
+        .await
+        .unwrap();
+
+    // Stale base: the tombstone moved (it did not, but the guard must hold).
+    let stale = vault
+        .purge_file(
+            &owner,
+            &path,
+            Precondition::IfRevision(brains_domain::HexId::from_hex(&created.revision).unwrap()),
+            brains_domain::HexId::generate(),
+        )
+        .await;
+    assert!(matches!(stale, Err(DomainError::RevisionConflict { .. })));
+
+    let purged = vault
+        .purge_file(
+            &owner,
+            &path,
+            Precondition::IfRevision(brains_domain::HexId::from_hex(&trashed.revision).unwrap()),
+            brains_domain::HexId::generate(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(purged.path, "purge-me.md");
+
+    // Gone from listings and unreadable — Trashed became NotFound.
+    let page = vault
+        .list_from_store(&owner, None, None, true, 50)
+        .await
+        .unwrap();
+    assert!(!page.items.iter().any(|e| e.path == "purge-me.md"));
+    let read = vault.read_file(&owner, &path).await;
+    assert!(matches!(read, Err(DomainError::NotFound { .. })));
+
+    // Re-purging an absent path cannot meet its precondition: the 412 is
+    // the honest answer (never a fake success).
+    let again = vault
+        .purge_file(
+            &owner,
+            &path,
+            Precondition::IfRevision(brains_domain::HexId::from_hex(&trashed.revision).unwrap()),
+            brains_domain::HexId::generate(),
+        )
+        .await;
+    assert!(matches!(again, Err(DomainError::RevisionConflict { .. })));
 }

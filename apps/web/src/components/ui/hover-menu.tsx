@@ -26,6 +26,8 @@ export function HoverMenu({
   const openTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
   const hoverTrigger = useRef(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const popupRef = useRef<HTMLDivElement | null>(null);
   // Pin state is read inside event handlers only — a ref, not re-render state.
   const pinnedRef = useRef(false);
 
@@ -49,7 +51,15 @@ export function HoverMenu({
   const scheduleClose = () => {
     clearTimers();
     if (!open || pinnedRef.current) return;
-    closeTimer.current = window.setTimeout(() => setOpen(false), 150);
+    // 300ms grace, and the close is pointer-verified: portals can make the
+    // browser fire a synthetic mouseleave at a stationary cursor — only a
+    // pointer that has truly left the trigger closes the menu. (Keyboard
+    // opens pin the menu, so focus staying in the popup never fights this.)
+    closeTimer.current = window.setTimeout(() => {
+      if (!wrapperRef.current?.matches(":hover") && !popupRef.current?.matches(":hover")) {
+        setOpen(false);
+      }
+    }, 300);
   };
 
   const handleOpenChange = (next: boolean) => {
@@ -73,8 +83,12 @@ export function HoverMenu({
   };
 
   return (
-    <Menu.Root open={open} onOpenChange={handleOpenChange}>
+    // modal={false}: a modal menu mounts a viewport-wide inert layer that
+    // covers the trigger — synthetic mouseleave at a stationary cursor, zoom
+    // or not. Hover menus must be non-modal.
+    <Menu.Root open={open} onOpenChange={handleOpenChange} modal={false}>
       <div
+        ref={wrapperRef}
         className="flex items-center"
         onMouseEnter={() => {
           hoverTrigger.current = true;
@@ -90,6 +104,7 @@ export function HoverMenu({
       <Menu.Portal>
         <Menu.Positioner align={align} sideOffset={sideOffset}>
           <Menu.Popup
+            ref={popupRef}
             className={menuPopupClass}
             onMouseEnter={clearTimers}
             onMouseLeave={scheduleClose}

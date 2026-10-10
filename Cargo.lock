@@ -375,6 +375,8 @@ dependencies = [
  "brains-domain",
  "brains-server",
  "clap",
+ "clap_complete",
+ "clap_complete_nushell",
  "hex",
  "predicates",
  "reqwest",
@@ -391,6 +393,8 @@ version = "0.1.0"
 dependencies = [
  "brains-api-types",
  "brains-domain",
+ "brains-sdk",
+ "diffy",
  "hex",
  "reqwest",
  "serde",
@@ -398,6 +402,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "time",
+ "unicase",
 ]
 
 [[package]]
@@ -588,6 +593,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "037e2a1a92236d0aff7e845093f64661d6df4c02c9fcc61a60e9e1d736fa392f"
+dependencies = [
+ "clap",
+]
+
+[[package]]
+name = "clap_complete_nushell"
+version = "4.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffb66bc82eb9c92b1727310ae2c5868df22ae7cf46185bc5c544a4fa71955e49"
+dependencies = [
+ "clap",
+ "clap_complete",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -742,6 +766,15 @@ name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6184e33543162437515c2e2b48714794e37845ec9851711914eec9d308f6ebe8"
+
+[[package]]
+name = "diffy"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e3dc2f773b6aaa63b1a7684b8589f670a8a0146a510b74d23a401c882364b49"
+dependencies = [
+ "hashbrown 0.17.1",
+]
 
 [[package]]
 name = "digest"

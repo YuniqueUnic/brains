@@ -7,11 +7,10 @@ name: Deploy (Cloudflare Workers)
 #        pnpm --dir apps/worker exec wrangler r2 bucket create brains-data
 #        pnpm --dir apps/worker exec wrangler d1 create brains-index
 #      …then paste the returned database_id into apps/worker/wrangler.toml.
-#   3. Instance secrets (never in git):
-#        cd apps/worker
-#        pnpm exec wrangler secret put TOKEN_REGISTRY_JSON   # {"tokens":[{id,name,token_sha256,scopes,enabled}]}
-#        pnpm exec wrangler secret put SESSION_SIGNING_KEY   # 64 hex chars
-#        pnpm exec wrangler secret put CURSOR_SIGNING_KEY    # 64 hex chars
+#   3. Bootstrap all three instance secrets together with the first deploy:
+#        pnpm exec wrangler deploy --secrets-file /private/path/brains-secrets.json
+#      See docs/runbook.md. `secret put` immediately creates and deploys a version.
+#      Subsequent workflow deploys retain the existing required secrets.
 on:
   workflow_dispatch:
     inputs:
@@ -39,14 +38,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Build web + worker
+      - name: Build web and install Worker build tool
         run: |
           pnpm --dir apps/web build
-          cd apps/worker
           cargo install worker-build --locked
-          worker-build --release
-        env:
-          RUSTFLAGS: --cfg getrandom_backend="wasm_js"
       - name: Apply remote D1 migrations
         if: inputs.apply_migrations
         working-directory: apps/worker
@@ -54,10 +49,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Deploy worker
+      - name: Deploy worker (Wrangler builds wasm once)
         working-directory: apps/worker
         run: pnpm exec wrangler deploy
         env:
+          RUSTFLAGS: --cfg getrandom_backend="wasm_js"
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Done

@@ -276,6 +276,21 @@ export const demoApi = {
     return mutation(path, file);
   },
 
+  async purge(path: string, baseRevision: string): Promise<{ path: string; purged: boolean; index_state: string; operation_id: string }> {
+    await latency();
+    const file = store.get(path);
+    if (!file) throw new ApiError(404, "NOT_FOUND", `${path} 不存在`);
+    const top = head(file);
+    if (top.action !== "trash") {
+      throw new ApiError(409, "PURGE_REQUIRES_TRASHED", `${path} 仍是 live 状态,先移入回收站`);
+    }
+    if (top.revision !== baseRevision) {
+      throw new ApiError(412, "REVISION_CONFLICT", "基线已过期", top.revision);
+    }
+    store.delete(path);
+    return { path, purged: true, index_state: "ready", operation_id: nextRevision() };
+  },
+
   async history(path: string, _cursor?: string | null): Promise<HistoryPage> {
     await latency();
     const file = store.get(path);

@@ -102,6 +102,11 @@ pub trait IndexStore {
     /// parser at the same generation, must never overwrite a newer row.
     fn upsert(&self, projection: &FileProjection) -> impl Future<Output = DomainResult<()>> + Send;
 
+    /// Drop the whole projection of one path (permanent delete): file row,
+    /// FTS entry, links and tags. Missing path is fine — purge is idempotent
+    /// at the index layer.
+    fn remove_path(&self, path: &str) -> impl Future<Output = DomainResult<()>> + Send;
+
     /// One bounded literal window (design §10.3). Rows are ordered by path;
     /// `upper` is an exclusive prefix bound, `None` = whole vault.
     fn scan_literal(

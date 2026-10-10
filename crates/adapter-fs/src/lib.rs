@@ -204,3 +204,27 @@ pub(crate) fn fsync_dir(dir: &Path) -> DomainResult<()> {
 
 #[cfg(test)]
 mod tests;
+
+/// Atomically publish immutable bytes without replacing an existing object.
+pub(crate) fn create_immutable(target: &Path, bytes: &[u8]) -> DomainResult<()> {
+    use std::io::Write;
+    let dir = target
+        .parent()
+        .ok_or_else(|| DomainError::Internal("immutable target without parent".into()))?;
+    std::fs::create_dir_all(dir).map_err(|e| DomainError::StorageUnavailable(e.to_string()))?;
+    let temp = dir.join(format!(".staging-{}", uuid::Uuid::new_v4().simple()));
+    let result = (|| -> std::io::Result<()> {
+        let mut file = std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&temp)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        std::fs::hard_link(&temp, target)
+    })();
+    let _ = std::fs::remove_file(&temp);
+    result.map_err(|error| {
+        DomainError::StorageUnavailable(format!("immutable publish {}: {error}", target.display()))
+    })?;
+    fsync_dir(dir)
+}

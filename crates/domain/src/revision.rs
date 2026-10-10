@@ -51,7 +51,7 @@ pub struct CopyProvenance {
     pub revision: HexId,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Revision {
     pub schema_version: u64,
     pub revision: HexId,
@@ -194,6 +194,36 @@ impl Revision {
 
     pub fn path(&self) -> VaultPath {
         VaultPath::trusted(self.path.clone())
+    }
+
+    /// Archive transfer preserves identity, changing only the storage namespace.
+    pub fn in_vault(&self, vault: &str) -> DomainResult<Self> {
+        self.validate()?;
+        let mut revision = self.clone();
+        if let Some(content) = &mut revision.content {
+            let object = content
+                .key
+                .splitn(4, '/')
+                .nth(3)
+                .ok_or_else(|| DomainError::InvalidFormat("invalid archive blob key".into()))?;
+            content.key = format!("vaults/{vault}/blobs/{object}");
+        }
+        revision.validate()?;
+        Ok(revision)
+    }
+
+    pub fn head(&self) -> DomainResult<crate::Head> {
+        crate::Head::new(
+            &self.path(),
+            self.revision.clone(),
+            self.generation,
+            if self.action == RevisionAction::Trash {
+                crate::HeadState::Trashed
+            } else {
+                crate::HeadState::Live
+            },
+            self.created_at.clone(),
+        )
     }
 }
 

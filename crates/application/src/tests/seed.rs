@@ -68,7 +68,7 @@ async fn seeding_skips_vaults_with_any_head_including_tombstones() {
                 actor: principal.actor.clone(),
                 operation_id: HexId::generate(),
                 precondition: Precondition::Create,
-                executable: false,
+                executable: Some(false),
                 copied_from: None,
             },
         )

@@ -23,7 +23,7 @@ const config: Config = {
     viewport: { width: 1440, height: 900 },
   },
   webServer:
-    BASE_URL !== `http://127.0.0.1:${PORT}`
+    process.env.BRAINS_BASE_URL !== undefined
       ? undefined
       : {
           command: [

@@ -1,52 +1,47 @@
-import type { CompletionContext, CompletionResult } from "@codemirror/autocomplete";
+import { insertCompletionText, type CompletionContext, type CompletionResult } from "@codemirror/autocomplete";
+import { buildRefPreviewDom, type RefPreviewLabels } from "./ref-preview-dom";
+import { referenceStem } from "../properties/preview";
 
 export interface CompletionFile {
   path: string;
   binary: boolean;
 }
 
-/**
- * Reference completions (DESIGN.md §41 wiki links): `[[` suggests documents
- * (by stem, the [[...]] convention), `[](` and `![](` suggest every file
- * (closing the parens) so existing notes and images are one keystroke away.
- */
+/** File references and their previews share the editor's native completion lifecycle. */
 export function fileCompletions(
   files: CompletionFile[],
+  onOpen: ((path: string) => void) | undefined,
+  labels: RefPreviewLabels,
 ): (context: CompletionContext) => CompletionResult | null {
-  const documents = files.filter((file) => !file.binary);
-  const stemOf = (path: string) => path.replace(/\.[a-z0-9]+$/i, "");
   return (context) => {
     const line = context.state.doc.lineAt(context.pos);
     const before = line.text.slice(0, context.pos - line.from);
-    const wiki = /\[\[([^[\\]]*)$/.exec(before);
-    if (wiki) {
-      return {
-        from: context.pos - wiki[1].length,
-        options: documents.map((file) => {
-          const stem = stemOf(file.path);
-          return {
-            label: stem.split("/").pop() ?? stem,
-            detail: file.path,
-            apply: stem,
-            type: "file",
-          };
-        }),
-        validFor: /^[^[\]]*$/,
-      };
-    }
+    const wiki = /\[\[([^\[\]]*)$/.exec(before);
     const link = /(!?\[[^\]]*\]\()([^)]*)$/.exec(before);
-    if (link) {
-      return {
-        from: context.pos - link[2].length,
-        options: files.map((file) => ({
-          label: file.path.split("/").pop() ?? file.path,
+    if (!wiki && !link) return null;
+    const close = wiki ? "]]" : ")";
+    return {
+      from: context.pos - (wiki ? wiki[1] : link![2]).length,
+      options: files.filter((file) => !wiki || !file.binary).map((file) => {
+        const target = wiki ? referenceStem(file.path) : encodeURI(file.path).replace(/[()]/g, (char) => `%${char.charCodeAt(0).toString(16)}`);
+        return {
+          label: (wiki ? referenceStem(file.path) : file.path).split("/").pop()!,
           detail: file.path,
-          apply: `${file.path})`,
           type: "file",
-        })),
-        validFor: /^[^)]*$/,
-      };
-    }
-    return null;
+          info: () => buildRefPreviewDom(file.path, onOpen, labels),
+          apply(view, _completion, from, to) {
+            // Consume the existing auto-closed suffix; never leave `))`/`]]]]`.
+            const line = view.state.doc.lineAt(to);
+            const closing = view.state.sliceDoc(to, line.to).indexOf(close);
+            let end = closing < 0 ? to : to + closing;
+            for (const char of close) {
+              if (view.state.sliceDoc(end, end + 1) === char) end += 1;
+            }
+            view.dispatch(insertCompletionText(view.state, target + close, from, end));
+          },
+        };
+      }),
+      validFor: wiki ? /^[^\[\]]*$/ : /^[^)]*$/,
+    };
   };
 }

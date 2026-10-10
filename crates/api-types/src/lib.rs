@@ -83,6 +83,16 @@ pub struct MutationResult {
     pub operation_id: String,
 }
 
+/// Permanent delete of a tombstone: the path is gone from every listing and
+/// its history chain is unreachable. No Entry — there is no head anymore.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PurgeResult {
+    pub path: String,
+    pub purged: bool,
+    pub index_state: String,
+    pub operation_id: String,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FilePage {
     pub items: Vec<Entry>,

@@ -10,10 +10,8 @@ import {
   FolderPlus,
   Info,
   Link2,
-  ListChecks,
   MoreHorizontal,
   Trash2,
-  X,
 } from "lucide-react";
 import { ContextMenu } from "@base-ui-components/react/context-menu";
 import { Menu } from "@base-ui-components/react/menu";
@@ -24,12 +22,11 @@ import type { Entry } from "../../api/client";
 import { cn } from "../../lib/utils";
 import { menuItemClass, menuPopupClass, MenuShortcut } from "../ui/menu";
 import { Button } from "../ui/button";
+import { BulkSelectionBar, BulkSelectionToggle } from "../ui/bulk-selection-bar";
 import { Input } from "../ui/input";
 import {
   checkState,
   collapseToRoots,
-  invertSelection,
-  selectAllFiles,
   togglePath,
 } from "./selection";
 
@@ -266,7 +263,7 @@ export function FileTree({
                         onDragLeave={() => setDropTarget(null)}
                         onDrop={handleDrop(node.path)}
                         className={cn(
-                          "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-[13px] transition-colors",
+                          "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-body transition-colors",
                           selecting && folderState !== "none" && "bg-selected",
                           dropTarget === node.path && "ring-2 ring-inset ring-primary/50",
                           !selecting && "cursor-pointer hover:bg-muted",
@@ -336,7 +333,7 @@ export function FileTree({
                       }}
                       onClick={rowClick(entry.path, false)}
                       className={cn(
-                        "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-[13px] outline-none transition-colors",
+                        "group/row flex h-7 select-none items-center gap-1.5 rounded-md pr-1 text-body outline-none transition-colors",
                         props.isSelected || activePath === entry.path
                           ? "bg-selected text-foreground"
                           : "hover:bg-muted",
@@ -426,47 +423,14 @@ export function FileTree({
           </Menu.Portal>
         </Menu.Root>
         <span className="flex-1" />
-        <Button
-          variant={selecting ? "secondary" : "ghost"}
-          size="iconSm"
-          aria-pressed={selecting}
-          aria-label={selecting ? t("exitSelect") : t("select")}
-          data-testid="toggle-select"
-          onClick={onToggleSelecting}
-        >
-          {selecting ? <X /> : <ListChecks />}
-        </Button>
+        <BulkSelectionToggle selecting={selecting} onToggle={onToggleSelecting} />
       </div>
 
       {selecting && (
-        <div className="mx-2 mb-1 flex shrink-0 items-center gap-1 rounded-md bg-muted/60 px-2 py-1 text-[11px] text-muted-foreground">
-          <span className="min-w-0 flex-1 truncate">
-            {t("selectedCount", { count: selected.size })}
-          </span>
-          <button
-            type="button"
-            className="cursor-pointer rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-            onClick={() => onSelectionChange(selectAllFiles(allPaths))}
-          >
-            {t("selectAll")}
-          </button>
-          <button
-            type="button"
-            className="cursor-pointer rounded px-1.5 py-0.5 hover:bg-muted hover:text-foreground"
-            onClick={() => onSelectionChange(invertSelection(allPaths, selected))}
-          >
-            {t("invertSelection")}
-          </button>
-          <button
-            type="button"
-            data-testid="delete-selected"
-            disabled={selected.size === 0}
-            className="cursor-pointer rounded px-1.5 py-0.5 text-destructive hover:bg-destructive/10 disabled:pointer-events-none disabled:opacity-45"
-            onClick={() => actions.onTrash([...selected])}
-          >
-            {t("deleteSelected")}
-          </button>
-        </div>
+        <BulkSelectionBar paths={allPaths} selected={selected} onSelectionChange={onSelectionChange} actions={
+          <Button size="iconSm" variant="dangerGhost" aria-label={t("deleteSelected")} title={t("deleteSelected")}
+            data-testid="delete-selected" disabled={selected.size === 0} onClick={() => actions.onTrash([...selected])}><Trash2 /></Button>
+        } />
       )}
 
       <div className="min-h-0 flex-1 overflow-auto px-1 pb-1" data-testid="file-list">
@@ -478,7 +442,7 @@ export function FileTree({
           onSelectionChange={(keys) => {
             if (selecting) return;
             const next = new Set<string>();
-            for (const key of keys) next.add(String(key));
+            for (const key of keys) { if (allPaths.includes(String(key))) next.add(String(key)); }
             onSelectionChange(next);
           }}
           expandedKeys={allExpandedKeys(nodes, collapsed)}
@@ -600,7 +564,7 @@ function RowMenu({
         render={
           <button
             aria-label={t("rowMenu", { path })}
-            className="pointer-events-none ml-auto size-5 shrink-0 cursor-pointer items-center justify-center rounded text-faint opacity-0 hover:bg-selected hover:text-foreground group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring/70"
+            className="hit pointer-events-none ml-auto size-5 shrink-0 cursor-pointer items-center justify-center rounded text-faint opacity-0 hover:bg-selected hover:text-foreground group-hover/row:pointer-events-auto group-hover/row:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-ring/70"
             onClick={(event) => event.stopPropagation()}
           />
         }

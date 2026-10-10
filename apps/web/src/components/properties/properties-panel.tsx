@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type Entry, type RevisionDto } from "../../api/client";
 import { markdownToSafeHtml, previewFor, revisionPreviewFor } from "./preview";
+import { formatDateTime } from "../../lib/format";
+import { Skeleton } from "../ui/skeleton";
 import { HoverPreview } from "../ui/hover-preview";
 import { ToggleGroupSection } from "../shell/toggle-section";
 import {
@@ -42,7 +44,7 @@ function BacklinkItem({ source, onOpenFile }: { source: string; onOpenFile: (pat
           <button
             type="button"
             onClick={() => onOpenFile(source)}
-            className="block w-full cursor-pointer truncate rounded-md px-1.5 py-1 text-left font-mono text-[11px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
+            className="block w-full cursor-pointer truncate rounded-md px-1.5 py-1 text-left font-mono text-meta text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
             title={t("openHint")}
           >
             {source}
@@ -86,11 +88,13 @@ export function PropertiesPanel({
 }) {
   const { t } = useTranslation("info");
   const [meta, setMeta] = useState<Entry | null>(null);
-  const [history, setHistory] = useState<RevisionDto[]>([]);
-  const [links, setLinks] = useState<{ outbound: number; backlinks: string[] }>({
-    outbound: 0,
-    backlinks: [],
-  });
+  const [history, setHistory] = useState<RevisionDto[] | null>(null);
+  // null = still loading (skeleton); loads that FAIL set the error flag so
+  // the section says so instead of posing as an empty result.
+  const [links, setLinks] = useState<{ outbound: number; backlinks: string[] } | null>(null);
+  const [linksError, setLinksError] = useState(false);
+  const [metaError, setMetaError] = useState(false);
+  const [historyError, setHistoryError] = useState(false);
   // 查看: rendered/raw content of an old revision. 恢复: destructive, confirmed.
   const [viewing, setViewing] = useState<
     | { rev: RevisionDto; kind: "text"; html: string; raw: string }
@@ -102,17 +106,38 @@ export function PropertiesPanel({
   const [confirming, setConfirming] = useState<RevisionDto | null>(null);
 
   useEffect(() => {
+    setMeta(null);
+    setHistory(null);
+    setLinks(null);
+    setViewing(null);
+    setConfirming(null);
     if (!path) {
       setMeta(null);
-      setHistory([]);
+      setHistory(null);
       return;
     }
     let alive = true;
+    // While any section is in flight its slot shows a skeleton, never a
+    // misleading "empty" state.
+    setMetaError(false);
+    setHistoryError(false);
+    setLinksError(false);
     api.readMeta(path).then(
       (entry) => alive && setMeta(entry),
-      () => alive && setMeta(null),
+      () => {
+        if (!alive) return;
+        setMeta(null);
+        setMetaError(true);
+      },
     );
-    collectHistory(path).then((items) => alive && setHistory(items));
+    collectHistory(path).then(
+      (items) => alive && setHistory(items),
+      () => {
+        if (!alive) return;
+        setHistory([]);
+        setHistoryError(true);
+      },
+    );
     Promise.all([api.links(path, "outbound"), api.links(path, "backlinks")]).then(
       ([out, back]) =>
         alive &&
@@ -120,12 +145,14 @@ export function PropertiesPanel({
           outbound: out.items.length,
           backlinks: back.items.map((item) => item.source),
         }),
-      () => undefined,
+      () => alive && setLinksError(true),
     );
     return () => {
       alive = false;
     };
   }, [path, revision]);
+  const historyLoading = path !== null && history === null;
+  const historyItems = history ?? [];
 
   const openRevisionView = (rev: RevisionDto) => {
     if (!path) return;
@@ -156,7 +183,7 @@ export function PropertiesPanel({
       aria-label={t("properties")}
     >
       <div className="flex h-11 shrink-0 items-center gap-2 border-b px-3">
-        <h2 className="flex-1 text-[13px] font-semibold">{t("properties")}</h2>
+        <h2 className="flex-1 text-body font-semibold">{t("properties")}</h2>
         <kbd aria-hidden>⌘I</kbd>
         <button
           aria-label={t("close")}
@@ -173,28 +200,36 @@ export function PropertiesPanel({
           <p className="text-xs">{t("noSelection")}</p>
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-auto px-3 py-3">
+        <div key={path} aria-busy={meta === null || historyLoading} className="pane-in min-h-0 flex-1 overflow-auto px-3 py-3">
           <section>
             <SectionTitle icon={<ListTree className="size-3.5 stroke-[1.5]" />} label={t("general")} />
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[12px]">
+            {meta === null && !metaError && (
+              <div className="grid gap-1.5 py-1">
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            )}
+            {metaError && <p className="py-1 text-meta text-muted-foreground">{t("loadFailed")}</p>}
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
               <dt className="text-muted-foreground">{t("pathLabel")}</dt>
-              <dd className="break-all font-mono text-[11px]">{path}</dd>
+              <dd className="break-all font-mono text-meta">{path}</dd>
               {meta && (
                 <>
                   <dt className="text-muted-foreground">{t("kindLabel")}</dt>
-                  <dd className="font-mono text-[11px]">{meta.kind ?? "-"}</dd>
+                  <dd className="font-mono text-meta">{kindLabel(t, meta.kind)}</dd>
                   {meta.size !== undefined && (
                     <>
                       <dt className="text-muted-foreground">{t("sizeLabel")}</dt>
-                      <dd className="font-mono text-[11px]">{formatSize(meta.size)}</dd>
+                      <dd className="font-mono text-meta">{formatSize(meta.size)}</dd>
                     </>
                   )}
-                  <dt className="text-muted-foreground">generation</dt>
-                  <dd className="font-mono text-[11px]">{meta.generation}</dd>
+                  <dt className="text-muted-foreground">{t("generationLabel")}</dt>
+                  <dd className="font-mono text-meta">{meta.generation}</dd>
                   {meta.updated_at && (
                     <>
                       <dt className="text-muted-foreground">{t("updatedLabel")}</dt>
-                      <dd className="font-mono text-[11px]">{meta.updated_at.slice(0, 19)}</dd>
+                      <dd className="font-mono text-meta">{formatDateTime(meta.updated_at)}</dd>
                     </>
                   )}
                 </>
@@ -204,13 +239,21 @@ export function PropertiesPanel({
 
           <section className="mt-4">
             <SectionTitle icon={<Link2 className="size-3.5 stroke-[1.5]" />} label={t("links")} />
-            <p className="text-[12px] text-muted-foreground">
-              {t("linkSummary", {
-                outbound: links.outbound,
-                backlinks: links.backlinks.length,
-              })}
-            </p>
-            {links.backlinks.length > 0 && (
+            {links === null && !linksError && (
+              <div className="grid gap-1.5 py-1">
+                <Skeleton className="h-3 w-2/5" />
+              </div>
+            )}
+            {linksError && <p className="py-1 text-meta text-muted-foreground">{t("loadFailed")}</p>}
+            {links !== null && (
+              <p className="text-xs text-muted-foreground">
+                {t("linkSummary", {
+                  outbound: links.outbound,
+                  backlinks: links.backlinks.length,
+                })}
+              </p>
+            )}
+            {links !== null && links.backlinks.length > 0 && (
               <ul className="mt-1 space-y-0.5">
                 {links.backlinks.map((source) => (
                   <BacklinkItem key={source} source={source} onOpenFile={onOpenFile} />
@@ -222,21 +265,29 @@ export function PropertiesPanel({
           <section className="mt-4">
             <SectionTitle icon={<History className="size-3.5 stroke-[1.5]" />} label={t("history")} />
             <ul className="space-y-0.5" data-testid="history-list">
-              {history.map((rev) => (
+              {historyLoading &&
+                [0, 1, 2].map((i) => (
+                  <li key={i} className="flex items-center gap-2 px-1.5 py-1">
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3 w-10" />
+                    <Skeleton className="h-3 flex-1" />
+                  </li>
+                ))}
+              {historyItems.map((rev) => (
                 <li
                   key={rev.revision}
-                  className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[12px] hover:bg-muted/70"
+                  className="flex items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-muted/70"
                 >
                   {rev.revision === revision ? (
                     <>
-                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                      <span className="shrink-0 font-mono text-meta text-muted-foreground">
                         gen {rev.generation}
                       </span>
-                      <span className="shrink-0">{rev.action}</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-faint">
-                        {rev.created_at.slice(0, 19)}
+                      <span className="shrink-0">{actionLabel(t, rev.action)}</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-meta-sm text-faint">
+                        {formatDateTime(rev.created_at)}
                       </span>
-                      <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">
+                      <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-meta-xs text-primary">
                         {t("current")}
                       </span>
                     </>
@@ -244,25 +295,25 @@ export function PropertiesPanel({
                     // A tombstone has no content to restore; the trash view's
                     // restore walks history for the newest contentful revision.
                     <>
-                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                      <span className="shrink-0 font-mono text-meta text-muted-foreground">
                         gen {rev.generation}
                       </span>
-                      <span className="shrink-0">{rev.action}</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-faint">
-                        {rev.created_at.slice(0, 19)}
+                      <span className="shrink-0">{actionLabel(t, rev.action)}</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-meta-sm text-faint">
+                        {formatDateTime(rev.created_at)}
                       </span>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                      <span className="shrink-0 text-meta-xs text-muted-foreground">
                         {t("tombstone")}
                       </span>
                     </>
                   ) : (
                     <HistoryRowTooltip path={path} revision={rev.revision}>
-                      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+                      <span className="shrink-0 font-mono text-meta text-muted-foreground">
                         gen {rev.generation}
                       </span>
-                      <span className="shrink-0">{rev.action}</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-faint">
-                        {rev.created_at.slice(0, 19)}
+                      <span className="shrink-0">{actionLabel(t, rev.action)}</span>
+                      <span className="min-w-0 flex-1 truncate font-mono text-meta-sm text-faint">
+                        {formatDateTime(rev.created_at)}
                       </span>
                       <span className="flex shrink-0 items-center gap-0.5">
                         <button
@@ -270,7 +321,7 @@ export function PropertiesPanel({
                           onClick={() => openRevisionView(rev)}
                           aria-label={t("viewRevision")}
                           title={t("viewRevision")}
-                          className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
+                          className="hit inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-meta-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
                         >
                           <Eye className="size-3 stroke-[1.5]" />
                           {t("viewRevision")}
@@ -278,7 +329,7 @@ export function PropertiesPanel({
                         <button
                           data-testid={`restore-revision-gen-${rev.generation}`}
                           onClick={() => setConfirming(rev)}
-                          className="inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
+                          className="hit inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-meta-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
                         >
                           <ArchiveRestore className="size-3 stroke-[1.5]" />
                           {t("restoreRevision")}
@@ -288,8 +339,11 @@ export function PropertiesPanel({
                   )}
                 </li>
               ))}
-              {history.length === 0 && (
-                <li className="px-1.5 text-[11px] text-muted-foreground">{t("noHistory")}</li>
+              {!historyLoading && historyError && (
+                <li className="px-1.5 text-meta text-muted-foreground">{t("loadFailed")}</li>
+              )}
+              {!historyLoading && !historyError && historyItems.length === 0 && (
+                <li className="px-1.5 text-meta text-muted-foreground">{t("noHistory")}</li>
               )}
             </ul>
           </section>
@@ -303,7 +357,7 @@ export function PropertiesPanel({
             <DialogTitle>
               {t("viewRevisionTitle", {
                 gen: viewing?.rev.generation ?? 0,
-                time: viewing?.rev.created_at.slice(0, 19) ?? "",
+                time: formatDateTime(viewing?.rev.created_at ?? null),
               })}
             </DialogTitle>
             <DialogDescription>
@@ -331,7 +385,7 @@ export function PropertiesPanel({
               viewMode === "code" ? (
                 <pre
                   data-testid="revision-view-code"
-                  className="max-h-[52vh] overflow-auto p-4 font-mono text-[12px] leading-relaxed whitespace-pre-wrap"
+                  className="max-h-[52vh] overflow-auto p-4 font-mono text-xs leading-relaxed whitespace-pre-wrap"
                 >
                   {viewing.raw}
                 </pre>
@@ -375,7 +429,7 @@ export function PropertiesPanel({
           <AlertDialogDescription>
             {t("restoreConfirmBody", {
               gen: confirming?.generation ?? 0,
-              time: confirming?.created_at.slice(0, 19) ?? "",
+              time: formatDateTime(confirming?.created_at ?? null),
             })}
           </AlertDialogDescription>
           <AlertDialogFooter>
@@ -399,11 +453,28 @@ export function PropertiesPanel({
 
 function SectionTitle({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <h3 className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-faint uppercase">
+    <h3 className="mb-1.5 flex items-center gap-1.5 text-meta font-semibold tracking-wide text-faint uppercase">
       <span>{icon}</span>
       {label}
     </h3>
   );
+}
+
+/** Server kinds ("note"/"text"/"script"/"binary") in UI words. */
+function kindLabel(t: (key: string) => string, kind: string | undefined): string {
+  if (kind === "note") return t("kindNote");
+  if (kind === "text") return t("kindText");
+  if (kind === "script") return t("kindScript");
+  if (kind === "binary") return t("kindBinary");
+  return kind ?? "-";
+}
+
+/** Server actions ("put"/"restore"/"trash") in UI words; unknown stays raw. */
+function actionLabel(t: (key: string) => string, action: string): string {
+  if (action === "put") return t("actionPut");
+  if (action === "restore") return t("actionRestore");
+  if (action === "trash") return t("actionTrash");
+  return action;
 }
 
 function formatSize(size: number): string {

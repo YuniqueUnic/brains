@@ -35,56 +35,17 @@ impl FsBlobStore {
 }
 
 impl BlobStore for FsBlobStore {
-    /// Stage the bytes to a temp file while hashing, verify the digest, then
+    /// Verify the digest and stage bytes to a temp file, then
     /// hard-link into place — `hard_link` fails on an existing target, which
     /// gives create-only semantics without a rename race.
     async fn create(&self, key: &str, content: &[u8], sha256_hex: &str) -> DomainResult<()> {
         let target = self.blob_path(key)?;
-        let dir = target
-            .parent()
-            .ok_or_else(|| DomainError::Internal(format!("blob key without parent: {key}")))?;
-        std::fs::create_dir_all(dir)
-            .map_err(|e| DomainError::StorageUnavailable(format!("blob dir: {e}")))?;
-        let temp = dir.join(format!(".staging-{}", uuid::Uuid::new_v4().simple()));
-        let write = || -> DomainResult<()> {
-            let mut hasher = Sha256::new();
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temp)
-                .map_err(|e| DomainError::StorageUnavailable(format!("blob staging: {e}")))?;
-            use std::io::Write;
-            // Hash in chunks to keep peak copies bounded for large attachments.
-            for chunk in content.chunks(1024 * 1024) {
-                hasher.update(chunk);
-                file.write_all(chunk)
-                    .and_then(|()| file.flush())
-                    .map_err(|e| DomainError::StorageUnavailable(format!("blob write: {e}")))?;
-            }
-            file.sync_all()
-                .map_err(|e| DomainError::StorageUnavailable(format!("blob fsync: {e}")))?;
-            let actual = hex::encode(hasher.finalize());
-            if actual != sha256_hex {
-                let _ = std::fs::remove_file(&temp);
-                return Err(DomainError::ChecksumMismatch {
-                    path: key.to_owned(),
-                });
-            }
-            Ok(())
-        };
-        write()?;
-        if let Err(e) = std::fs::hard_link(&temp, &target) {
-            let _ = std::fs::remove_file(&temp);
-            if e.kind() == std::io::ErrorKind::AlreadyExists {
-                return Err(DomainError::StorageUnavailable(format!(
-                    "immutable blob collision: {key}"
-                )));
-            }
-            return Err(DomainError::StorageUnavailable(format!("blob commit: {e}")));
+        if hex::encode(Sha256::digest(content)) != sha256_hex {
+            return Err(DomainError::ChecksumMismatch {
+                path: key.to_owned(),
+            });
         }
-        let _ = std::fs::remove_file(&temp);
-        crate::fsync_dir(dir)?;
-        Ok(())
+        crate::create_immutable(&target, content)
     }
 
     async fn get(&self, key: &str) -> DomainResult<Vec<u8>> {

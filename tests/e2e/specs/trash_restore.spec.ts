@@ -13,7 +13,7 @@ import { CreateNote, RewriteNote, SignIn } from "../screenplay/tasks/Authoring";
 import { OpenNote, ToggleTrash } from "../screenplay/tasks/Navigation";
 import { Workbench } from "../screenplay/screens/Workbench";
 import { EditorArea } from "../screenplay/screens/EditorArea";
-import { BannerText, EditorStatus, ListedFiles } from "../screenplay/questions/Views";
+import { EditorStatus, ListedFiles, ToastText } from "../screenplay/questions/Views";
 
 const SAVED = equals("已发布");
 
@@ -41,7 +41,7 @@ describe("trash and restore", () => {
     await actor.attemptsTo(
       ToggleTrash(),
       Click.on(Workbench.restoreButtonFor(path)),
-      Ensure.eventually(BannerText(), includes("已恢复"))
+      Ensure.eventually(ToastText(), includes("已恢复"))
         .timeoutAfter(Duration.ofSeconds(10)),
     );
   });
@@ -77,7 +77,7 @@ describe("trash and restore", () => {
       Click.on(
         PageElement.located(By.css('[data-testid="restore-revision-confirm-yes"]')),
       ),
-      Ensure.eventually(BannerText(), includes("已恢复"))
+      Ensure.eventually(ToastText(), includes("已恢复"))
         .timeoutAfter(Duration.ofSeconds(10)),
       Ensure.eventually(Text.of(EditorArea.content()), includes("第一版内容"))
         .timeoutAfter(Duration.ofSeconds(10)),

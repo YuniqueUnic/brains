@@ -11,6 +11,16 @@ export const EditorStatus = () => Text.of(EditorArea.status());
 export const BannerText = () => Text.of(Workbench.banner());
 
 /**
+ * All visible toast texts joined. Toasts stack (e.g. "moved to trash" and
+ * "restored" can coexist), so reading one locator races strict mode.
+ */
+export const ToastText = () =>
+  Question.about<string>("toast texts", async (actor) => {
+    const texts = await Text.ofAll(Workbench.toasts()).answeredBy(actor);
+    return texts.join("\n");
+  });
+
+/**
  * Sidebar paths currently listed, read as ONE container text. Reading items
  * one-by-one (`nth=0..N`) races a concurrent list update — a trashed file
  * vanishing mid-read leaves the last locator waiting forever (Playwright

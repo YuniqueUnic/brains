@@ -1,47 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Compartment, EditorState as CodeMirrorState } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers } from "@codemirror/view";
-import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import {
-  autocompletion,
-} from "@codemirror/autocomplete";
-import { tags } from "@lezer/highlight";
-import {
-  defaultKeymap,
-  history,
-  historyKeymap,
-  redo,
-  redoDepth,
-  undo,
-  undoDepth,
-} from "@codemirror/commands";
-import {
-  highlightSelectionMatches,
-  openSearchPanel,
-  search,
-  searchKeymap,
-} from "@codemirror/search";
-import { MergeView, unifiedMergeView } from "@codemirror/merge";
+import { EditorView, lineNumbers } from "@codemirror/view";
+import { autocompletion } from "@codemirror/autocomplete";
+import { unifiedMergeView } from "@codemirror/merge";
+import { openSearchPanel } from "@codemirror/search";
+import { redo, undo } from "@codemirror/commands";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import { createFindPanel, type FindPanelLabels } from "./editor/find-panel";
-import { fileCompletions, type CompletionFile } from "./editor/completions";
-import { referenceHover } from "./editor/reference-hover";
-import { Toggle } from "@base-ui-components/react/toggle";
-import { ToggleGroup } from "@base-ui-components/react/toggle-group";
-import { Switch } from "@base-ui-components/react/switch";
-import { Popover } from "@base-ui-components/react/popover";
-import { Settings2, Send } from "lucide-react";
 import {
   CopyPlus,
+  ChevronUp,
+  ChevronDown,
   Eye,
   FileDiff,
-  GitMerge,
   Info,
   MoreHorizontal,
   Redo2,
   Search,
+  Send,
   Sparkles,
   SquarePen,
   Trash2,
@@ -49,233 +25,53 @@ import {
   WrapText,
 } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
+import { Toggle } from "@base-ui-components/react/toggle";
 import { useTranslation } from "react-i18next";
 import { api, ApiError } from "../api/client";
 import { toast } from "sonner";
 import { Button } from "./ui/button";
-import { SaveIndicator, type SaveTone } from "./SaveIndicator";
+import { SaveIndicator } from "./SaveIndicator";
 import { Tooltip } from "./ui/tooltip";
 import { menuItemClass, menuPopupClass, MenuShortcut } from "./ui/menu";
 import { SliderRow } from "./ui/slider-row";
+import { ToggleGroupSection } from "./shell/toggle-section";
+import { fileCompletions, type CompletionFile } from "./editor/completions";
+import { referenceHover } from "./editor/reference-hover";
+import { MarkdownToolbar } from "./editor/markdown-toolbar";
+import { ConflictView } from "./editor/conflict-view";
+import { SaveAsDialog } from "./editor/save-as-dialog";
+import { invalidatePreview } from "./properties/preview";
+import { EditorSettingsPopover } from "./editor/editor-settings-popover";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "./ui/dialog";
-import { Input } from "./ui/input";
-import { cn } from "../lib/utils";
+  baseExtensions,
+  currentDoc,
+  docKey,
+  findPanelLabels,
+  freshEditorState,
+  statusLabel,
+  statusTone,
+  type EditorState,
+} from "./editor/editor-core";
+import {
+  clearDraft,
+  DRAFT_LIMIT,
+  flushDrafts,
+  loadEditorSettings,
+  readDraft,
+  saveEditorSettings,
+  writeDraft,
+  type EditorSettings,
+} from "./editor/editor-settings";
 
 /*
- * Editor (DESIGN.md §26-34): the document is the star — 860px measure (CSS),
- * document typography, restrained markdown highlighting. Chrome is one quiet
- * toolbar: undo/redo, find, diff, publish; everything else lives in ⋯.
- * Draft/publish model: typing keeps a LOCAL draft (debounced localStorage,
- * crash-safe); ⌘S stashes it; only 发布 (button / ⌘⏎) writes a new revision.
- * State machine (design §13.2): loading → clean → dirty → saving
- * → clean | conflict | error.
+ * Editor pane (DESIGN.md §26-34): the document is the star. One quiet
+ * toolbar (undo/redo, find, diff, publish), an optional markdown formatting
+ * row under it, and the ⋯ menu for the rest. Shared machinery lives in
+ * editor/editor-core (state machine, extensions) and editor/editor-settings
+ * (preferences, crash-safe drafts); the conflict merge view is
+ * editor/conflict-view. Draft/publish model: typing keeps a LOCAL draft;
+ * ⌘S stashes it; only 发布 (button / ⌘⏎) writes a new revision.
  */
-export type EditorState =
-  | { kind: "empty" }
-  | { kind: "loading"; path: string }
-  | {
-      kind: "clean" | "dirty" | "error";
-      path: string;
-      text: string;
-      baseText: string;
-      baseRevision: string;
-      message?: string;
-    }
-  | {
-      kind: "saving";
-      path: string;
-      /** Keystrokes during the flight buffer here; the closure's `current.text` is what was sent. */
-      text: string;
-      baseText: string;
-      baseRevision: string;
-      operationId: string;
-    }
-  | {
-      kind: "conflict";
-      path: string;
-      localText: string;
-      baseText: string;
-      remoteRevision: string;
-      remoteText: string;
-      /** Latest failure inside the conflict view (kept local, network…). */
-      notice?: string;
-    };
-
-function freshEditorState(path: string, text: string, baseRevision: string): EditorState {
-  return { kind: "clean", path, text, baseText: text, baseRevision };
-}
-
-/* Editor preferences (fonts are independent of the UI font): persisted,
- * applied through compartments so the view never rebuilds. */
-export interface EditorSettings {
-  lineNumbers: boolean;
-  wrap: boolean;
-  font: "sans" | "serif" | "mono";
-  /** Percent, 100 = the 15px document base. */
-  scale: number;
-}
-
-const EDITOR_DEFAULTS: EditorSettings = { lineNumbers: false, wrap: true, font: "sans", scale: 100 };
-const EDITOR_KEY = "brains-editor";
-
-function loadEditorSettings(): EditorSettings {
-  try {
-    const raw = localStorage.getItem(EDITOR_KEY);
-    if (raw) return { ...EDITOR_DEFAULTS, ...(JSON.parse(raw) as Partial<EditorSettings>) };
-  } catch {
-    /* ignore malformed state */
-  }
-  return EDITOR_DEFAULTS;
-}
-
-function saveEditorSettings(settings: EditorSettings) {
-  try {
-    localStorage.setItem(EDITOR_KEY, JSON.stringify(settings));
-  } catch {
-    /* best-effort */
-  }
-}
-
-/* --- Unsaved-buffer drafts (crash/refresh safety) ------------------------- */
-/* Every dirty buffer is debounce-persisted to localStorage keyed by path;
- * reopening the file adopts the draft as dirty content with a discard
- * action. Cleared when the buffer returns to clean (save, revert, take
- * remote). Best-effort only — quota errors are swallowed. */
-
-const DRAFT_PREFIX = "brains-draft:";
-const DRAFT_LIMIT = 500_000;
-
-interface EditorDraft {
-  text: string;
-  at: number;
-}
-
-const draftPending = new Map<string, { text: string; timer: number }>();
-
-function writeDraft(path: string, text: string) {
-  const pending = draftPending.get(path);
-  if (pending) window.clearTimeout(pending.timer);
-  const timer = window.setTimeout(() => {
-    draftPending.delete(path);
-    try {
-      if (text.length <= DRAFT_LIMIT) {
-        localStorage.setItem(
-          DRAFT_PREFIX + path,
-          JSON.stringify({ text, at: Date.now() } satisfies EditorDraft),
-        );
-      }
-    } catch {
-      /* quota or unavailable — drafts are best-effort */
-    }
-  }, 600);
-  draftPending.set(path, { text, timer });
-}
-
-function clearDraft(path: string) {
-  const pending = draftPending.get(path);
-  if (pending) {
-    window.clearTimeout(pending.timer);
-    draftPending.delete(path);
-  }
-  try {
-    localStorage.removeItem(DRAFT_PREFIX + path);
-  } catch {
-    /* ignore */
-  }
-}
-
-function readDraft(path: string): EditorDraft | null {
-  try {
-    const raw = localStorage.getItem(DRAFT_PREFIX + path);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as EditorDraft;
-    return typeof parsed?.text === "string" && typeof parsed?.at === "number" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-/** Flush debounce-pending drafts synchronously (unload / tab hide). */
-function flushDrafts() {
-  for (const [path, pending] of draftPending) {
-    window.clearTimeout(pending.timer);
-    try {
-      if (pending.text.length <= DRAFT_LIMIT) {
-        localStorage.setItem(
-          DRAFT_PREFIX + path,
-          JSON.stringify({ text: pending.text, at: Date.now() } satisfies EditorDraft),
-        );
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  draftPending.clear();
-}
-
-/* Markdown highlighting (DESIGN.md §31): near-monochrome, quiet accents. */
-const markdownHighlights = HighlightStyle.define([
-  { tag: tags.heading1, fontWeight: "650", fontSize: "1.7em", lineHeight: "1.4" },
-  { tag: tags.heading2, fontWeight: "630", fontSize: "1.35em", lineHeight: "1.45" },
-  { tag: tags.heading3, fontWeight: "600", fontSize: "1.12em" },
-  { tag: tags.heading4, fontWeight: "600" },
-  { tag: tags.strong, fontWeight: "620" },
-  { tag: tags.emphasis, fontStyle: "italic" },
-  { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--muted-foreground)" },
-  { tag: tags.link, color: "var(--primary)", textDecoration: "underline" },
-  { tag: tags.url, color: "var(--muted-foreground)" },
-  { tag: tags.monospace, class: "cm-md-code" },
-  { tag: tags.quote, color: "var(--muted-foreground)", fontStyle: "italic" },
-  { tag: tags.processingInstruction, color: "var(--faint-foreground)" },
-  { tag: tags.meta, color: "var(--faint-foreground)" },
-  { tag: [tags.keyword, tags.atom, tags.bool], color: "var(--primary)" },
-  { tag: tags.comment, color: "var(--faint-foreground)" },
-  { tag: [tags.string, tags.number], color: "color-mix(in srgb, var(--foreground) 78%, var(--primary))" },
-]);
-
-function findPanelLabels(t: (key: string) => string): FindPanelLabels {
-  return {
-    find: t("findPlaceholder"),
-    replace: t("replacePlaceholder"),
-    replaceButton: t("replaceAction"),
-    replaceAllButton: t("replaceAllAction"),
-    previous: t("findPrevious"),
-    next: t("findNext"),
-    close: t("close"),
-    caseSensitive: t("matchCase"),
-    useRegex: t("useRegex"),
-    toggleReplace: t("toggleReplace"),
-  };
-}
-
-function baseExtensions(
-  onDocChange: (text: string) => void,
-  onHistoryChange: (canUndo: boolean, canRedo: boolean) => void,
-  findLabels: () => FindPanelLabels,
-) {
-  return [
-    markdown({ base: markdownLanguage }),
-    syntaxHighlighting(markdownHighlights),
-    // Wrapping is owned by wrapComp (the preference must be able to turn it
-    // off) — no static EditorView.lineWrapping here.
-    history(),
-    search({ top: true, createPanel: (view) => createFindPanel(findLabels())(view) }),
-    highlightSelectionMatches(),
-    keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-    EditorView.updateListener.of((update) => {
-      if (update.docChanged) onDocChange(update.state.doc.toString());
-      onHistoryChange?.(undoDepth(update.state) > 0, redoDepth(update.state) > 0);
-    }),
-  ];
-}
-
 export default function EditorPane({
   state,
   onChange,
@@ -307,6 +103,7 @@ export default function EditorPane({
   const viewRef = useRef<EditorView | null>(null);
   const stateRef = useRef<EditorState>(state);
   stateRef.current = state;
+  const [viewInstance, setViewInstance] = useState<EditorView | null>(null);
   const [diffOpen, setDiffOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"source" | "preview">("source");
   const [undoPossible, setUndoPossible] = useState(false);
@@ -324,6 +121,7 @@ export default function EditorPane({
   const lineNumComp = useRef(new Compartment());
   const wrapComp = useRef(new Compartment());
   const completionsComp = useRef(new Compartment());
+  const previewLabels = { loading: t("previewLoading"), unavailable: t("previewUnavailable") };
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -355,6 +153,12 @@ export default function EditorPane({
       setRedoPossible((prev) => (prev === canRedo ? prev : canRedo));
     };
     const initialSettings = loadEditorSettings();
+    const completionExtensions = completions
+      ? [
+          autocompletion({ override: [fileCompletions(completions, onOpenReference, previewLabels)] }),
+          referenceHover(completions, onOpenReference, previewLabels),
+        ]
+      : [];
     const view = new EditorView({
       parent: hostRef.current,
       state: CodeMirrorState.create({
@@ -366,21 +170,12 @@ export default function EditorPane({
           diffCompartment.current.of([]),
           lineNumComp.current.of(initialSettings.lineNumbers ? lineNumbers() : []),
           wrapComp.current.of(initialSettings.wrap ? EditorView.lineWrapping : []),
-          completionsComp.current.of(
-            completions
-              ? [
-                  autocompletion({ override: [fileCompletions(completions)] }),
-                  referenceHover(completions, onOpenReference, {
-                    loading: t("previewLoading"),
-                    unavailable: t("previewUnavailable"),
-                  }),
-                ]
-              : [],
-          ),
+          completionsComp.current.of(completionExtensions),
         ],
       }),
     });
     viewRef.current = view;
+    setViewInstance(view);
     // Unsaved buffers survive tab close and crashes through their drafts.
     const flush = () => flushDrafts();
     window.addEventListener("beforeunload", flush);
@@ -440,11 +235,12 @@ export default function EditorPane({
     }
 
     // Text typed while NO file was bound to the editor (the 新建 dialog is
-    // still committing) belongs to the user, not to the state replacing it:
-    // adopt it onto the freshly created base instead of wiping it. Loading
-    // transitions resync normally — that buffer belongs to another file.
+    // still committing, or a slow file is still loading) belongs to the
+    // user, not to the state replacing it: adopt it onto the freshly created
+    // base instead of wiping it.
     const viewText = view.state.doc.toString();
-    const typedBlind = previous.state.kind === "empty";
+    const typedBlind =
+      previous.state.kind === "empty" || previous.state.kind === "loading";
     if (
       typedBlind &&
       viewText !== "" &&
@@ -539,16 +335,14 @@ export default function EditorPane({
         completionsComp.current.reconfigure(
           completions
             ? [
-                autocompletion({ override: [fileCompletions(completions)] }),
-                referenceHover(completions, onOpenReference, {
-                  loading: t("previewLoading"),
-                  unavailable: t("previewUnavailable"),
-                }),
+                autocompletion({ override: [fileCompletions(completions, onOpenReference, previewLabels)] }),
+                referenceHover(completions, onOpenReference, previewLabels),
               ]
             : [],
         ),
       ],
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.lineNumbers, settings.wrap, completions, onOpenReference, t]);
 
   /**
@@ -601,6 +395,11 @@ export default function EditorPane({
             };
       onStateChange(next);
       stateRef.current = next;
+      // The published text is canonical: any stored draft for this path is
+      // stale by definition — dropping it keeps the doc-key resync from
+      // resurrecting content the user already deleted.
+      clearDraft(current.path);
+      invalidatePreview(current.path);
     } catch (error) {
       if (!stillMine()) return;
       // An expired session is not a retryable editor error — hand it up so
@@ -659,6 +458,14 @@ export default function EditorPane({
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
       const meta = event.metaKey || event.ctrlKey;
+      // A modal owns ⌘S/⌘⏎: publishing or toasting from behind a dialog
+      // double-fires whatever the dialog is confirming.
+      if (
+        meta &&
+        (event.target as HTMLElement | null)?.closest?.('[role="dialog"], [role="alertdialog"]')
+      ) {
+        return;
+      }
       if (meta && event.key.toLowerCase() === "s") {
         event.preventDefault();
         stashDraft();
@@ -672,29 +479,10 @@ export default function EditorPane({
   }, [publish, stashDraft]);
 
   const [saveAsOpen, setSaveAsOpen] = useState(false);
-  const [saveAsPath, setSaveAsPath] = useState("");
   const openSaveAs = () => {
     const current = stateRef.current;
     if (current.kind !== "clean" && current.kind !== "dirty") return;
-    setSaveAsPath(current.path);
     setSaveAsOpen(true);
-  };
-  const commitSaveAs = async () => {
-    const current = stateRef.current;
-    const path = saveAsPath.trim();
-    if (current.kind !== "clean" && current.kind !== "dirty") return;
-    if (!path) return;
-    try {
-      const result = await api.saveText(path, current.text, { mode: "create" });
-      setSaveAsOpen(false);
-      onStateChange(freshEditorState(result.path, current.text, result.revision));
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        onAuthLost?.();
-        return;
-      }
-      toast.error(error instanceof Error ? error.message : String(error));
-    }
   };
 
   const openFind = () => {
@@ -750,32 +538,18 @@ export default function EditorPane({
         />
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-0.5">
-            <ToggleGroup
-              value={[viewMode]}
-              onValueChange={(groupValue) =>
-                setViewMode((groupValue[groupValue.length - 1] ?? "source") as "source" | "preview")
-              }
+            <ToggleGroupSection
+              compactOnMobile
+              value={viewMode}
+              onChange={(next) => setViewMode(next as "source" | "preview")}
               className="mr-1 flex items-center gap-0.5 rounded-[7px] border p-0.5"
-            >
-              <Toggle
-                value="source"
-                aria-label={t("modeSource")}
-                className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-              >
-                <SquarePen className="size-3.5 stroke-[1.5]" />
-                {t("modeSource")}
-              </Toggle>
-              <Toggle
-                value="preview"
-                aria-label={t("modePreview")}
-                className="flex h-6 cursor-pointer items-center gap-1 rounded-md px-2 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-              >
-                <Eye className="size-3.5 stroke-[1.5]" />
-                {t("modePreview")}
-              </Toggle>
-            </ToggleGroup>
+              options={[
+                { value: "source", label: t("modeSource"), icon: <SquarePen className="size-3.5 stroke-[1.5]" /> },
+                { value: "preview", label: t("modePreview"), icon: <Eye className="size-3.5 stroke-[1.5]" /> },
+              ]}
+            />
             {viewMode === "source" && (
-              <>
+              <div className="hidden items-center gap-0.5 sm:flex">
             <Tooltip content={t("undoTooltip")}>
               <Button
                 size="icon"
@@ -813,18 +587,27 @@ export default function EditorPane({
                 <FileDiff />
               </Button>
             </Tooltip>
-            </>
+              </div>
+            )}
+            {viewMode === "source" && (
+              <Tooltip content={t("toolbarToggle")}>
+                <Button size="icon" aria-label={t("toolbarToggle")} aria-expanded={settings.toolbar}
+                  data-testid="markdown-toolbar-toggle" onClick={() => updateSettings({ toolbar: !settings.toolbar })}>
+                  {settings.toolbar ? <ChevronUp /> : <ChevronDown />}
+                </Button>
+              </Tooltip>
             )}
             <Button
+              aria-label={t("publish")}
               variant="default"
               data-testid="publish-button"
-              className="ml-1"
+              className="ml-1 w-8 px-0 sm:w-auto sm:px-3"
               disabled={state.kind !== "dirty" && state.kind !== "error"}
               onClick={() => void publish()}
             >
               <Send />
-              {t("publish")}
-              <MenuShortcut>⌘⏎</MenuShortcut>
+              <span className="hidden sm:inline">{t("publish")}</span>
+              <span className="hidden sm:inline"><MenuShortcut>⌘⏎</MenuShortcut></span>
             </Button>
             <Menu.Root>
               <Menu.Trigger
@@ -837,6 +620,12 @@ export default function EditorPane({
               <Menu.Portal>
                 <Menu.Positioner sideOffset={4} align="end">
                   <Menu.Popup className={menuPopupClass}>
+                    {viewMode === "source" && <div className="sm:hidden">
+                      <Menu.Item className={menuItemClass()} disabled={!undoPossible} onClick={runUndo}><Undo2 className="size-4" />{t("undoTooltip")}</Menu.Item>
+                      <Menu.Item className={menuItemClass()} disabled={!redoPossible} onClick={runRedo}><Redo2 className="size-4" />{t("redoTooltip")}</Menu.Item>
+                      <Menu.Item className={menuItemClass()} onClick={openFind}><Search className="size-4" />{t("searchTooltip")}</Menu.Item>
+                      <Menu.Item className={menuItemClass()} disabled={!canDiff && !diffOpen} onClick={() => setDiffOpen((value) => !value)}><FileDiff className="size-4" />{t("diffTooltip")}</Menu.Item>
+                    </div>}
                     {state.kind === "clean" || state.kind === "dirty" ? (
                       <Menu.Item className={menuItemClass()} onClick={openSaveAs}>
                         <CopyPlus className="size-4 stroke-[1.5] text-muted-foreground" />
@@ -860,7 +649,7 @@ export default function EditorPane({
             <EditorSettingsPopover settings={settings} onChange={updateSettings} />
             {onOpenProperties && (
               <Tooltip content={`${t("properties")}（⌘I）`}>
-                <Button size="icon" aria-label={t("properties")} onClick={onOpenProperties}>
+                <Button className="hidden sm:inline-flex" size="icon" aria-label={t("properties")} onClick={onOpenProperties}>
                   <Info />
                 </Button>
               </Tooltip>
@@ -868,6 +657,10 @@ export default function EditorPane({
           </div>
         )}
       </div>
+
+      {!inConflict && state.kind !== "empty" && viewMode === "source" && settings.toolbar && (
+        <MarkdownToolbar view={viewInstance} />
+      )}
 
       <div
         className="relative min-h-0 flex-1"
@@ -898,21 +691,23 @@ export default function EditorPane({
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-muted-foreground">
             <Sparkles className="size-5 stroke-[1.25] opacity-50" />
             <div className="text-center">
-              <p className="text-[13px] text-foreground/80">{t("emptyTitle")}</p>
+              <p className="text-body text-foreground/80">{t("emptyTitle")}</p>
               <p className="mt-1 text-xs">{t("emptyState")}</p>
             </div>
           </div>
         )}
       </div>
 
-      <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-[11px] text-faint">
-        <span className="font-mono">
-          {t("stats", {
-            chars: stats.chars,
-            words: stats.words,
-            lines: stats.lines,
-          })}
-        </span>
+      <div className="flex shrink-0 items-center gap-3 border-t px-3 py-1.5 text-meta text-faint">
+        {state.kind !== "empty" && state.kind !== "loading" && (
+          <span className="min-w-0 truncate font-mono">
+            {t("stats", {
+              chars: stats.chars,
+              words: stats.words,
+              lines: stats.lines,
+            })}
+          </span>
+        )}
         <span className="flex-1" />
         {inConflict || state.kind === "empty" ? null : (
           <div className="flex items-center gap-2">
@@ -926,7 +721,7 @@ export default function EditorPane({
               resetLabel={t("scaleReset")}
               onChange={(scale) => updateSettings({ scale })}
               onReset={() => updateSettings({ scale: 100 })}
-              className="w-40"
+              className="w-28 sm:w-40"
             />
             <Tooltip content={settings.wrap ? t("wrapLabel") : t("overflowLabel")}>
               <Toggle
@@ -940,423 +735,24 @@ export default function EditorPane({
             </Tooltip>
           </div>
         )}
-        <span className="font-mono">
+        <span className="hidden font-mono sm:inline">
           {inConflict || state.kind === "empty" || state.kind === "loading"
             ? null
             : t("revLabel", { revision: state.baseRevision.slice(0, 8) })}
         </span>
       </div>
 
-      <Dialog open={saveAsOpen} onOpenChange={setSaveAsOpen}>
-        <DialogContent data-testid="save-as-dialog">
-          <DialogHeader>
-            <DialogTitle>{t("saveAs")}</DialogTitle>
-            <DialogDescription>{t("saveAsPrompt")}</DialogDescription>
-          </DialogHeader>
-          <div className="pt-4">
-            <Input
-              data-testid="save-as-path"
-              value={saveAsPath}
-              onChange={(event) => setSaveAsPath(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void commitSaveAs();
-              }}
-              autoFocus
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSaveAsOpen(false)}>
-              {t("close")}
-            </Button>
-            <Button variant="default" data-testid="save-as-confirm" onClick={() => void commitSaveAs()}>
-              {t("publish")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SaveAsDialog
+        open={saveAsOpen}
+        onOpenChange={setSaveAsOpen}
+        defaultPath={state.kind === "empty" || state.kind === "loading" ? "" : state.path}
+        currentText={buffer}
+        onSaved={(result) => {
+          clearDraft(result.path);
+          onStateChange(freshEditorState(result.path, buffer, result.revision));
+        }}
+        onAuthLost={onAuthLost}
+      />
     </div>
   );
-}
-
-/**
- * Editor preferences popover (line numbers, wrap, font family, scale).
- * The editor font is independent of the UI font.
- */
-function EditorSettingsPopover({
-  settings,
-  onChange,
-}: {
-  settings: EditorSettings;
-  onChange: (patch: Partial<EditorSettings>) => void;
-}) {
-  const { t } = useTranslation("editor");
-  return (
-    <Popover.Root>
-      <Popover.Trigger
-        render={<Button size="icon" aria-label={t("settingsLabel")} data-testid="editor-settings" />}
-      >
-        <Settings2 />
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner align="end" sideOffset={6}>
-          <Popover.Popup className="z-50 w-[248px] rounded-[10px] border bg-card p-3 text-[12.5px] shadow-menu overlay-in">
-            <div className="flex items-center justify-between py-1.5">
-              <span>{t("lineNumbersLabel")}</span>
-              <Switch.Root
-                checked={settings.lineNumbers}
-                onCheckedChange={(checked) => onChange({ lineNumbers: checked === true })}
-                className="relative h-5 w-8 cursor-pointer rounded-full bg-muted transition-colors data-[checked]:bg-primary"
-              >
-                <Switch.Thumb className="absolute left-0.5 top-0.5 size-4 rounded-full bg-card shadow transition-transform data-[checked]:translate-x-3" />
-              </Switch.Root>
-            </div>
-            <div className="flex items-center justify-between py-1.5">
-              <span>{t("wrapLabel")}</span>
-              <Switch.Root
-                checked={settings.wrap}
-                onCheckedChange={(checked) => onChange({ wrap: checked === true })}
-                className="relative h-5 w-8 cursor-pointer rounded-full bg-muted transition-colors data-[checked]:bg-primary"
-              >
-                <Switch.Thumb className="absolute left-0.5 top-0.5 size-4 rounded-full bg-card shadow transition-transform data-[checked]:translate-x-3" />
-              </Switch.Root>
-            </div>
-            <div className="flex items-center justify-between py-1.5">
-              <span>{t("fontLabel")}</span>
-              <ToggleGroup
-                value={[settings.font]}
-                onValueChange={(groupValue) =>
-                  onChange({ font: (groupValue[groupValue.length - 1] ?? "sans") as EditorSettings["font"] })
-                }
-                className="flex items-center gap-0.5 rounded-md border p-0.5"
-              >
-                {(
-                  [
-                    ["sans", t("fontSans")],
-                    ["serif", t("fontSerif")],
-                    ["mono", t("fontMono")],
-                  ] as const
-                ).map(([value, label]) => (
-                  <Toggle
-                    key={value}
-                    value={value}
-                    aria-label={label}
-                    className="cursor-pointer rounded px-1.5 py-0.5 text-[10.5px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground data-[pressed]:bg-selected data-[pressed]:text-foreground"
-                  >
-                    {label}
-                  </Toggle>
-                ))}
-              </ToggleGroup>
-            </div>
-            <div className="py-1.5">
-              <SliderRow
-                label={t("scaleLabel")}
-                value={settings.scale}
-                min={80}
-                max={160}
-                step={5}
-                suffix="%"
-                resetLabel={t("scaleReset")}
-                onChange={(scale) => onChange({ scale })}
-                onReset={() => onChange({ scale: 100 })}
-              />
-            </div>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
-  );
-}
-
-type ConflictMode = "split" | "inline";
-
-/**
- * Conflict resolution with VSCode-style diff views: "split" shows remote and
- * local side-by-side with synced chunk highlights; "inline" shows the local
- * buffer against the remote original with per-chunk accept/reject. The merge
- * editor owns the buffer while the conflict is open — text typed here flows
- * back into `localText` through the same state machine.
- */
-function ConflictView({
-  state,
-  stateRef,
-  onChange,
-  onAuthLost,
-}: {
-  state: Extract<EditorState, { kind: "conflict" }>;
-  stateRef: React.RefObject<EditorState>;
-  onChange: (next: EditorState) => void;
-  onAuthLost?: () => void;
-}) {
-  const { t } = useTranslation("editor");
-  const [mode, setMode] = useState<ConflictMode>("split");
-  const hostRef = useRef<HTMLDivElement | null>(null);
-  const onChangeRef = useRef(onChange);
-  onChangeRef.current = onChange;
-
-  // True while THIS conflict still owns the editor (the human may have
-  // opened another file while the request was in flight).
-  const stillMine = () =>
-    stateRef.current.kind === "conflict" &&
-    stateRef.current.path === state.path &&
-    stateRef.current.remoteRevision === state.remoteRevision;
-
-  useEffect(() => {
-    const parent = hostRef.current;
-    if (!parent) return;
-    const onDocChange = (text: string) => {
-      const current = stateRef.current;
-      if (
-        current.kind === "conflict" &&
-        current.path === state.path &&
-        current.remoteRevision === state.remoteRevision &&
-        current.localText !== text
-      ) {
-        onChangeRef.current({ ...current, localText: text });
-      }
-    };
-    if (mode === "inline") {
-      const view = new EditorView({
-        parent,
-        state: CodeMirrorState.create({
-          doc: state.localText,
-          extensions: [
-            ...baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
-            EditorView.lineWrapping,
-            unifiedMergeView({
-              original: state.remoteText,
-              mergeControls: true,
-              highlightChanges: true,
-              gutter: true,
-              allowInlineDiffs: true,
-              collapseUnchanged: { margin: 3, minSize: 8 },
-            }),
-          ],
-        }),
-      });
-      return () => view.destroy();
-    }
-    const merge = new MergeView({
-      a: {
-        doc: state.remoteText,
-        extensions: [
-          markdown({ base: markdownLanguage }),
-          EditorView.lineWrapping,
-          EditorView.editable.of(false),
-        ],
-      },
-      b: {
-        doc: state.localText,
-        extensions: [
-          ...baseExtensions(onDocChange, () => undefined, () => findPanelLabels(t)),
-          EditorView.lineWrapping,
-        ],
-      },
-      parent,
-      highlightChanges: true,
-      gutter: true,
-      collapseUnchanged: { margin: 3, minSize: 8 },
-    });
-    return () => merge.destroy();
-    // Rebuild only on mode or conflict identity change: the merge editors
-    // own the buffer text in between (prop pushes would clobber typing).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, state.path, state.remoteRevision]);
-
-  const saveWithRemoteBase = async () => {
-    const current = stateRef.current;
-    const localText = current.kind === "conflict" ? current.localText : state.localText;
-    try {
-      const result = await api.saveText(state.path, localText, {
-        mode: "update",
-        baseRevision: state.remoteRevision,
-      });
-      if (!stillMine()) return;
-      onChange(freshEditorState(state.path, localText, result.revision));
-    } catch (error) {
-      if (!stillMine()) return;
-      if (error instanceof ApiError && error.status === 401) {
-        onAuthLost?.();
-        return;
-      }
-      if (error instanceof ApiError && error.status === 412) {
-        const nextRevision = error.currentRevision ?? state.remoteRevision;
-        let remoteText = state.remoteText;
-        let notice: string | undefined;
-        try {
-          remoteText = (await api.readText(state.path)).text;
-        } catch {
-          // Never pair a NEW revision with the STALE text the human compared:
-          // keep the old pair together and say why (design §13.2).
-          notice = t("conflictReReadFailed");
-        }
-        onChange({
-          ...state,
-          remoteRevision: notice ? state.remoteRevision : nextRevision,
-          remoteText,
-          notice,
-        });
-        return;
-      }
-      onChange({
-        ...state,
-        notice: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
-
-  const takeRemote = () => {
-    onChange({
-      kind: "clean",
-      path: state.path,
-      text: state.remoteText,
-      baseText: state.remoteText,
-      baseRevision: state.remoteRevision,
-    });
-  };
-
-  const remoteUsable = state.remoteRevision !== "(unknown)";
-
-  return (
-    <div
-      className="absolute inset-0 z-10 flex flex-col gap-1.5 border-b"
-      data-testid="conflict-view"
-      style={{
-        borderColor: "color-mix(in srgb, var(--warning) 30%, var(--border))",
-        backgroundColor: "color-mix(in srgb, var(--warning) 6%, var(--card))",
-      }}
-    >
-      <div className="flex items-start gap-2 px-3 pt-2.5">
-        <GitMerge className="mt-0.5 size-4 shrink-0 stroke-[1.5]" style={{ color: "var(--warning)" }} />
-        <div className="min-w-0 flex-1">
-          <p className="text-[12.5px] font-semibold">{t("conflictTitle")}</p>
-          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-            {t("conflictDesc", { revision: state.remoteRevision.slice(0, 8) })}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5 rounded-md border bg-card p-0.5">
-          <ModeChip active={mode === "split"} onClick={() => setMode("split")}>
-            {t("conflictModeSplit")}
-          </ModeChip>
-          <ModeChip active={mode === "inline"} onClick={() => setMode("inline")}>
-            {t("conflictModeInline")}
-          </ModeChip>
-        </div>
-      </div>
-      {state.notice && (
-        <p
-          className="mx-3 rounded-md px-2.5 py-1.5 text-xs"
-          role="alert"
-          style={{
-            backgroundColor: "color-mix(in srgb, var(--destructive) 8%, transparent)",
-            color: "color-mix(in srgb, var(--destructive) 80%, var(--foreground))",
-          }}
-        >
-          {state.notice}
-        </p>
-      )}
-      <div className="min-h-0 flex-1 px-3">
-        <div
-          ref={hostRef}
-          className="h-full overflow-hidden rounded-md border bg-card [&_.cm-editor]:h-full"
-        />
-      </div>
-      <div className="flex shrink-0 items-center justify-end gap-2 px-3 py-2">
-        <Button variant="secondary" data-testid="conflict-keep-local" onClick={() => void saveWithRemoteBase()}>
-          {t("conflictKeepLocal")}
-        </Button>
-        <Button
-          variant="outline"
-          data-testid="conflict-take-remote"
-          onClick={takeRemote}
-          disabled={!remoteUsable}
-          title={remoteUsable ? undefined : t("conflictRemoteUnreadable")}
-        >
-          {t("conflictTakeRemote")}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function ModeChip({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "cursor-pointer rounded px-2 py-1 text-[10.5px] font-medium transition-colors",
-        active
-          ? "bg-primary/12 text-primary ring-1 ring-primary/30"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground",
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-/** Traffic-light tone for the publish capsule; labels stay the e2e contract. */
-function statusTone(state: EditorState): SaveTone {
-  switch (state.kind) {
-    case "empty":
-    case "loading":
-      return "neutral";
-    case "clean":
-      return "saved";
-    case "saving":
-    case "dirty":
-      return "pending";
-    case "conflict":
-    case "error":
-      return "error";
-  }
-}
-
-/** Draft/publish model: clean = everything published; dirty = local draft. */
-function statusLabel(state: EditorState, t: (key: string) => string): string {
-  switch (state.kind) {
-    case "empty":
-      return t("statusEmpty");
-    case "loading":
-      return t("statusLoading");
-    case "clean":
-      return t("statusSaved");
-    case "dirty":
-      return t("statusDirty");
-    case "saving":
-      return t("statusSaving");
-    case "conflict":
-      return t("statusConflict");
-    case "error":
-      return state.message ?? t("statusFailed");
-  }
-}
-
-function currentDoc(state: EditorState): string {
-  if (state.kind === "empty" || state.kind === "loading") return "";
-  if (state.kind === "conflict") return state.localText;
-  return state.text;
-}
-
-function docKey(state: EditorState): string {
-  // Re-sync the CodeMirror doc when the underlying version identity changes
-  // (file switch, conflict resolution, restore) but not on every keystroke.
-  switch (state.kind) {
-    case "empty":
-      return "empty";
-    case "loading":
-      return `loading:${state.path}`;
-    case "conflict":
-      return `conflict:${state.path}:${state.remoteRevision}`;
-    default:
-      return `edit:${state.path}:${state.baseRevision}`;
-  }
 }
