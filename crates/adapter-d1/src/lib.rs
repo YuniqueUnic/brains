@@ -1,15 +1,15 @@
 //! D1 derived index (design §9.2, §10). The schema and bounded queries come
-//! from `migrations/*.sql` at the repository root — byte-identical to the
-//! SQLite adapter — so the two index backends cannot drift. Schema objects
+//! from `migrations/*.sql` at the repository root. The projection upsert
+//! and literal scan are shared with the native Turso adapter. Schema objects
 //! are applied by `wrangler d1 migrations apply` (all statements are
 //! idempotent); this adapter only runs queries.
 
+use brains_domain::path::normalize_prefix;
 use std::future::Future;
 
 use brains_domain::{DomainError, DomainResult, FileKind};
 use brains_ports::{
     FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow,
-    prefix_upper_bound,
 };
 use wasm_bindgen::JsValue;
 use worker::D1Database;
@@ -222,16 +222,14 @@ impl IndexStore for D1Index {
 
     fn scan_literal(
         &self,
-        lower: &str,
-        upper: Option<&str>,
+        prefix: Option<&str>,
         after: &str,
         limit: usize,
         query: &str,
         tag: Option<&str>,
     ) -> impl Future<Output = DomainResult<Vec<LiteralRow>>> + Send {
         let db = &self.db;
-        let lower = lower.to_owned();
-        let upper = upper.map(str::to_owned);
+        let prefix = normalize_prefix(prefix).map(str::to_owned);
         let after = after.to_owned();
         let query = query.to_owned();
         let tag = tag.map(str::to_owned);
@@ -246,8 +244,7 @@ impl IndexStore for D1Index {
                 "literal window",
                 LITERAL_WINDOW_SQL,
                 &[
-                    js_str(&lower),
-                    js_opt(upper.as_deref()),
+                    js_opt(prefix.as_deref()),
                     js_str(&after),
                     js_num(limit as i64),
                     js_str(&query),
@@ -270,19 +267,17 @@ impl IndexStore for D1Index {
     fn search_fts(
         &self,
         query: &str,
-        lower: &str,
-        upper: Option<&str>,
+        prefix: Option<&str>,
         tag: Option<&str>,
         offset: usize,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<(String, String, String)>>> + Send {
         let db = &self.db;
         let query = query.to_owned();
-        let lower = lower.to_owned();
-        let upper = upper.map(str::to_owned);
+        let prefix = normalize_prefix(prefix).map(str::to_owned);
         let tag = tag.map(str::to_owned);
         SendFuture::new(async move {
-            // Mirrors the SQLite adapter: path and tag bounds are explicit
+            // Path and tag bounds are explicit
             // SQL branches, and a bad MATCH is a 400 — never a fake-empty
             // fallback.
             let mut sql = String::from(
@@ -290,24 +285,23 @@ impl IndexStore for D1Index {
                         snippet(files_fts, 2, '', '', '…', 16) AS snip
                  FROM files_fts JOIN files ON files.rowid = files_fts.rowid
                  WHERE files_fts MATCH ?1 AND files.deleted = 0
-                 AND files.path >= ?2 AND (?3 IS NULL OR files.path < ?3)",
+                 AND (?2 IS NULL OR files.path = ?2 OR (files.path >= ?2 || '/' AND files.path < ?2 || '0'))",
             );
             if tag.is_some() {
                 sql.push_str(
-                    " AND EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = ?4)",
+                    " AND EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = ?3)",
                 );
             } else {
-                sql.push_str(" AND ?4 IS NULL");
+                sql.push_str(" AND ?3 IS NULL");
             }
-            sql.push_str(" ORDER BY rank LIMIT ?5 OFFSET ?6");
+            sql.push_str(" ORDER BY rank LIMIT ?4 OFFSET ?5");
             let rows = query_rows::<FtsRow>(
                 db,
                 "fts search",
                 &sql,
                 &[
                     js_str(&query),
-                    js_str(&lower),
-                    js_opt(upper.as_deref()),
+                    js_opt(prefix.as_deref()),
                     js_opt(tag.as_deref()),
                     js_num(limit as i64),
                     js_num(offset as i64),
@@ -345,38 +339,37 @@ impl IndexStore for D1Index {
         let after_path = after_path.map(str::to_owned);
         let after_updated = after_updated.map(str::to_owned);
         SendFuture::new(async move {
-            let lower = filter.prefix.clone().unwrap_or_default();
-            let upper = filter.prefix.as_deref().map(prefix_upper_bound);
+            let prefix = normalize_prefix(filter.prefix.as_deref());
             let order_desc = filter.order == ListOrder::UpdatedDesc;
 
             let mut sql = String::from(
                 "SELECT path, revision, generation, deleted, kind, title, size, sha256, media_type, updated_at \
                  FROM files WHERE (?1 = 1 OR deleted = 0) \
-                 AND path >= ?2 AND (?3 IS NULL OR path < ?3)",
+                 AND (?2 IS NULL OR path = ?2 OR (path >= ?2 || '/' AND path < ?2 || '0'))",
             );
             if filter.tag.is_some() {
                 sql.push_str(
-                    " AND EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = ?4)",
+                    " AND EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = ?3)",
                 );
+            } else {
+                sql.push_str(" AND ?3 IS NULL");
+            }
+            if filter.kind.is_some() {
+                sql.push_str(" AND kind = ?4");
             } else {
                 sql.push_str(" AND ?4 IS NULL");
             }
-            if filter.kind.is_some() {
-                sql.push_str(" AND kind = ?5");
-            } else {
-                sql.push_str(" AND ?5 IS NULL");
-            }
             if order_desc {
                 sql.push_str(
-                    " AND (?6 IS NULL OR updated_at < ?6 OR (updated_at = ?6 AND path > ?7))",
+                    " AND (?5 IS NULL OR updated_at < ?5 OR (updated_at = ?5 AND path > ?6))",
                 );
             } else {
-                sql.push_str(" AND (?7 IS NULL OR path > ?7)");
+                sql.push_str(" AND (?6 IS NULL OR path > ?6)");
             }
             if order_desc {
-                sql.push_str(" ORDER BY updated_at DESC, path LIMIT ?8");
+                sql.push_str(" ORDER BY updated_at DESC, path LIMIT ?7");
             } else {
-                sql.push_str(" ORDER BY path LIMIT ?8");
+                sql.push_str(" ORDER BY path LIMIT ?7");
             }
 
             let rows = query_rows::<ListDbRow>(
@@ -385,8 +378,7 @@ impl IndexStore for D1Index {
                 &sql,
                 &[
                     js_num(filter.include_deleted as i64),
-                    js_str(&lower),
-                    js_opt(upper.as_deref()),
+                    js_opt(prefix),
                     js_opt(filter.tag.as_deref()),
                     js_opt(filter.kind.map(|k| k.as_str())),
                     js_opt(after_updated.as_deref()),

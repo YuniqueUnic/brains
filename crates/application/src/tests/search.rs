@@ -234,3 +234,103 @@ async fn scoped_token_cannot_search_beyond_prefix() {
         ["public/open.md"]
     );
 }
+
+#[tokio::test]
+async fn query_subtrees_preserve_scope_unicode_and_pagination() {
+    use crate::listing::{ListQuery, ListSource};
+    use brains_domain::DomainError;
+    let TestVault { vault, .. } = open_vault();
+    let owner = owner_principal();
+    for prefix in ["public", "public.md", "docs/ÿ", "资料/缓存"] {
+        let expected = vec![
+            prefix.to_owned(),
+            format!("{prefix}/a.md"),
+            format!("{prefix}/b.md"),
+        ];
+        for path in expected.iter().cloned().chain([
+            format!("{prefix}-private.md"),
+            format!("{prefix}2/private.md"),
+        ]) {
+            put_text(
+                &vault,
+                &owner,
+                &path,
+                "---\ntags: [topic]\n---\nneedle",
+                Precondition::Create,
+            )
+            .await
+            .unwrap();
+        }
+        let limited = super::support::limited_principal(&format!("{prefix}/"));
+        for requested in [prefix.to_owned(), format!("{prefix}/")] {
+            for mode in [SearchMode::Literal, SearchMode::Fts] {
+                let mut paths = Vec::new();
+                let mut cursor = None;
+                loop {
+                    let page = vault
+                        .search(
+                            &limited,
+                            SearchQuery {
+                                q: "needle".into(),
+                                mode,
+                                prefix: Some(requested.clone()),
+                                tag: None,
+                                cursor,
+                                scan_limit: 1,
+                            },
+                        )
+                        .await
+                        .unwrap();
+                    assert!(page.scanned <= 1);
+                    paths.extend(page.items.into_iter().map(|hit| hit.path));
+                    if page.complete {
+                        break;
+                    }
+                    cursor = page.next_cursor;
+                    assert!(cursor.is_some());
+                    assert!(paths.len() <= expected.len());
+                }
+                paths.sort();
+                // Extensionless exact paths are binary; only declared text enters search.
+                assert_eq!(
+                    paths,
+                    expected
+                        .iter()
+                        .filter(|p| p.ends_with(".md"))
+                        .cloned()
+                        .collect::<Vec<_>>()
+                );
+            }
+            for source in [ListSource::Store, ListSource::Index] {
+                let mut paths = Vec::new();
+                let mut cursor = None;
+                loop {
+                    let page = vault
+                        .list_files(
+                            &limited,
+                            ListQuery {
+                                source,
+                                prefix: Some(requested.clone()),
+                                limit: 1,
+                                cursor,
+                                ..ListQuery::default()
+                            },
+                        )
+                        .await
+                        .unwrap();
+                    paths.extend(page.items.into_iter().map(|entry| entry.path));
+                    cursor = page.next_cursor;
+                    if cursor.is_none() {
+                        break;
+                    }
+                    assert!(paths.len() <= expected.len());
+                }
+                assert_eq!(paths, expected);
+            }
+        }
+        assert!(matches!(
+            vault.list_files(&limited, ListQuery::default()).await,
+            Err(DomainError::Forbidden(_))
+        ));
+    }
+}

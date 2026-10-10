@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["fts"]
+fts = ["brains-local/fts"]
+
 [dependencies]
 brains-api-types.workspace = true
 brains-sdk = { path = "../../sdk/rust" }

@@ -229,10 +229,8 @@ where
         include_deleted: bool,
         limit: usize,
     ) -> DomainResult<StoreListResult> {
+        let prefix = brains_domain::path::normalize_prefix(prefix);
         self.require_list_prefix(principal, prefix)?;
-        // A trailing slash is display sugar (`brain ls ord/`): the segment-
-        // boundary filters downstream expect the bare prefix (design §6.2).
-        let prefix = prefix.map(|p| p.strip_suffix('/').unwrap_or(p));
         let filter = store_list_filter(prefix, include_deleted);
         let after = match cursor.filter(|c| !c.is_empty()) {
             None => None,
@@ -302,7 +300,7 @@ where
     /// A listing prefix must sit inside exactly one granted read scope —
     /// results are never silently intersected (design §15.2).
     fn require_list_prefix(&self, principal: &Principal, prefix: Option<&str>) -> DomainResult<()> {
-        match prefix {
+        match brains_domain::path::normalize_prefix(prefix) {
             Some(prefix) => principal.require(AccessLevel::Read, prefix),
             None => {
                 if principal.allows(AccessLevel::Read, "") {

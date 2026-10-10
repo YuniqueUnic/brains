@@ -30,8 +30,8 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 - **A real editor, not a textarea.** CodeMirror with find & replace (match case / regex / whole word, replace all), selection-match highlights, and a folder tree sidebar with **multi-select batch actions** (batch trash / batch restore).
 - **Delete is a tombstone; restore is a new revision.** Generations only move forward. Nothing is ever destroyed by accident, and the history panel can bring any contentful revision back.
 - **Local and cloud profiles sync in both directions.** `bsx sync` uses per-file revision bases and CAS, merges non-overlapping text edits, and leaves divergent files untouched for an explicit resolution.
-- **Portable current files and complete reachable history.** `bsx import/export` moves readable working trees; `--format archive` preserves reachable revisions and blobs across FS/SQLite and R2/D1. `profile use --verify-with` validates content and the rebuilt index before selecting the daily profile. See the [portable workflow](docs/portable-workflow.md) for the different guarantees, resumable failures, shell completion and Git-aware build versions.
-- **The on-disk layout is the backup.** `vaults/{vault}/heads|revisions|blobs` — copy the directory and you have a complete raw backup; the index (SQLite/D1) is a rebuildable projection you can delete at any time.
+- **Portable current files and complete reachable history.** `bsx import/export` moves readable working trees; `--format archive` preserves reachable revisions and blobs across FS/Turso and R2/D1. `profile use --verify-with` validates content and the rebuilt index before selecting the daily profile. See the [portable workflow](docs/portable-workflow.md) for the different guarantees, resumable failures, shell completion and Git-aware build versions.
+- **The on-disk layout is the backup.** `vaults/{vault}/heads|revisions|blobs` — copy the directory and you have a complete raw backup; the index (Turso/D1) is a rebuildable projection you can delete at any time.
 - **One HTTP contract, three clients.** The Web app, remote CLI and `curl`/agents speak the same versioned REST API; standalone CLI calls the same application layer directly, backed by the same axum layer on both runtimes.
 - **Bounded everything.** Literal-scan windows never fake a complete search; a lost index degrades loudly (`503` / `building`), and oversized text is stored but never indexed.
 
@@ -93,7 +93,7 @@ remote CLI / curl ──/api/v1/*──┐
       ┌─────────────────┴──────────────────┐
       ▼ local-rust profile                 ▼ cloudflare-rust profile
   filesystem + locks (HEAD CAS)        R2 binding (HEAD CAS via storage ETag)
-  SQLite (rebuildable index)           D1 binding (same SQL, rebuildable)
+  Turso + optional Tantivy             D1 binding (SQLite FTS5)
       apps/server                          apps/worker (workers-rs)
 ```
 
@@ -104,7 +104,7 @@ remote CLI / curl ──/api/v1/*──┐
 | `crates/ports` | store traits — CAS heads, create-only blobs/revisions, index (deliberately `Send`-free; the Worker bridges its `!Send` futures) |
 | `crates/application` | the whole business orchestration: commit pipeline, search, restore, patch, copy/move, reindex |
 | `crates/api-http` | shared HTTP layer (routing, error mapping, auth) for both runtimes |
-| `crates/adapter-fs` / `adapter-sqlite` | local profile adapters |
+| `crates/adapter-fs` / `adapter-turso` | local profile adapters |
 | `crates/adapter-r2` / `adapter-d1` | Worker profile adapters (same key layout, same SQL) |
 | `crates/local` | native store assembly shared by CLI and server, without HTTP or auth |
 | `crates/client` | Library interface with local/HTTP adapters, shared archive and sync |
@@ -113,7 +113,7 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## Testing
 
-- **83 Rust tests** — domain, format, adapters, 29 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
+- **83 Rust tests** — domain, format, adapters, 29 application business tests (real fs+Turso, injected CAS/index failures), HTTP + CLI contract tests.
 - **12 browser E2E** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
 - **Standalone CLI business scenarios and snapshot** — offline edits/history, pagination, directory ownership, and multi-server collaboration (`tests/local-workflows.py`); both local/remote sources exercise archive and sync against Worker.
 - **Worker business smoke** — the same acceptance list executed against workerd (`tests/worker-smoke.sh`).
@@ -143,3 +143,5 @@ bash tests/worker-smoke.sh                                               # again
 ## License
 
 MIT
+
+Native search now uses Turso 0.8.2 with optional Tantivy. See [build features and search semantics](docs/turso.md).

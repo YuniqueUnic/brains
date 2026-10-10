@@ -4,13 +4,13 @@
 
 ## 存储和三种传输语义
 
-FS/R2 保存权威 HEAD、revision 和 blob；SQLite/D1 保存可重建的搜索、列表和链接投影。local 模式直接调用应用层，remote 模式通过两种服务端 runtime 的共同 HTTP 契约访问。迁移复用同一套端点接口，不复制数据库文件，也不把索引当作正文。现有服务端 store traits 保持分层；客户端的 `FileEndpoint` 供工作树导入导出、同步和核验复用，`ArchiveEndpoint` 只承载完整历史维护能力。
+FS/R2 保存权威 HEAD、revision 和 blob；Turso/D1 保存可重建的搜索、列表和链接投影。local 模式直接调用应用层，remote 模式通过两种服务端 runtime 的共同 HTTP 契约访问。迁移复用同一套端点接口，不复制数据库文件，也不把索引当作正文。现有服务端 store traits 保持分层；客户端的 `FileEndpoint` 供工作树导入导出、同步和核验复用，`ArchiveEndpoint` 只承载完整历史维护能力。
 
 | 操作 | 保留内容 | 写入语义 | 合适场景 |
 | --- | --- | --- | --- |
 | `import/export --format working-tree`（默认） | 当前 live 文件的正文、类型、可执行标志；导出 manifest 另记 tombstone | 导入会产生目标端新 revision，不应用目录缺失或 tombstone 为删除 | Markdown 目录导入、人工编辑、正文搬运 |
 | `sync` | 当前状态与逐文件共同基线；可传递删除为 tombstone | 双向 CAS，同一文件无重叠文本修改可合并，冲突须显式处理；不传播永久 purge | 两个 profile 持续协作 |
-| `import/export --format archive` | 每个 HEAD 的完整可达 parent 链、对应 blob、回收站和 metadata | 保留历史身份，仅改准确的 vault key 前缀；目标必须为空或同归档的精确历史前缀 | FS＋SQLite ↔ R2＋D1 的完整迁移与恢复 |
+| `import/export --format archive` | 每个 HEAD 的完整可达 parent 链、对应 blob、回收站和 metadata | 保留历史身份，仅改准确的 vault key 前缀；目标必须为空或同归档的精确历史前缀 | FS＋Turso ↔ R2＋D1 的完整迁移与恢复 |
 
 工作树 manifest 为 `.brain/export-manifest.json`，格式 `brains-working-tree` v2；完整历史 manifest 为 `brains-archive` v1，两者不能混用。工作树导入不接受旧版缺失 metadata 的 manifest；保留旧原始库，使用新版重新导出。无 manifest 的普通目录也可以导入，文件类型按现有检测规则判定，Unix 可执行位来自文件模式。
 
@@ -119,7 +119,7 @@ bsx profile list
 
 ## 已验证与待实测
 
-代码可证明：local 与 remote 共用应用规则、FileEndpoint 和 ArchiveEndpoint，索引可重建；普通传输与历史归档的语义不同；写入保留 CAS、不可变对象和权限边界。业务实测：native FS＋SQLite 与本地 workerd R2＋D1 往返、完整历史及 metadata、两种 SDK 的原始字节/null 往返、故障续传、冲突解决和受验证切库均已通过，具体输入和结果见验收记录。
+代码可证明：local 与 remote 共用应用规则、FileEndpoint 和 ArchiveEndpoint，索引可重建；普通传输与历史归档的语义不同；写入保留 CAS、不可变对象和权限边界。业务实测：native FS＋Turso 与本地 workerd R2＋D1 往返、完整历史及 metadata、两种 SDK 的原始字节/null 往返、故障续传、冲突解决和受验证切库均已通过，具体输入和结果见验收记录。
 
 续验已覆盖 261 个路径/504 个 revision、130 代单路径历史、分页重建与并发 CAS；native Firefox/WebKit 及 Worker Chromium/HTTPS WebKit 的完整浏览器用例也已通过。这些是明确规模和本地 runtime 下的结果，不代表生产容量或系统 Safari/iOS 实机验收。
 

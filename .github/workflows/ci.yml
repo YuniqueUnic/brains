@@ -99,6 +99,11 @@ jobs:
         run: |
           cargo build -p brains-server -p brains-cli
           pnpm --dir apps/web build
+      - name: Build and exercise native feature combinations
+        run: |
+          cargo build -p brains-cli -p brains-server --no-default-features --target-dir target/basic
+          cargo test -p brains-adapter-turso --no-default-features
+          python3 tests/feature-workflows.py --fts-cli target/debug/bsx --fts-server target/debug/brains-server --basic-cli target/basic/debug/bsx --basic-server target/basic/debug/brains-server
       - name: Standalone CLI and native server handoff
         run: python3 tests/local-workflows.py
       - name: Install Playwright browser

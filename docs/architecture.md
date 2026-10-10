@@ -18,7 +18,7 @@ see [../api/brains.idl](../api/brains.idl) and
 3. **Delete is a tombstone.** Trashing writes a new revision that marks the
    path deleted; nothing is destroyed. Restore reads back through history.
 4. **The directory layout is the backup.** Copying the vault directory is a
-   complete raw backup. Indexes (SQLite/D1) are rebuildable projections.
+   complete raw backup. Indexes (Turso/D1) are rebuildable projections.
 5. **Honest degradation.** A missing or stale index answers `building`/`503`
    instead of faking complete results; listings report truncation.
 
@@ -31,7 +31,7 @@ HTTP, filesystems, SQLite, or Cloudflare.
 domain ← format ← ports ← application ← api-http ← apps/server (native)
                               ↑              ↖ apps/worker (cloudflare)
             adapter-fs ───────┤
-            adapter-sqlite ───┤        client ← apps/cli (bsx)
+            adapter-turso ───┤        client ← apps/cli (bsx)
             adapter-r2 ───────┤
             adapter-d1 ───────┘        sdk/rust (generated, external consumers)
 
@@ -45,12 +45,12 @@ api-types: HTTP DTOs shared by api-http and client
 | `brains-ports` | Storage traits (`HeadStore`, `RevisionStore`, `BlobStore`, `IndexStore`) declared as `-> impl Future + Send` (RPITIT) |
 | `brains-application` | The single commit protocol, queries, search, links, reindex, patch, copy/move, first-boot template seeding |
 | `brains-adapter-fs` | Native storage: one JSON file per HEAD/revision, content-addressed blobs with hardlink dedup, path locks |
-| `brains-adapter-sqlite` | Native index (FTS5 + literal windows), embedded migrations |
+| `brains-adapter-turso` | Native Turso index (optional Tantivy FTS + literal windows) |
 | `brains-adapter-r2` | Cloudflare R2 storage: ETag as CAS token, create-only via `If-None-Match: *` |
-| `brains-adapter-d1` | Cloudflare D1 index sharing the same SQL as SQLite |
+| `brains-adapter-d1` | Cloudflare D1 index; shared projection and literal query, SQLite FTS5 schema |
 | `brains-api-types` | Transport DTOs (snake_case JSON), the HTTP surface shapes |
 | `brains-api-http` | The shared axum layer: routing, auth middleware, preconditions, ETag helpers, error mapping. Both runtimes serve this one router |
-| `brains-local` | Native FS/SQLite assembly for server and standalone CLI; no HTTP, auth or background runtime |
+| `brains-local` | Native FS/Turso assembly for server and standalone CLI; no HTTP, auth or background runtime |
 | `brains-client` | Library interface; HTTP and direct local adapters; shared archive, sync and export |
 | `brains-server` | Native binary: config, listener, SPA hosting, first-boot seeding |
 | `brains-worker` | Cloudflare Worker binary: per-request bindings (R2/D1/env secrets), Static Assets for the SPA |
@@ -69,7 +69,7 @@ A native data directory has one process owner. FsStore clones retain the OS lock
 for the lifetime of all adapters; Vault closes its index before releasing these
 handles. A server holds ownership while running; use its remote profile during
 that time. Different directories can collaborate through existing sync/archive.
-Each vault owns its SQLite index. A missing index is built from all authoritative
+Each vault owns its Turso index. A missing index is built from all authoritative
 HEADs into a temporary DB, checkpointed and closed with error checks, then renamed.
 No legacy root index is read. This does not provide a transaction across HEAD and
 index or serialize concurrent requests inside one server.
@@ -86,7 +86,7 @@ The on-disk layout is identical across runtimes and is the raw backup format:
     revisions/<hex>.json   # immutable revision metadata (parent chain)
     blobs/<hex>/<name>     # immutable content, content-addressed
     locks/                 # path-level exclusive locks (native profile)
-    index.db*              # per-vault rebuildable SQLite index
+    index.turso-fts.db*              # per-vault rebuildable Turso index
   .brains.lock             # directory ownership for CLI/server
   auth.json  secret.key    # token registry / session signing key
 ```
@@ -117,7 +117,7 @@ comparison and answers `304`.
 
 ## Index as a projection
 
-The index (SQLite locally, D1 on Cloudflare) holds searchable projections:
+The index (Turso locally, D1 on Cloudflare) holds searchable projections:
 entry metadata, FTS tokens, tag/title frontmatter, and wiki-links. It can be
 deleted and rebuilt at any time (`POST /maintenance/reindex` or
 `bsx reindex --all-pages`) from authoritative storage. Literal search uses
@@ -154,7 +154,7 @@ responses, and per-response dynamic Content-Type on `GET /file`.
 | | native (`brains-server`) | cloudflare (`brains-worker`) |
 |---|---|---|
 | Storage | local FS | R2 (same key layout) |
-| Index | SQLite (FTS5) | D1 (same SQL migrations) |
+| Index | Turso (optional Tantivy) | D1 (SQLite FTS5) |
 | Auth store | `auth.json` + `secret.key` | `TOKEN_REGISTRY_JSON` + signing key secrets |
 | Static assets | `--web-dist` served by axum | Workers Static Assets |
 | HTTP layer | `brains-api-http::build_router` | the same `build_router` |

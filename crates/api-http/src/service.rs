@@ -229,7 +229,13 @@ error_from_domain!(
 error_from_domain!(
     search_error,
     FilesSearchError,
-    [BadRequest, Forbidden, ServiceUnavailable, Internal]
+    [
+        BadRequest,
+        Forbidden,
+        NotImplemented,
+        ServiceUnavailable,
+        Internal
+    ]
 );
 error_from_domain!(
     links_error,

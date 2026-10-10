@@ -7,7 +7,6 @@ pub mod index;
 pub mod store;
 
 pub use index::{
-    FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow,
-    PARSER_VERSION, prefix_upper_bound,
+    FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow, PARSER_VERSION,
 };
 pub use store::{BlobStore, CasOutcome, ExpectedHead, HeadStore, RevisionStore, StoredHead};

@@ -84,21 +84,6 @@ pub struct ListFilter {
     pub order: ListOrder,
 }
 
-/// Exclusive upper bound for a prefix range scan: increment the final byte.
-/// A prefix ending in `0xFF` (or an empty prefix) has no upper bound.
-pub fn prefix_upper_bound(prefix: &str) -> String {
-    let mut bytes = prefix.as_bytes().to_vec();
-    while let Some(last) = bytes.last_mut() {
-        if *last == 0xFF {
-            bytes.pop();
-        } else {
-            *last += 1;
-            break;
-        }
-    }
-    String::from_utf8(bytes).unwrap_or_default()
-}
-
 pub trait IndexStore {
     /// Available full-text query grammar; consumers report this capability.
     fn full_text_search(&self) -> brains_domain::FullTextSearch;
@@ -113,11 +98,10 @@ pub trait IndexStore {
     fn remove_path(&self, path: &str) -> impl Future<Output = DomainResult<()>> + Send;
 
     /// One bounded literal window (design §10.3). Rows are ordered by path;
-    /// `upper` is an exclusive prefix bound, `None` = whole vault.
+    /// `prefix` selects the exact path and its descendants; `None` = whole vault.
     fn scan_literal(
         &self,
-        lower: &str,
-        upper: Option<&str>,
+        prefix: Option<&str>,
         after: &str,
         limit: usize,
         query: &str,
@@ -125,14 +109,13 @@ pub trait IndexStore {
     ) -> impl Future<Output = DomainResult<Vec<LiteralRow>>> + Send;
 
     /// Explicit engine-native full-text search. Invalid syntax is an error, not a fallback.
-    /// `lower`/`upper` bound the path range (exclusive upper, `None` = whole
+    /// `prefix` selects the exact path and its descendants (`None` = whole
     /// vault) and `tag` requires the tag row — filters are never silently
     /// ignored (design §11.1).
     fn search_fts(
         &self,
         query: &str,
-        lower: &str,
-        upper: Option<&str>,
+        prefix: Option<&str>,
         tag: Option<&str>,
         offset: usize,
         limit: usize,

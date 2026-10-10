@@ -868,6 +868,7 @@ pub mod brains {
     pub enum FilesSearchError {
         BadRequest(BadRequest),
         Forbidden(Forbidden),
+        NotImplemented(NotImplemented),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
         Framework(xidl_rust_axum::Error),
@@ -877,6 +878,7 @@ pub mod brains {
             match self {
                 Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
                 Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
@@ -5000,6 +5002,17 @@ pub mod brains {
                         )
                     })?;
                     return Err(FilesSearchError::Forbidden(value));
+                }
+                if status.as_u16() == 501 {
+                    let headers = resp.headers().clone();
+                    let mut value: NotImplemented =
+                        resp.json::<NotImplemented>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception NotImplemented body: {err}"),
+                            )
+                        })?;
+                    return Err(FilesSearchError::NotImplemented(value));
                 }
                 if status.as_u16() == 503 {
                     let headers = resp.headers().clone();

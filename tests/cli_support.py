@@ -14,7 +14,8 @@ REPO = Path(__file__).resolve().parent.parent
 
 
 class Cli:
-    def __init__(self, root):
+    def __init__(self, root, binary=None):
+        self.binary = binary or REPO / "target/debug/bsx"
         self.config = root / "config.json"
         self.env = {key: value for key, value in os.environ.items()
                     if key not in ("BRAINS_URL", "BRAINS_TOKEN")}
@@ -22,7 +23,7 @@ class Cli:
 
     def __call__(self, profile, *args, data=None, expected=0):
         result = subprocess.run(
-            [str(REPO / "target/debug/bsx"), "--profile", profile, *map(str, args)],
+            [str(self.binary), "--profile", profile, *map(str, args)],
             input=data, capture_output=True, env=self.env, timeout=120,
         )
         assert result.returncode == expected, (
@@ -74,8 +75,26 @@ def exercise_repeated_relations(cli, profile):
     assert len(cli(profile, "links", path, "--json").splitlines()) == 1
 
 
+def exercise_path_subtrees(cli, profile):
+    """Store, literal, FTS and index listing agree on UTF-8 segment boundaries."""
+    for prefix in ("scoped", "scoped.md", "docs/ÿ", "资料/缓存"):
+        expected = [prefix, prefix + "/a.md", prefix + "/b.md"]
+        for path in expected + [prefix + "-private.md", prefix + "2/private.md"]:
+            cli(profile, "put", path, "--create", data=b"---\ntags: [boundary]\n---\nneedle\n")
+        for requested in (prefix, prefix + "/"):
+            for source in ("store", "index"):
+                rows = [json.loads(line) for line in cli(profile, "ls", requested,
+                        "--source", source, "--json").splitlines()]
+                assert [row["path"] for row in rows] == expected
+            for mode in ("literal", "fts"):
+                rows = [json.loads(line) for line in cli(profile, "search", "needle",
+                        "--prefix", requested, "--mode", mode,
+                        "--json").splitlines()]
+                assert sorted(row["path"] for row in rows) == [p for p in expected if p.endswith(".md")]
+
+
 @contextmanager
-def native_server(root, data_dir, vault):
+def native_server(root, data_dir, vault, binary=None):
     token = secrets.token_urlsafe(32)
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
@@ -84,7 +103,7 @@ def native_server(root, data_dir, vault):
     with (root / f"server-{port}.log").open("w+") as log:
         env = dict(os.environ, BRAINS_TOKEN=token)
         server = subprocess.Popen([
-            str(REPO / "target/debug/brains-server"), "--data-dir", str(data_dir),
+            str(binary or REPO / "target/debug/brains-server"), "--data-dir", str(data_dir),
             "--bind", "127.0.0.1", "--port", str(port), "--vault", vault, "--no-seed",
         ], env=env, stdout=log, stderr=subprocess.STDOUT)
         try:

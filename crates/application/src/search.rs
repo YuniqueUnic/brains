@@ -2,8 +2,9 @@
 //! optionally. Zero hits plus a pending cursor never means "whole vault has
 //! no results"; index failures are loud 503s, never fake-empty pages.
 
+use brains_domain::path::normalize_prefix;
 use brains_domain::{AccessLevel, DomainError, DomainResult, Endpoint, Principal, VaultPath};
-use brains_ports::{LinkRow, prefix_upper_bound};
+use brains_ports::LinkRow;
 
 use crate::Vault;
 
@@ -70,7 +71,7 @@ where
         principal: &Principal,
         mut query: SearchQuery,
     ) -> DomainResult<SearchResult> {
-        query.prefix = query.prefix.filter(|value| !value.is_empty());
+        query.prefix = normalize_prefix(query.prefix.as_deref()).map(str::to_owned);
         query.tag = query.tag.filter(|value| !value.is_empty());
         query.cursor = query.cursor.filter(|value| !value.is_empty());
         if query.q.is_empty() || query.q.len() > 512 {
@@ -108,18 +109,15 @@ where
         query: SearchQuery,
         building: bool,
     ) -> DomainResult<SearchResult> {
-        let lower = query.prefix.clone().unwrap_or_default();
         let filter = literal_filter(&query);
         let after = match &query.cursor {
             None => String::new(),
             Some(cursor) => self.cursors.verify(Endpoint::Search, &filter, cursor)?,
         };
-        let upper = query.prefix.as_deref().map(prefix_upper_bound);
         let rows = self
             .index
             .scan_literal(
-                &lower,
-                upper.as_deref(),
+                query.prefix.as_deref(),
                 &after,
                 query.scan_limit,
                 &query.q,
@@ -160,14 +158,11 @@ where
                 .parse::<usize>()
                 .map_err(|_| DomainError::InvalidArgument("malformed cursor".into()))?,
         };
-        let lower = query.prefix.clone().unwrap_or_default();
-        let upper = query.prefix.as_deref().map(prefix_upper_bound);
         let rows = self
             .index
             .search_fts(
                 &query.q,
-                &lower,
-                upper.as_deref(),
+                query.prefix.as_deref(),
                 query.tag.as_deref(),
                 offset,
                 query.scan_limit,

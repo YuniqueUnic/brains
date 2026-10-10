@@ -18,6 +18,7 @@ pub enum Runtime {
 pub enum FullTextSearch {
     Disabled,
     Fts5,
+    Tantivy,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -66,6 +67,7 @@ impl Capabilities {
         let features: BTreeMap<String, bool> = BTreeMap::from([
             ("literal_search".into(), true),
             ("fts_search".into(), full_text != FullTextSearch::Disabled),
+            ("fts_tantivy".into(), full_text == FullTextSearch::Tantivy),
             ("regex_search".into(), false), // checkout-local rg only (design §10.3)
             ("history".into(), true),
             ("restore".into(), true),

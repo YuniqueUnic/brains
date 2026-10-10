@@ -48,7 +48,7 @@ bsx ls
     revisions/<hex>.json   # 不可变修订元数据
     blobs/<hex>/<name>     # 不可变内容（hard_link 去重）
     locks/                 # 路径级排他锁
-    index.db*              # 每个 vault 独立的可重建索引
+    index.turso-fts.db*              # 每个 vault 独立的可重建索引
   .brains.lock             # 数据目录所有权锁
   auth.json  secret.key    # token 注册表 / 会话签名密钥
 ```

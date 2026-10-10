@@ -33,3 +33,5 @@ highlights below. Keep them applying when you edit:
 
 Regenerating generated artifacts referenced here (OpenAPI, SDKs) is
 documented in [../scripts/gen-api.sh](../scripts/gen-api.sh).
+
+- [原生 Turso 与可选全文检索](turso.md)：构建开关、搜索语法、索引重建及上游能力边界。

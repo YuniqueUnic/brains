@@ -64,7 +64,18 @@ impl AsRef<str> for VaultPath {
     }
 }
 
+/// A directory prefix accepts an optional trailing slash; empty or `/` is
+/// the whole vault. Containment always compares complete path segments.
+pub fn normalize_prefix(prefix: Option<&str>) -> Option<&str> {
+    prefix
+        .map(|p| p.trim_end_matches('/'))
+        .filter(|p| !p.is_empty())
+}
+
 pub fn prefix_has(prefix: &str, path: &str) -> bool {
+    let Some(prefix) = normalize_prefix(Some(prefix)) else {
+        return true;
+    };
     if path == prefix {
         return true;
     }

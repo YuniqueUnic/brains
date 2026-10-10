@@ -105,6 +105,6 @@ local profile 不接受 `BRAINS_URL` / `BRAINS_TOKEN` 覆盖，避免本地命�
 
 旧版只含 URL/token 的 profile 需要在备份配置后明确添加 `"mode": "remote"`，其余值保持原样。代码不猜测旧配置属于哪种模式，也不会静默转换。
 
-数据正文和历史保存在 `vaults/<vault>/heads`、`revisions`、`blobs`；不要用编辑器直接改这些文件。每个 vault 的 `index.db` 只是派生索引。旧根目录索引不再读取，新位置不存在时会从权威文件完整重建；重建失败则报错，不把半成品当作可用索引。旧索引可在备份并确认重建成功后单独清理。
+数据正文和历史保存在 `vaults/<vault>/heads`、`revisions`、`blobs`；不要用编辑器直接改这些文件。每个 vault 的 `index.turso-fts.db`（带全文检索）或 `index.turso-basic.db`（不带全文检索）只是派生索引。只维护当前构建对应的一份索引；切换构建能力时，从当前 HEAD 完整重建，成功后移除另一种派生索引，避免返回旧缓存。旧 SQLite `index.db` 不再读取；新索引建立和 checkpoint 失败会报错，不发布半成品。旧 SQLite 文件可在备份并确认重建成功后单独清理。
 
 裸目录备份应停止写入后进行。日常可读导出和完整历史归档的边界、断点恢复与核验规则见[可移植工作流](portable-workflow.md)。

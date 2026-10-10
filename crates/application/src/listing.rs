@@ -83,7 +83,7 @@ where
             sort,
             include_deleted,
         } = query;
-        let prefix = prefix.filter(|value| !value.is_empty());
+        let prefix = brains_domain::path::normalize_prefix(prefix.as_deref()).map(str::to_owned);
         let tag = tag.filter(|value| !value.is_empty());
         let cursor = cursor.filter(|value| !value.is_empty());
         if limit == 0 || limit > self.limits.list_page_max {

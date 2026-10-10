@@ -2929,6 +2929,7 @@ pub mod brains {
     pub enum FilesSearchError {
         BadRequest(BadRequest),
         Forbidden(Forbidden),
+        NotImplemented(NotImplemented),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
         Framework(xidl_rust_axum::Error),
@@ -2938,6 +2939,7 @@ pub mod brains {
             match self {
                 Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
                 Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
@@ -2995,6 +2997,25 @@ pub mod brains {
                     let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
                     *response.status_mut() =
                         ::xidl_rust_axum::axum::http::StatusCode::from_u16(403u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::NotImplemented(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(501u16).unwrap();
                     response.headers_mut().insert(
                         ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
                         ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),

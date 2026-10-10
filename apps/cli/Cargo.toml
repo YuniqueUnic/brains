@@ -9,6 +9,10 @@ license.workspace = true
 name = "bsx"
 path = "src/main.rs"
 
+[features]
+default = ["fts"]
+fts = ["brains-client/fts"]
+
 [dependencies]
 anyhow.workspace = true
 brains-api-types.workspace = true

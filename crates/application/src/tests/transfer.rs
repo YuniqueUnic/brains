@@ -9,7 +9,7 @@ use crate::Precondition;
 use crate::Vault;
 use crate::transfer::TransferInput;
 use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
-use brains_adapter_sqlite::SqliteIndex;
+use brains_adapter_turso::TursoIndex;
 use brains_domain::{CursorSigner, DomainError, HexId, Limits, VaultPath};
 use brains_ports::{CasOutcome, ExpectedHead};
 
@@ -150,7 +150,7 @@ async fn move_with_changed_source_reports_partial() {
         heads,
         FsRevisionStore::new(store.clone()),
         FsBlobStore::new(store),
-        SqliteIndex::open(&dir.path().join("index.db")).unwrap(),
+        TursoIndex::open(&dir.path().join("index.db")).unwrap(),
         "default".into(),
         Limits::default(),
         CursorSigner::new([9u8; 32]),

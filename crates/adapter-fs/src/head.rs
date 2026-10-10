@@ -5,7 +5,7 @@ use std::io::Seek;
 use fs2::FileExt;
 
 use brains_domain::{DomainError, DomainResult, Head, VaultPath};
-use brains_ports::{CasOutcome, ExpectedHead, HeadStore, StoredHead, prefix_upper_bound};
+use brains_ports::{CasOutcome, ExpectedHead, HeadStore, StoredHead};
 
 use crate::{FsStore, atomic_write, lock_file, read_json_file};
 
@@ -122,28 +122,16 @@ impl HeadStore for FsHeadStore {
         let mut logical: Vec<String> = Vec::new();
         collect_head_paths(&self.store.heads_dir(), &mut String::new(), &mut logical)?;
         logical.sort();
-        let lower = match (after, prefix) {
-            (Some(after), Some(prefix)) if brains_domain::path::prefix_has(prefix, after) => {
-                Some(after.to_owned())
-            }
-            (Some(after), None) => Some(after.to_owned()),
-            _ => None,
-        };
-        let upper = prefix.map(prefix_upper_bound);
         let mut out = Vec::new();
         for key in logical {
-            if let Some(lower) = &lower
-                && &key <= lower
+            if let Some(after) = after
+                && key.as_str() <= after
             {
                 continue;
             }
             if let Some(prefix) = prefix
                 && !brains_domain::path::prefix_has(prefix, &key)
             {
-                // Sorted scan: once past the prefix range, stop.
-                if upper.as_ref().is_some_and(|up| key.as_str() >= up.as_str()) {
-                    break;
-                }
                 continue;
             }
             if out.len() >= limit {

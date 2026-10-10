@@ -87,7 +87,7 @@ class LocalWorkflows(unittest.TestCase):
         self.assertEqual(snapshot, expected)
         self.assertFalse((self.data / "auth.json").exists())
         self.assertFalse((self.data / "index.db").exists())
-        self.assertTrue((self.data / "vaults/default/index.db").is_file())
+        self.assertTrue((self.data / "vaults/default/index.turso-fts.db").is_file())
 
     def test_pagination_stays_in_one_local_session(self):
         """Given more than one page, list/search/history/reindex visit all records."""
@@ -187,17 +187,17 @@ class LocalWorkflows(unittest.TestCase):
         cli("local", "put", "note.md", "--create", data=b"# Rebuild me\n")
         original = cli.stat("local", "note.md")
         vault = self.data / "vaults/default"
-        (vault / "index.db").rename(self.data / "index.db")
+        (vault / "index.turso-fts.db").rename(self.data / "index.db")
         revision = json.loads((vault / "revisions" / f'{original["revision"]}.json').read_text())
         blob = self.data / revision["content"]["key"]
         saved = blob.read_bytes()
         blob.unlink()
         cli("local", "ls", expected=6)
-        self.assertFalse((vault / "index.db").exists())
+        self.assertFalse((vault / "index.turso-fts.db").exists())
         blob.write_bytes(saved)
         cli("local", "search", "Rebuild")
         self.assertEqual(cli.stat("local", "note.md"), original)
-        self.assertFalse((vault / "index.building.db").exists())
+        self.assertEqual(list(vault.glob("index.turso-building.db*")), [])
         indexed = self.rows("local", "ls", "--source", "index", "--json")[0]
         stored = self.rows("local", "ls", "--source", "store", "--json")[0]
         for key in ("path", "revision", "generation", "state"):

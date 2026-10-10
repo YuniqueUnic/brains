@@ -19,7 +19,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 brains-adapter-fs.workspace = true
-brains-adapter-sqlite.workspace = true
+brains-adapter-turso = { workspace = true, features = ["fts"] }
 futures.workspace = true
 tempfile = "3.27.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

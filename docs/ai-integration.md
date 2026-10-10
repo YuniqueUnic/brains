@@ -11,7 +11,7 @@ writes an immutable blob + revision, then atomically moves a per-path HEAD
 pointer with a compare-and-swap. Two writers on the same base → exactly one
 `200`, the loser gets `412` with the current revision. Deletes are tombstones;
 restores create new revisions. The on-disk layout (`vaults/{vault}/heads |
-revisions | blobs`) *is* the backup; search indexes (SQLite/D1) are rebuildable
+revisions | blobs`) *is* the backup; search indexes (Turso/D1) are rebuildable
 projections. It is **not** an AI memory framework — no recall engine, no
 embeddings, no context assembly.
 

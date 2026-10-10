@@ -203,7 +203,7 @@ async fn index_failure_does_not_lose_the_commit() {
 
     // Swap in a flaky index that fails every subsequent upsert.
     let broken = Arc::new(AtomicUsize::new(0));
-    let index = brains_adapter_sqlite::SqliteIndex::open(&dir.path().join("index.db")).unwrap();
+    let index = brains_adapter_turso::TursoIndex::open(&dir.path().join("index.db")).unwrap();
     let flaky = FlakyIndex::new(index, 0, broken.clone());
     let degraded = crate::Vault::new(
         vault.heads,

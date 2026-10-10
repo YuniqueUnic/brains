@@ -1,14 +1,13 @@
 -- One bounded literal scan window, not a complete all-vault search.
--- D1/SQLite ordered arguments:
--- ?1 inclusive path lower bound (requested prefix intersected with ONE allowed scope)
--- ?2 exclusive path upper bound, NULL only for full authorized vault
--- ?3 last visited path, initially empty string
--- ?4 scan_limit, application-clamped to 1..100
--- ?5 nonempty case-sensitive literal query
--- ?6 exact tag, or NULL
---
--- The service resolves/intersects authorization ranges BEFORE binding this query.
--- Multiple disjoint permitted ranges require a cursor carrying the range index.
+-- Shared native/D1 arguments:
+-- ?1 canonical path prefix, NULL for the whole authorized vault
+-- ?2 last visited path, initially empty string
+-- ?3 scan_limit, application-clamped to 1..100
+-- ?4 nonempty case-sensitive literal query
+-- ?5 exact tag, or NULL
+-- The service authorizes the complete requested subtree before querying.
+-- A subtree is the exact path or descendants in [prefix+'/', prefix+'0').
+-- This works with UTF-8 without incrementing bytes of the prefix itself.
 -- Return every row to the API handler, including nonmatches, so it can advance
 -- to the last scanned path without dropping a hit. No full body leaves D1.
 -- When row count == limit, advertise a next page even if it later proves empty.
@@ -18,14 +17,14 @@ WITH candidates AS MATERIALIZED (
     SELECT path, revision, title, body
     FROM files
     WHERE deleted = 0 AND searchable = 1
-      AND path >= ?1 AND (?2 IS NULL OR path < ?2) AND path > ?3
-      AND (?6 IS NULL OR EXISTS (
-          SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = ?6
+      AND (?1 IS NULL OR path = ?1 OR (path >= ?1 || '/' AND path < ?1 || '0')) AND path > ?2
+      AND (?5 IS NULL OR EXISTS (
+          SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = ?5
       ))
     ORDER BY path
-    LIMIT ?4
+    LIMIT ?3
 ), matched AS (
-    SELECT path, revision, body, instr(body, ?5) AS match_pos
+    SELECT path, revision, body, instr(body, ?4) AS match_pos
     FROM candidates
 )
 SELECT path, revision, match_pos,

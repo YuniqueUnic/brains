@@ -544,7 +544,7 @@ interface Files {
         @query @optional string tag,
         @query @rename("scan_limit") @optional int64 scan_limit,
         @query @optional string cursor
-    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotImplemented, ServiceUnavailable, Internal);
 
     // Wiki-link graph induced by [[links]] in stored text. Pages are fixed
     // at 50 rows; `cursor` walks the rest.

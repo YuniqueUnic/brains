@@ -30,8 +30,8 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 - **真编辑器，不是文本框。** CodeMirror 提供查找替换（大小写/正则/全词、全部替换）与选区匹配高亮；侧栏为文件夹树，支持 **多选批量操作**（批量移入回收站 / 批量恢复）。
 - **删除是墓碑，恢复是新版本。** generation 只前进不倒退；历史面板可把任意有内容的版本恢复为新修订。
 - **本地与云端 profile 双向同步。** `bsx sync` 依据逐文件 revision 基线与 CAS 传递变更；无重叠文本修改自动合并，分歧文件保留两侧内容并交由用户明确解决。
-- **普通目录与完整历史各有明确入口。** `bsx import/export` 搬运可读工作树；`--format archive` 在 FS/SQLite 与 R2/D1 间保留完整可达 revision 和 blob。`profile use --verify-with` 实读正文、重建并核验目标索引后才切换日常主库；中断恢复、shell 补全及带 Git hash 的构建身份见[可移植工作流](docs/portable-workflow.md)。
-- **磁盘布局即备份。** `vaults/{vault}/heads|revisions|blobs`——拷贝目录即完整裸备份；索引（SQLite/D1）是可随时删除重建的投影。
+- **普通目录与完整历史各有明确入口。** `bsx import/export` 搬运可读工作树；`--format archive` 在 FS/Turso 与 R2/D1 间保留完整可达 revision 和 blob。`profile use --verify-with` 实读正文、重建并核验目标索引后才切换日常主库；中断恢复、shell 补全及带 Git hash 的构建身份见[可移植工作流](docs/portable-workflow.md)。
+- **磁盘布局即备份。** `vaults/{vault}/heads|revisions|blobs`——拷贝目录即完整裸备份；索引（Turso/D1）是可随时删除重建的投影。
 - **一份 HTTP 契约，三类客户端。** Web、remote 模式 CLI、curl/agent 走同一套版本化 REST API；local 模式 CLI 直接调用同一应用层；两个运行时（原生 Axum 与 Cloudflare Worker）复用同一 axum 层。
 - **一切有界。** 字面检索是有界窗口、绝不伪造"已搜完全库"；索引损坏时响亮降级（`503` / `building`）；超限文本只存储、不入索引。
 
@@ -88,7 +88,7 @@ remote CLI / curl ──/api/v1/*──┐
       ┌─────────────────┴──────────────────┐
       ▼ local-rust profile                ▼ cloudflare-rust profile
   文件系统 + 跨进程锁（HEAD CAS）       R2 binding（存储 ETag 作 CAS token）
-  SQLite（可重建索引）                 D1 binding（同一份 SQL，可重建）
+  Turso + 可选 Tantivy                 D1 binding（SQLite FTS5）
       apps/server                          apps/worker（workers-rs）
 ```
 
@@ -99,7 +99,7 @@ remote CLI / curl ──/api/v1/*──┐
 | `crates/ports` | 存储 trait——CAS HEAD、create-only blob/revision、索引（刻意不强制 `Send`，Worker 侧桥接 `!Send` future） |
 | `crates/application` | 全部业务编排：提交管线、搜索、恢复、patch、copy/move、reindex |
 | `crates/api-http` | 两个运行时共享的 HTTP 层（路由、错误映射、鉴权） |
-| `crates/adapter-fs` / `adapter-sqlite` | 本地 profile 适配器 |
+| `crates/adapter-fs` / `adapter-turso` | 本地 profile 适配器 |
 | `crates/adapter-r2` / `adapter-d1` | Worker profile 适配器（同键布局、同 SQL） |
 | `crates/local` | CLI 与原生服务器共用的本地存储装配，无 HTTP 与认证 |
 | `crates/client` | 统一 Library 接口与 local/HTTP 实现，共用归档和同步 |
@@ -108,7 +108,7 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## 测试
 
-- **83 个 Rust 测试**——domain、format、适配器、29 个业务测试（真实 fs+SQLite，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
+- **83 个 Rust 测试**——domain、format、适配器、29 个业务测试（真实 fs+Turso，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
 - **12 个浏览器 E2E**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
 - **独立 CLI 业务验收与快照**——离线导入、编辑、历史、分页、服务器接管与多端协作，见 `tests/local-workflows.py`；local/remote 两类来源分别与 Worker 验证归档和同步。
 - **Worker 业务冒烟**——同一验收清单对 workerd 执行（`tests/worker-smoke.sh`）。
@@ -138,3 +138,5 @@ bash tests/worker-smoke.sh                                               # 对�
 ## 许可
 
 MIT
+
+原生索引使用 Turso 0.8.2，可通过 `fts` 选择是否构建 Tantivy；见[构建开关与搜索规则](docs/turso.md)。

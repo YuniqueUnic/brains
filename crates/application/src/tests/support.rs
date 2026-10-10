@@ -1,4 +1,4 @@
-//! Test seams for business tests: the production stack (fs store + sqlite
+//! Test seams for business tests: the production stack (fs store + Turso
 //! index) plus injectable failure wrappers for fault-injection scenarios
 //! (design §8.4, §17.2: 故障注入是验收的一部分).
 
@@ -7,13 +7,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::Vault;
 use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
-use brains_adapter_sqlite::SqliteIndex;
+use brains_adapter_turso::TursoIndex;
 use brains_domain::{CursorSigner, Limits, Principal, Scope};
 use brains_ports::{FileProjection, IndexStore, LinkRow, ListFilter, ListRow, LiteralRow};
 
 /// A real vault backed by real adapters, in a temp directory.
 pub struct TestVault {
-    pub vault: Vault<FsHeadStore, FsRevisionStore, FsBlobStore, SqliteIndex>,
+    pub vault: Vault<FsHeadStore, FsRevisionStore, FsBlobStore, TursoIndex>,
     pub dir: tempfile::TempDir,
 }
 
@@ -41,7 +41,7 @@ pub fn limited_principal(prefix: &str) -> Principal {
 pub fn open_vault() -> TestVault {
     let dir = tempfile::tempdir().unwrap();
     let store = FsStore::create(dir.path(), "default").unwrap();
-    let index = SqliteIndex::open(&dir.path().join("index.db")).unwrap();
+    let index = TursoIndex::open(&dir.path().join("index.db")).unwrap();
     let vault = Vault::new(
         FsHeadStore::new(store.clone()),
         FsRevisionStore::new(store.clone()),
@@ -57,14 +57,14 @@ pub fn open_vault() -> TestVault {
 /// IndexStore wrapper whose first `fail_after` upserts succeed and every
 /// later one fails — modeling "HEAD committed, index write failed" (§8.4).
 pub struct FlakyIndex {
-    inner: SqliteIndex,
+    inner: TursoIndex,
     upserts: AtomicUsize,
     pub fail_after: usize,
     pub broken: Arc<AtomicUsize>,
 }
 
 impl FlakyIndex {
-    pub fn new(inner: SqliteIndex, fail_after: usize, broken: Arc<AtomicUsize>) -> Self {
+    pub fn new(inner: TursoIndex, fail_after: usize, broken: Arc<AtomicUsize>) -> Self {
         Self {
             inner,
             upserts: AtomicUsize::new(0),
@@ -96,8 +96,7 @@ impl IndexStore for FlakyIndex {
 
     async fn scan_literal(
         &self,
-        _lower: &str,
-        _upper: Option<&str>,
+        _prefix: Option<&str>,
         _after: &str,
         _limit: usize,
         _query: &str,
@@ -111,8 +110,7 @@ impl IndexStore for FlakyIndex {
     async fn search_fts(
         &self,
         _query: &str,
-        _lower: &str,
-        _upper: Option<&str>,
+        _prefix: Option<&str>,
         _tag: Option<&str>,
         _offset: usize,
         _limit: usize,

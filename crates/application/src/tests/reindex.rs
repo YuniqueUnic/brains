@@ -3,7 +3,7 @@
 
 use crate::Precondition;
 use crate::Vault;
-use brains_adapter_sqlite::SqliteIndex;
+use brains_adapter_turso::TursoIndex;
 use brains_domain::{CursorSigner, Limits, VaultPath};
 
 use super::support::{TestVault, open_vault, owner_principal, put_text};
@@ -47,7 +47,7 @@ async fn fresh_index_reports_building_then_rebuild_restores_search() {
         vault.heads,
         vault.revisions,
         vault.blobs,
-        SqliteIndex::open(&fresh_db).unwrap(),
+        TursoIndex::open(&fresh_db).unwrap(),
         "default".into(),
         Limits::default(),
         CursorSigner::new([9u8; 32]),

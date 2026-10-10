@@ -1,0 +1,10 @@
+{
+  "basic": {
+    "fts_search": false,
+    "fts_tantivy": false
+  },
+  "fts": {
+    "fts_search": true,
+    "fts_tantivy": true
+  }
+}

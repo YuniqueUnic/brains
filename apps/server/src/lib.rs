@@ -1,5 +1,5 @@
 //! brains-server library: the local-rust runtime profile — filesystem +
-//! SQLite adapters and the file-backed security store, wired into the shared
+//! Turso adapters and the file-backed security store, wired into the shared
 //! axum layer from `brains-api-http`. Exposed so integration tests can boot
 //! the exact production stack in-process.
 
@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore};
-use brains_adapter_sqlite::SqliteIndex;
+use brains_adapter_turso::TursoIndex;
 use brains_api_http::auth::SecurityStore;
 use brains_api_http::state::{AppState, Blob, Head, Idx, Rev};
 use brains_domain::Limits;
@@ -45,7 +45,7 @@ impl ServerConfig {
     }
 }
 
-pub type LocalState = AppState<FsHeadStore, FsRevisionStore, FsBlobStore, SqliteIndex>;
+pub type LocalState = AppState<FsHeadStore, FsRevisionStore, FsBlobStore, TursoIndex>;
 pub type SharedState = Arc<LocalState>;
 
 /// Build the complete local application state against durable storage.
@@ -93,7 +93,7 @@ where
     FsHeadStore: Head,
     FsRevisionStore: Rev,
     FsBlobStore: Blob,
-    SqliteIndex: Idx,
+    TursoIndex: Idx,
 {
     let (state, plaintext, token_new) = build_state(&config)?;
     // First boot on a completely empty vault: lay down the template notes so

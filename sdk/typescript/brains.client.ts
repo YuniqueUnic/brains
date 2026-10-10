@@ -1394,6 +1394,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 501) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.NotImplemented({
+                        "error": body["error"] as never,
+                        });
+                }
                 if (status === 503) {
                     const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
                     const rawBody = await resp.clone().json().catch(() => undefined);

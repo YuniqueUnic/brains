@@ -3494,6 +3494,16 @@
             },
             "description": "Error: Internal"
           },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotImplemented"
+                }
+              }
+            },
+            "description": "Error: NotImplemented"
+          },
           "503": {
             "content": {
               "application/json": {

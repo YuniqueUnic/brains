@@ -46,11 +46,8 @@ impl Scope {
     pub fn parse(raw: &str) -> DomainResult<Self> {
         let (level_raw, prefix) = raw.split_once(':').unwrap_or((raw, ""));
         let level = AccessLevel::parse(level_raw)?;
-        let prefix = match prefix {
-            "" | "/" => None,
-            p if p.starts_with('/') => Some(p.trim_start_matches('/').to_owned()),
-            p => Some(p.to_owned()),
-        };
+        let prefix =
+            path::normalize_prefix(Some(prefix.trim_start_matches('/'))).map(str::to_owned);
         Ok(Self { level, prefix })
     }
 

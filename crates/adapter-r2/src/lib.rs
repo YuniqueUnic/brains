@@ -224,6 +224,7 @@ impl HeadStore for R2ContentStore {
         // cursor pages the raw scan), narrow with a SEGMENT-BOUNDARY filter
         // (a bare key prefix would leak `notes-backup/` into `prefix=notes`),
         // sort by path, then keep what is strictly after `after`.
+        let prefix = brains_domain::path::normalize_prefix(prefix);
         let scan_prefix = match prefix {
             Some(p) if !p.is_empty() => format!("{heads_root}{p}"),
             _ => heads_root.clone(),

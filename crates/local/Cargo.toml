@@ -4,9 +4,13 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["fts"]
+fts = ["brains-adapter-turso/fts"]
+
 [dependencies]
 brains-adapter-fs.workspace = true
-brains-adapter-sqlite.workspace = true
+brains-adapter-turso.workspace = true
 brains-application.workspace = true
 brains-domain.workspace = true
 futures.workspace = true

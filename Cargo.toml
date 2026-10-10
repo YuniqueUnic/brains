@@ -6,7 +6,7 @@ members = [
     "crates/ports",
     "crates/application",
     "crates/adapter-fs",
-    "crates/adapter-sqlite",
+    "crates/adapter-turso",
     "crates/api-types",
     "crates/api-http",
     "crates/adapter-r2",
@@ -32,13 +32,13 @@ brains-format = { path = "crates/format" }
 brains-ports = { path = "crates/ports" }
 brains-application = { path = "crates/application" }
 brains-adapter-fs = { path = "crates/adapter-fs" }
-brains-adapter-sqlite = { path = "crates/adapter-sqlite" }
+brains-adapter-turso = { path = "crates/adapter-turso", default-features = false }
 brains-api-types = { path = "crates/api-types" }
 brains-api-http = { path = "crates/api-http", default-features = false }
 brains-adapter-r2 = { path = "crates/adapter-r2" }
 brains-adapter-d1 = { path = "crates/adapter-d1" }
-brains-client = { path = "crates/client" }
-brains-local = { path = "crates/local" }
+brains-client = { path = "crates/client", default-features = false }
+brains-local = { path = "crates/local", default-features = false }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -50,7 +50,7 @@ clap = { version = "4", features = ["derive"] }
 clap_complete = "4.6"
 clap_complete_nushell = "4.6"
 reqwest = { version = "0.13", default-features = false, features = ["json", "query", "rustls", "stream"] }
-rusqlite = { version = "0.40", features = ["bundled"] }
+turso = { version = "=0.8.2", default-features = false }
 sha2 = "0.11"
 hmac = "0.13"
 hex = "0.4"

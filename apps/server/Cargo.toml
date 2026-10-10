@@ -4,10 +4,14 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+default = ["fts"]
+fts = ["brains-local/fts"]
+
 [dependencies]
 axum.workspace = true
 brains-adapter-fs.workspace = true
-brains-adapter-sqlite.workspace = true
+brains-adapter-turso.workspace = true
 brains-api-http = { workspace = true, features = ["local"] }
 brains-application.workspace = true
 brains-local.workspace = true
