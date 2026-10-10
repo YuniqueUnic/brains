@@ -4,7 +4,7 @@
 
 **A human-readable, migration-safe knowledge store — plain files in, plain files out, every revision kept.**
 
-[中文文档](README.zh.md) · [Architecture](docs/architecture.md) · [Runbook](docs/runbook.md) · [Import, sync & migration](docs/portable-workflow.md) · [Verification log](docs/verification.md)
+[中文文档](README.zh.md) · [Architecture](docs/architecture.md) · [Runbook](docs/runbook.md) · [Import, sync & migration](docs/portable-workflow.md)
 
 [![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
 
@@ -81,8 +81,6 @@ pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local
 pnpm exec wrangler dev --port 8799          # → http://localhost:8799
 bash tests/worker-smoke.sh                  # CAS race, search, trash/restore acceptance
 ```
-
-Validated acceptance (local workerd): the **full 24-check Web suite passes against the Worker unchanged**, alongside concurrent same-base writes → exactly one `200`, one `412`; trash→410→restore yielding a new generation; deleting the D1 database and re-running `reindex` restoring identical search results; CLI + export working unchanged against the Worker. Real-account deployment is the remaining milestone and is deliberately not claimed as done ([verification log](docs/verification.md)).
 
 ## Architecture
 

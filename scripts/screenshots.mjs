@@ -1,8 +1,8 @@
 /**
  * Regenerate the README screenshots against a running local server.
  * Usage: BRAINS_URL=http://127.0.0.1:8801 node scripts/screenshots.mjs
- * (run from tests/e2e/ so @playwright/test resolves, e.g.
- *  `cd tests/e2e && node ../../scripts/screenshots.mjs`)
+ * Install workspace dependencies with `pnpm install` first.
+ * Playwright is resolved from the tests/e2e package.
  *
  * Seed the demo server (fresh data dir) before running:
  *   brains-server --data-dir /tmp/readme-demo --port 8801 \
@@ -12,10 +12,13 @@
  *   put notes/weekly/2026-W41.md   (mentions 缓存策略)
  *   put notes/inbox/idea.md
  */
-import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(new URL("../tests/e2e/package.json", import.meta.url));
+const { chromium } = require("@playwright/test");
 
 const BASE = process.env.BRAINS_URL ?? "http://127.0.0.1:8801";
 const TOKEN = process.env.BRAINS_TOKEN ?? "readme-demo-token-0000000000000000";

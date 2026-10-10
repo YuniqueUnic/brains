@@ -8,7 +8,8 @@ Documentation for the Brains repository, written against the code as it is
 | [architecture.md](architecture.md) | How the system works: crates, storage layout, commit protocol, auth, API contract, runtimes |
 | [runbook.md](runbook.md) | How to run, configure, back up, deploy, and troubleshoot |
 | [ai-integration.md](ai-integration.md) | Agent-facing API reference and write etiquette |
-| [verification.md](verification.md) | What was verified, when, and with what limits |
+| [editor-search.md](editor-search.md) | Source tags, search commands, and editor width |
+| [releasing.md](releasing.md) | Unified versions and release workflows |
 
 ## Documentation standards
 

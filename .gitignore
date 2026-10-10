@@ -3,14 +3,30 @@
 /target-e2e
 /apps/web/dist
 /apps/worker/build
-node_modules/
+node_modules
+*.tsbuildinfo
 brainstore-design
-docs/evidence
+
+# Local development records and agent tooling
+/tasks.csv
+/tasks.done.csv
+/agents.csv
+/agents.done.csv
+/.impeccable/
+/.agents
+/.schemaui/
+/AGENTS.md
+/AGENTS.override.md
+/docs/verification.md
+/docs/xidl-http-envelope-handoff.md
+/docs/xidl-issues-review.md
+/docs/evidence/
 
 # Local runtimes & stores (never commit knowledge data or local state)
 /brain-data
 /data
 .wrangler/
+.dev.vars
 .dev.vars.local
 
 # Test artifacts
@@ -47,4 +63,3 @@ rustc-ice-*.txt
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
-

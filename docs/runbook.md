@@ -124,21 +124,15 @@ bsx --profile home sync --remote-profile cloud resolve 'docs/guide.md' --merged-
 
 ## GitHub 自动 Release / 部署清单（真实运行所需）
 
-仓库提供 Release、Deploy 与 CI 工作流；工作流文件存在不代表已有 GitHub remote、云账号或生产资源。本机当前部署条件见 [2026-10-10 续验记录](evidence/2026-10-10-continuation/README.md)。
+仓库提供 Release Please、Release、Deploy 与 CI 工作流。版本管理、版本 PR、标签创建和失败重跑统一见 [统一版本与发布](releasing.md)。
 
-**1. 自动发布（`.github/workflows/release.yml`）** — 使用 GitHub 自动提供的 `GITHUB_TOKEN`；只有 publish job 需要 `contents: write`，不需要 Cloudflare 凭据：
-```bash
-git tag v0.1.0 && git push origin v0.1.0     # 或 Actions 页手动 dispatch 填版本号
-```
-先更新根 `Cargo.toml` 的 `[workspace.package].version`，并确保同一提交已通过 CI（含 SDK codegen drift）。tag 与手动输入都必须是 `v<workspace version>`；例如当前 `0.1.0` 只接受 `v0.1.0`。prepare 统一输出 tag、version、commit SHA，所有构建 job 固定检出该 SHA。Web/Worker 的 package.json 是私有构建工具配置，不承担公开 Release 版本。
+**1. 发布产物**（`.github/workflows/release.yml`）：在已有 Release tag 上构建，使用 GitHub 自动提供的 `GITHUB_TOKEN`，不需要 Cloudflare 凭据。
 
 产物包括 macOS arm64/x64 与 Linux musl 的 server+CLI tar.gz、web dist、完整 Worker bundle 和已提交的 OpenAPI；每个 tar.gz 都带 SHA-256 文件。native job 会实际运行 `bsx --version`，精确核对 SemVer、Git SHA 前 12 位和 clean 状态，再打包 `VERSION` 与自包含的 [native 使用说明](native-release.md)。macOS 使用 `macos-15`/`macos-15-intel`，当前 workflow 不执行代码签名或公证。[GitHub runner 说明](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
 
-publish 会把远端 tag 解引用到 commit 后与构建 SHA 比较，支持 annotated tag。已有同 SHA tag 可用于失败后的重跑；指向其它提交时拒绝发布，绝不强推。仅手动 dispatch 可以创建缺失的 tag；tag push 触发的运行若发现标签被删除，会失败而不是自动重建。`gh release create --verify-tag` 阻止 CLI 自动创建错误标签；已经正式发布的 Release 不会被自动覆盖，再次 create 将明确失败，需先检查既有发布状态。[GitHub CLI 说明](https://cli.github.com/manual/gh_release_create)
-
 Worker 包含 `build/`（含 shim、JS、Wasm）、`web/dist/`、`migrations/d1/`、`wrangler.json`、`release.json` 和独立部署 README。`scripts/package-worker.py` 从开发配置生成包内相对路径，移除源码 `[build]`，保留 binding、路由、限制和 required secrets；Wrangler 精确版本取自 frozen-lockfile 安装结果并写入 README。解包后不需要 Rust 源码或另一个 Web 包。首次部署仍需填写真实 D1 ID、R2 目标和实例 secrets；包内不附凭据。[Wrangler 配置](https://developers.cloudflare.com/workers/wrangler/configuration/)
 
-本地包验收必须在源码目录外解压，再从该目录使用包内 `wrangler.json` 做 dry-run、本地 D1 migration、静态资源和 Worker 业务 smoke；不能改回源码目录的 assets/migrations 路径来得到通过。当前本地实测、Git tag 失败分支和系统 Safari 限制见 [Release 验收记录](evidence/2026-10-10-release-readiness/README.md)。GitHub 托管矩阵及实际发布尚需配置 remote 后触发验证。
+本地包验收必须在源码目录外解压，再从该目录使用包内 `wrangler.json` 做 dry-run、本地 D1 migration、静态资源和 Worker 业务 smoke；不能改回源码目录的 assets/migrations 路径来得到通过。
 
 **2. Cloudflare Worker 部署（`.github/workflows/deploy.yml`）**：首次部署与后续工作流部署分开准备。
 

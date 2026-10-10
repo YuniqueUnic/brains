@@ -4,7 +4,7 @@
 
 **面向人类、可迁移的长期知识库——进来的是普通文件，出去的也是普通文件，且每一版都留着。**
 
-[English](README.md) · [架构文档](docs/architecture.md) · [运行手册](docs/runbook.md) · [导入、同步与迁移](docs/portable-workflow.md) · [验证记录](docs/verification.md)
+[English](README.md) · [架构文档](docs/architecture.md) · [运行手册](docs/runbook.md) · [导入、同步与迁移](docs/portable-workflow.md)
 
 [![CI](https://github.com/unic/brains/actions/workflows/ci.yml/badge.svg)](https://github.com/unic/brains/actions/workflows/ci.yml)
 
@@ -76,8 +76,6 @@ pnpm exec wrangler d1 migrations apply BRAINS_INDEX --local
 pnpm exec wrangler dev --port 8799          # → http://localhost:8799
 bash tests/worker-smoke.sh                  # CAS 竞争、搜索、回收站/恢复验收
 ```
-
-本地 workerd 已验证的验收项：**24 项网页验收对 Worker 原样全量通过**；同基线并发双写恰好一方 `200` 一方 `412`；trash→410→restore 产生新 generation；删掉 D1 库再 `reindex` 后搜索结果一致；CLI 与导出对 Worker 原样可用。**真实账户部署是下一个里程碑，当前不宣称已完成**（见[验证记录](docs/verification.md)）。
 
 ## 架构
 

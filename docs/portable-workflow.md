@@ -1,6 +1,6 @@
 # Brains 本地工作、迁移与主库切换
 
-本文对应 2026-10-10 完成的实现。命令以 `bsx --help` 为准；设计边界见 [ADR 0004](adr/0004-portable-workflow-and-editor.md)，实测与原始结果见 [首轮验收](evidence/2026-10-09-brains-improvements/README.md)、[分页/跨浏览器/规模续验](evidence/2026-10-10-continuation/README.md) 和 [发布包验收](evidence/2026-10-10-release-readiness/README.md)。真实 Cloudflare 账户尚未部署验收，本文中的 `cloud` 是需要自行配置的目标名称。
+命令以 `bsx --help` 为准；设计边界见 [ADR 0004](adr/0004-portable-workflow-and-editor.md)。本文中的 `cloud` 是需要自行配置的目标名称，使用前应验证目标账户的部署与权限。
 
 ## 存储和三种传输语义
 

@@ -13,8 +13,7 @@ on-disk layout IS the backup; search indexes are rebuildable projections.
 
 - Docs: [README](https://github.com/unic/brains/blob/main/README.md) ·
   [Runbook](https://github.com/unic/brains/blob/main/docs/runbook.md) ·
-  [AI integration (agent API reference)](https://github.com/unic/brains/blob/main/docs/ai-integration.md) ·
-  [Verification log](https://github.com/unic/brains/blob/main/docs/verification.md)
+  [AI integration (agent API reference)](https://github.com/unic/brains/blob/main/docs/ai-integration.md)
 - Architecture: https://github.com/unic/brains/blob/main/docs/architecture.md
 - Quickstart: `cargo build -p brains-server -p brains-cli` then
   `./target/debug/brains-server --data-dir ./brain-data --token "$TOKEN" --web-dist apps/web/dist`
@@ -24,7 +23,8 @@ on-disk layout IS the backup; search indexes are rebuildable projections.
 - API surface: `/api/v1/*` — files, revisions, search (literal + FTS),
   links, restore, copy/move/diff, maintenance. See docs/ai-integration.md
   for the agent-facing reference with CAS etiquette.
-- Deployment: GitHub Actions — tag `v*` → multi-platform release artifacts;
+- Deployment: GitHub Actions — Release Please manages the version PR and tag,
+  then dispatches the multi-platform asset build (see docs/releasing.md);
   `Deploy` workflow → Cloudflare Workers (secrets: CLOUDFLARE_API_TOKEN,
   CLOUDFLARE_ACCOUNT_ID; R2 bucket brains-data; D1 database
   brains-index).

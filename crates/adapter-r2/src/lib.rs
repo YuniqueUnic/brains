@@ -162,7 +162,7 @@ impl HeadStore for R2ContentStore {
     /// form, so this is verify-then-delete with a re-check: if a head
     /// reappears after the delete (a restore raced us), the error is raised
     /// instead of pretending the purge won. The race window is the
-    /// get→delete span and is documented in docs/verification.md.
+    /// get→delete span.
     fn remove(
         &self,
         path: &VaultPath,

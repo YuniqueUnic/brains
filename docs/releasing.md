@@ -29,7 +29,7 @@ mbx check --workspace --all-targets --all-features --locked
 pnpm install --frozen-lockfile
 ```
 
-`VERSION.txt` 与 `.release-please-manifest.json` 初始化为 0.2.0，作为后续自动版本的起点。本次没有创建 tag、Release 或远端 PR。manifest 只指定版本，当前未配置提交扫描起点；首次版本 PR 可能包含历史提交，需审核版本与日志。若需发布初始 0.2.0，维护者应先明确首发提交与发布说明，再建立对应 Release 并手动分发构建，不把本地 bump 当作已发布。参见 [release-please 初始化说明](https://github.com/googleapis/release-please/blob/v17.6.0/docs/manifest-releaser.md#bootstrapping)。
+`VERSION.txt` 与 `.release-please-manifest.json` 初始化为 0.2.0，作为后续自动版本的起点。manifest 只指定版本，当前未配置提交扫描起点；首次版本 PR 可能包含历史提交，需审核版本与日志。若需发布初始 0.2.0，维护者应先明确首发提交与发布说明，再建立对应 Release 并手动分发构建，不把本地 bump 当作已发布。参见 [release-please 初始化说明](https://github.com/googleapis/release-please/blob/v17.6.0/docs/manifest-releaser.md#bootstrapping)。
 
 `check-versions.py` 只校验，不负责改写版本。版本写入统一交给 release-please，避免两套版本更新器。pnpm lock v9 不存各工作区自身的版本，无需新增字段；不要对锁文件里的第三方版本做全局替换。
 
