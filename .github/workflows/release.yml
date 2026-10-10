@@ -140,11 +140,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build web
         run: pnpm --dir apps/web build
+      - name: Install Worker build tool for the host
+        run: cargo install worker-build --locked --version 0.8.7
       - name: Build worker wasm
         working-directory: apps/worker
-        run: |
-          cargo install worker-build --locked --version 0.8.7
-          worker-build --release
+        run: worker-build --release
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
       # CI's codegen drift check owns generation. Publish this commit's contract.
