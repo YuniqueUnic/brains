@@ -5,6 +5,7 @@
 /apps/worker/build
 node_modules/
 brainstore-design
+docs/evidence
 
 # Local runtimes & stores (never commit knowledge data or local state)
 /brain-data

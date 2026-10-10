@@ -35,6 +35,8 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 - **一份 HTTP 契约，三类客户端。** Web、remote 模式 CLI、curl/agent 走同一套版本化 REST API；local 模式 CLI 直接调用同一应用层；两个运行时（原生 Axum 与 Cloudflare Worker）复用同一 axum 层。
 - **一切有界。** 字面检索是有界窗口、绝不伪造"已搜完全库"；索引损坏时响亮降级（`503` / `building`）；超限文本只存储、不入索引。
 
+[Markdown 元信息和预览用法](docs/markdown-preview.md)
+
 ## 快速开始：先用一个 bsx
 
 ```bash
@@ -75,7 +77,7 @@ pnpm exec wrangler dev --port 8799          # → http://localhost:8799
 bash tests/worker-smoke.sh                  # CAS 竞争、搜索、回收站/恢复验收
 ```
 
-本地 workerd 已验证的验收项：**12 个浏览器 E2E 用例对 Worker 原样全量通过**；同基线并发双写恰好一方 `200` 一方 `412`；trash→410→restore 产生新 generation；删掉 D1 库再 `reindex` 后搜索结果一致；CLI 与导出对 Worker 原样可用。**真实账户部署是下一个里程碑，当前不宣称已完成**（见[验证记录](docs/verification.md)）。
+本地 workerd 已验证的验收项：**24 项网页验收对 Worker 原样全量通过**；同基线并发双写恰好一方 `200` 一方 `412`；trash→410→restore 产生新 generation；删掉 D1 库再 `reindex` 后搜索结果一致；CLI 与导出对 Worker 原样可用。**真实账户部署是下一个里程碑，当前不宣称已完成**（见[验证记录](docs/verification.md)）。
 
 ## 架构
 
@@ -108,8 +110,8 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## 测试
 
-- **83 个 Rust 测试**——domain、format、适配器、29 个业务测试（真实 fs+Turso，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
-- **12 个浏览器 E2E**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
+- **91 个 Rust 测试**——domain、format、适配器、31 个业务测试（真实 fs+Turso，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
+- **24 项网页验收（22 项浏览器流程 + 2 项解析规则）**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
 - **独立 CLI 业务验收与快照**——离线导入、编辑、历史、分页、服务器接管与多端协作，见 `tests/local-workflows.py`；local/remote 两类来源分别与 Worker 验证归档和同步。
 - **Worker 业务冒烟**——同一验收清单对 workerd 执行（`tests/worker-smoke.sh`）。
 

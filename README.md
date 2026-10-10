@@ -35,6 +35,8 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 - **One HTTP contract, three clients.** The Web app, remote CLI and `curl`/agents speak the same versioned REST API; standalone CLI calls the same application layer directly, backed by the same axum layer on both runtimes.
 - **Bounded everything.** Literal-scan windows never fake a complete search; a lost index degrades loudly (`503` / `building`), and oversized text is stored but never indexed.
 
+[Markdown metadata and preview guide (中文)](docs/markdown-preview.md)
+
 ## Quickstart: standalone bsx
 
 ```bash
@@ -80,7 +82,7 @@ pnpm exec wrangler dev --port 8799          # → http://localhost:8799
 bash tests/worker-smoke.sh                  # CAS race, search, trash/restore acceptance
 ```
 
-Validated acceptance (local workerd): the **full 12-scenario browser E2E suite passes against the Worker unchanged**, alongside concurrent same-base writes → exactly one `200`, one `412`; trash→410→restore yielding a new generation; deleting the D1 database and re-running `reindex` restoring identical search results; CLI + export working unchanged against the Worker. Real-account deployment is the remaining milestone and is deliberately not claimed as done ([verification log](docs/verification.md)).
+Validated acceptance (local workerd): the **full 24-check Web suite passes against the Worker unchanged**, alongside concurrent same-base writes → exactly one `200`, one `412`; trash→410→restore yielding a new generation; deleting the D1 database and re-running `reindex` restoring identical search results; CLI + export working unchanged against the Worker. Real-account deployment is the remaining milestone and is deliberately not claimed as done ([verification log](docs/verification.md)).
 
 ## Architecture
 
@@ -113,8 +115,8 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## Testing
 
-- **83 Rust tests** — domain, format, adapters, 29 application business tests (real fs+Turso, injected CAS/index failures), HTTP + CLI contract tests.
-- **12 browser E2E** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
+- **91 Rust tests** — domain, format, adapters, 31 application business tests (real fs+Turso, injected CAS/index failures), HTTP + CLI contract tests.
+- **24 Web checks (22 browser E2E + 2 parsing checks)** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
 - **Standalone CLI business scenarios and snapshot** — offline edits/history, pagination, directory ownership, and multi-server collaboration (`tests/local-workflows.py`); both local/remote sources exercise archive and sync against Worker.
 - **Worker business smoke** — the same acceptance list executed against workerd (`tests/worker-smoke.sh`).
 
