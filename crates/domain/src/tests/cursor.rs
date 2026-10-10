@@ -28,3 +28,15 @@ fn roundtrip_and_tamper() {
             .is_err()
     );
 }
+
+#[test]
+fn escaped_filter_and_position_roundtrip() {
+    let signer = CursorSigner::new([7; 32]);
+    let filter = r#"["literal","needle",null,["a,b","agent-memory"]]"#;
+    let position = "notes/quoted\".md";
+    let cursor = signer.issue(Endpoint::Search, filter, position);
+    assert_eq!(
+        signer.verify(Endpoint::Search, filter, &cursor).unwrap(),
+        position
+    );
+}

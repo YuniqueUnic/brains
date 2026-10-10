@@ -3,6 +3,8 @@
 //! forge or tamper. A cursor is an opaque position, never an authorization
 //! credential — every page re-checks permissions independently.
 
+use std::borrow::Cow;
+
 use base64::Engine;
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
@@ -42,9 +44,9 @@ impl Endpoint {
 
 #[derive(Serialize, Deserialize)]
 struct CursorPayload<'a> {
-    e: &'a str,
-    f: &'a str,
-    p: &'a str,
+    e: Cow<'a, str>,
+    f: Cow<'a, str>,
+    p: Cow<'a, str>,
 }
 
 #[derive(Clone)]
@@ -76,9 +78,9 @@ impl CursorSigner {
     /// `filter` must change whenever the query parameters change.
     pub fn issue(&self, endpoint: Endpoint, filter: &str, position: &str) -> String {
         let payload = CursorPayload {
-            e: endpoint.as_str(),
-            f: filter,
-            p: position,
+            e: endpoint.as_str().into(),
+            f: filter.into(),
+            p: position.into(),
         };
         let json = serde_json::to_vec(&payload).expect("payload serializes");
         let sig = self.sign_payload(&json);
@@ -116,7 +118,7 @@ impl CursorSigner {
                 "cursor does not match current filters".into(),
             ));
         }
-        Ok(payload.p.to_owned())
+        Ok(payload.p.into_owned())
     }
 }
 
