@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use brains_client::sync::{self, Resolution, SyncFailureStage, SyncState};
-use brains_client::{BrainClient, ClientError, ClientResult, Library};
+use brains_client::{ClientError, ClientResult, Library};
 use sha2::{Digest, Sha256};
 
 use crate::cli::{SyncCommand, SyncSide};
@@ -12,7 +12,7 @@ use crate::config::Config;
 struct Endpoint {
     profile: String,
     id: String,
-    client: BrainClient,
+    client: Box<dyn Library>,
 }
 
 struct Pair {
@@ -93,16 +93,28 @@ fn resolve_pair(config: &Config, local: &str, remote: &str) -> ClientResult<Pair
             "local and remote profiles must have different names",
         ));
     }
-    let (local_url, local_token) = config
+    let local_profile = config
         .resolve_named(local)
         .map_err(|message| invalid(&message))?;
-    let (remote_url, remote_token) = config
+    let remote_profile = config
         .resolve_named(remote)
         .map_err(|message| invalid(&message))?;
-    let local_client = BrainClient::new(&local_url, &local_token);
-    let remote_client = BrainClient::new(&remote_url, &remote_token);
-    let local_id = endpoint_id(&local_client, &local_url)?;
-    let remote_id = endpoint_id(&remote_client, &remote_url)?;
+    let local_client = local_profile.connect()?;
+    let remote_client = remote_profile.connect()?;
+    let local_id = local_profile.identity(
+        local_client
+            .capabilities()?
+            .vault
+            .as_deref()
+            .unwrap_or("default"),
+    )?;
+    let remote_id = remote_profile.identity(
+        remote_client
+            .capabilities()?
+            .vault
+            .as_deref()
+            .unwrap_or("default"),
+    )?;
     if local_id == remote_id {
         return Err(invalid(
             "both profiles resolve to the same endpoint and vault",
@@ -131,16 +143,6 @@ fn resolve_pair(config: &Config, local: &str, remote: &str) -> ClientResult<Pair
     }
 }
 
-fn endpoint_id(client: &BrainClient, url: &str) -> ClientResult<String> {
-    let capabilities = client.capabilities()?;
-    let identity = format!(
-        "{}\n{}",
-        url.trim_end_matches('/'),
-        capabilities.vault.as_deref().unwrap_or("default")
-    );
-    Ok(hex::encode(Sha256::digest(identity.as_bytes())))
-}
-
 fn synchronize(
     pair: &Pair,
     state_file: &Path,
@@ -148,8 +150,8 @@ fn synchronize(
     dry_run: bool,
 ) -> ClientResult<i32> {
     let report = sync::synchronize(
-        &pair.endpoints[0].client,
-        &pair.endpoints[1].client,
+        pair.endpoints[0].client.as_ref(),
+        pair.endpoints[1].client.as_ref(),
         state,
         dry_run,
         |state| save_state(state_file, state),
@@ -226,8 +228,8 @@ fn resolve_conflict(
             let media =
                 content_type.unwrap_or_else(|| brains_domain::media_type_for(path).to_owned());
             sync::resolve(
-                &pair.endpoints[0].client,
-                &pair.endpoints[1].client,
+                pair.endpoints[0].client.as_ref(),
+                pair.endpoints[1].client.as_ref(),
                 state,
                 path,
                 Resolution::Merged {
@@ -243,8 +245,8 @@ fn resolve_conflict(
         _ => return Err(invalid("choose exactly one of --keep or --merged-file")),
     };
     sync::resolve(
-        &pair.endpoints[0].client,
-        &pair.endpoints[1].client,
+        pair.endpoints[0].client.as_ref(),
+        pair.endpoints[1].client.as_ref(),
         state,
         path,
         resolution,
@@ -300,8 +302,8 @@ fn invalid(message: &str) -> ClientError {
 
 fn verify_pair(pair: &Pair) -> ClientResult<i32> {
     let report = brains_client::verify::verify_current(
-        &pair.endpoints[0].client,
-        &pair.endpoints[1].client,
+        pair.endpoints[0].client.as_ref(),
+        pair.endpoints[1].client.as_ref(),
     )?;
     super::print_pretty(&report)?;
     println!(
@@ -320,7 +322,7 @@ pub(crate) fn verify_before_use(config: &Config, source: &str, target: &str) -> 
     if verify_pair(&pair)? != 0 {
         return Err(invalid("contents differ; active profile was not changed"));
     }
-    let target = &pair.endpoints[1 - pair.local_index].client;
+    let target = pair.endpoints[1 - pair.local_index].client.as_ref();
     if super::system::reindex(target, true, 5)? != 0 {
         return Err(invalid(
             "target reindex failed; active profile was not changed",

@@ -1,8 +1,8 @@
 # Architecture
 
 This document describes Brains as implemented in this repository: the crate
-graph, the storage format, the commit protocol, the auth model, and the two
-runtime profiles. For operational procedures (run, back up, rebuild the
+graph, the storage format, the commit protocol, the auth model, standalone access, and the two server
+runtimes. For operational procedures (run, back up, rebuild the
 index), see [runbook.md](runbook.md). For a machine-readable API contract,
 see [../api/brains.idl](../api/brains.idl) and
 [../sdk/openapi/brains-openapi.json](../sdk/openapi/brains-openapi.json).
@@ -50,11 +50,29 @@ api-types: HTTP DTOs shared by api-http and client
 | `brains-adapter-d1` | Cloudflare D1 index sharing the same SQL as SQLite |
 | `brains-api-types` | Transport DTOs (snake_case JSON), the HTTP surface shapes |
 | `brains-api-http` | The shared axum layer: routing, auth middleware, preconditions, ETag helpers, error mapping. Both runtimes serve this one router |
-| `brains-client` | CLI-side client: preconditions, streaming, two-phase export |
+| `brains-local` | Native FS/SQLite assembly for server and standalone CLI; no HTTP, auth or background runtime |
+| `brains-client` | Library interface; HTTP and direct local adapters; shared archive, sync and export |
 | `brains-server` | Native binary: config, listener, SPA hosting, first-boot seeding |
 | `brains-worker` | Cloudflare Worker binary: per-request bindings (R2/D1/env secrets), Static Assets for the SPA |
 | `brains-cli` | The `bsx` command line client |
 | `brains-sdk` | Generated Rust client SDK (from the IDL, for external consumers) |
+
+## Standalone and remote access
+
+CLI commands depend on `Library`, implemented by `LocalClient` and `BrainClient`.
+LocalClient calls application services through `brains-local` native assembly;
+BrainClient uses HTTP. FileEndpoint and ArchiveEndpoint keep one implementation
+of import/export/sync for both modes. Application owns query normalization and
+write rules; HTTP owns authentication and wire conversion.
+
+A native data directory has one process owner. FsStore clones retain the OS lock
+for the lifetime of all adapters; Vault closes its index before releasing these
+handles. A server holds ownership while running; use its remote profile during
+that time. Different directories can collaborate through existing sync/archive.
+Each vault owns its SQLite index. A missing index is built from all authoritative
+HEADs into a temporary DB, checkpointed and closed with error checks, then renamed.
+No legacy root index is read. This does not provide a transaction across HEAD and
+index or serialize concurrent requests inside one server.
 
 ## Storage layout
 
@@ -68,7 +86,8 @@ The on-disk layout is identical across runtimes and is the raw backup format:
     revisions/<hex>.json   # immutable revision metadata (parent chain)
     blobs/<hex>/<name>     # immutable content, content-addressed
     locks/                 # path-level exclusive locks (native profile)
-  index.sqlite*            # native profile: rebuildable index
+    index.db*              # per-vault rebuildable SQLite index
+  .brains.lock             # directory ownership for CLI/server
   auth.json  secret.key    # token registry / session signing key
 ```
 

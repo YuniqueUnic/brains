@@ -2,11 +2,11 @@
 
 use crate::commands;
 use crate::config::Config;
-use brains_client::{BrainClient, TransferKind};
+use brains_client::TransferKind;
 use clap::{CommandFactory, Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "bsx", version = env!("BSX_VERSION"), about = "Brains command line client")]
+#[command(name = "bsx", version = env!("BSX_VERSION"), about = "Brains local and remote library manager")]
 struct Cli {
     /// Named profile from ~/.brains/config.json (default: active profile).
     #[arg(long, global = true)]
@@ -36,6 +36,12 @@ pub(crate) struct LsArgs {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Initialize an empty local library and make its profile active. No server required.
+    Init {
+        directory: std::path::PathBuf,
+        #[arg(long, default_value = "default")]
+        vault: String,
+    },
     /// Print a shell completion script without loading profiles or connecting.
     Completion {
         #[arg(value_enum)]
@@ -245,10 +251,19 @@ pub(crate) enum SyncSide {
 pub(crate) enum ProfileCommand {
     Add {
         name: String,
-        #[arg(long)]
-        url: String,
-        #[arg(long)]
+        #[arg(
+            long,
+            required_unless_present = "data_dir",
+            conflicts_with = "data_dir"
+        )]
+        url: Option<String>,
+        #[arg(long, requires = "url")]
         token: Option<String>,
+        /// Attach an existing local library (use init to create one).
+        #[arg(long, required_unless_present = "url", conflicts_with = "url")]
+        data_dir: Option<std::path::PathBuf>,
+        #[arg(long, requires = "data_dir")]
+        vault: Option<String>,
     },
     List,
     Use {
@@ -291,6 +306,16 @@ pub(crate) fn run() -> i32 {
             return 2;
         }
     };
+    if let Command::Init { directory, vault } = cli.command {
+        return match commands::system::init(&mut config, cli.profile.as_deref(), &directory, vault)
+        {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("bsx: {e}");
+                e.exit_code()
+            }
+        };
+    }
     // Profile management owns the config file itself and must work before any
     // connection exists — the first-use journey is `bsx profile add` (§12).
     if let Command::Profile { command } = cli.command {
@@ -323,21 +348,39 @@ pub(crate) fn run() -> i32 {
             return 2;
         }
     };
-    let client = BrainClient::new(&connection.0, &connection.1);
+    if let Command::Login { stdin_token } = cli.command {
+        let crate::config::Profile::Remote { url, .. } = &connection else {
+            eprintln!("bsx: local profiles use filesystem access, not tokens");
+            return 2;
+        };
+        return match commands::system::login(&mut config, cli.profile.as_deref(), url, stdin_token)
+        {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("bsx: {e}");
+                e.exit_code()
+            }
+        };
+    }
+    let client = match connection.connect() {
+        Ok(client) => client,
+        Err(e) => {
+            eprintln!("bsx: {e}");
+            return e.exit_code();
+        }
+    };
+    let client = client.as_ref();
 
     let result = match cli.command {
-        Command::Capabilities { json } => commands::system::capabilities(&client, json),
-        Command::Whoami { json } => commands::system::whoami(&client, json),
+        Command::Capabilities { json } => commands::system::capabilities(client, json),
+        Command::Whoami { json } => commands::system::whoami(client, json),
         Command::Profile { command } => commands::system::profile_command(&mut config, command),
-        Command::Login { stdin_token } => commands::system::login(
-            &mut config,
-            cli.profile.as_deref(),
-            &connection.0,
-            stdin_token,
-        ),
-        Command::Ls(args) => commands::query::ls(&client, args),
-        Command::Cat { path } => commands::files::cat(&client, &path),
-        Command::Stat { path, json } => commands::files::stat(&client, &path, json),
+        Command::Login { .. } | Command::Init { .. } => {
+            unreachable!("handled before opening the library")
+        }
+        Command::Ls(args) => commands::query::ls(client, args),
+        Command::Cat { path } => commands::files::cat(client, &path),
+        Command::Stat { path, json } => commands::files::stat(client, &path, json),
         Command::Put {
             path,
             from,
@@ -346,7 +389,7 @@ pub(crate) fn run() -> i32 {
             content_type,
             operation_id,
         } => commands::files::put(
-            &client,
+            client,
             &path,
             from,
             create,
@@ -354,18 +397,18 @@ pub(crate) fn run() -> i32 {
             content_type,
             operation_id,
         ),
-        Command::Rm { path, if_revision } => commands::files::rm(&client, &path, &if_revision),
-        Command::History { path, json } => commands::files::history(&client, &path, json),
+        Command::Rm { path, if_revision } => commands::files::rm(client, &path, &if_revision),
+        Command::History { path, json } => commands::files::history(client, &path, json),
         Command::Show {
             path,
             revision,
             json,
-        } => commands::files::show(&client, &path, &revision, json),
+        } => commands::files::show(client, &path, &revision, json),
         Command::Restore {
             path,
             revision,
             if_revision,
-        } => commands::files::restore(&client, &path, &revision, &if_revision),
+        } => commands::files::restore(client, &path, &revision, &if_revision),
         Command::Search {
             query,
             mode,
@@ -373,44 +416,44 @@ pub(crate) fn run() -> i32 {
             tag,
             json,
             max_pages,
-        } => commands::query::search(&client, &query, &mode, prefix, tag, json, max_pages),
+        } => commands::query::search(client, &query, &mode, prefix, tag, json, max_pages),
         Command::Links {
             path,
             backlinks,
             json,
-        } => commands::query::links(&client, &path, backlinks, json),
+        } => commands::query::links(client, &path, backlinks, json),
         Command::Patch {
             path,
             if_revision,
             old,
             new,
             dry_run,
-        } => commands::files::patch(&client, &path, &if_revision, &old, &new, dry_run),
+        } => commands::files::patch(client, &path, &if_revision, &old, &new, dry_run),
         Command::Cp {
             source,
             target,
             if_revision,
-        } => commands::files::transfer(&client, TransferKind::Copy, &source, &target, &if_revision),
+        } => commands::files::transfer(client, TransferKind::Copy, &source, &target, &if_revision),
         Command::Mv {
             source,
             target,
             if_revision,
-        } => commands::files::transfer(&client, TransferKind::Move, &source, &target, &if_revision),
-        Command::Diff { path, from, to } => commands::files::diff(&client, &path, &from, &to),
+        } => commands::files::transfer(client, TransferKind::Move, &source, &target, &if_revision),
+        Command::Diff { path, from, to } => commands::files::diff(client, &path, &from, &to),
         Command::Reindex { all_pages, limit } => {
-            commands::system::reindex(&client, all_pages, limit)
+            commands::system::reindex(client, all_pages, limit)
         }
-        Command::Seed => commands::system::seed_template(&client),
-        Command::Export { output, format } => commands::system::export(&client, &output, format),
+        Command::Seed => commands::system::seed_template(client),
+        Command::Export { output, format } => commands::system::export(client, &output, format),
         Command::Import {
             input,
             format,
             overwrite,
             dry_run,
-        } => commands::system::import(&client, &input, format, overwrite, dry_run),
+        } => commands::system::import(client, &input, format, overwrite, dry_run),
         Command::Sync { .. } => unreachable!("sync is handled before single-profile resolution"),
         Command::Completion { .. } => unreachable!("completion is handled before config loading"),
-        Command::Edit { path, if_revision } => commands::files::edit(&client, &path, &if_revision),
+        Command::Edit { path, if_revision } => commands::files::edit(client, &path, &if_revision),
     };
 
     match result {

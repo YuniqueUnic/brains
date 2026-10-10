@@ -7,6 +7,7 @@ pub mod endpoint;
 pub mod export;
 pub mod import;
 pub mod library;
+pub mod local;
 pub mod sync;
 pub mod verify;
 pub use library::Library;
@@ -54,9 +55,14 @@ impl ClientError {
 impl std::fmt::Display for ClientError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.status == 0 {
-            write!(f, "network error: {}", self.message)
+            write!(f, "I/O error: {}", self.message)
         } else {
-            write!(f, "HTTP {}: {}", self.status, self.message)
+            write!(
+                f,
+                "{}: {}",
+                self.code.as_deref().unwrap_or("REQUEST_FAILED"),
+                self.message
+            )
         }
     }
 }
@@ -378,6 +384,13 @@ impl Library for BrainClient {
                 .header(reqwest::header::CONTENT_TYPE, "application/json")
                 .body(serde_json::to_string(&body).expect("serializes")),
         )?;
+        // The IDL declares 409 as TransferConflict with the same result body:
+        // the target has been committed, so callers must see the partial outcome.
+        if response.status() == reqwest::StatusCode::CONFLICT {
+            return response
+                .json()
+                .map_err(|e| ClientError::transport(format!("transfer result: {e}")));
+        }
         self.expect_json(response)
     }
 
@@ -411,4 +424,30 @@ pub fn urlencode(raw: &str) -> String {
         }
     }
     out
+}
+
+impl From<DomainError> for ClientError {
+    fn from(error: DomainError) -> Self {
+        let status = match error {
+            DomainError::InvalidArgument(_) => 400,
+            DomainError::InvalidFormat(_) | DomainError::ChecksumMismatch { .. } => 422,
+            DomainError::Unauthenticated => 401,
+            DomainError::Forbidden(_) => 403,
+            DomainError::NotFound { .. } => 404,
+            DomainError::Trashed { .. } => 410,
+            DomainError::PurgeLive { .. } | DomainError::EditMismatch { .. } => 409,
+            DomainError::RevisionConflict { .. } => 412,
+            DomainError::TooLarge { .. } => 413,
+            DomainError::PreconditionRequired => 428,
+            DomainError::CapabilityUnsupported(_) => 501,
+            DomainError::IndexUnavailable(_) | DomainError::StorageUnavailable(_) => 503,
+            DomainError::Internal(_) => 500,
+        };
+        Self {
+            status,
+            code: Some(error.code().into()),
+            message: error.to_string(),
+            current_revision: error.current_revision().map(str::to_owned),
+        }
+    }
 }

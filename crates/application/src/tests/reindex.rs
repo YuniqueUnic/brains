@@ -3,7 +3,6 @@
 
 use crate::Precondition;
 use crate::Vault;
-use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
 use brains_adapter_sqlite::SqliteIndex;
 use brains_domain::{CursorSigner, Limits, VaultPath};
 
@@ -45,9 +44,9 @@ async fn fresh_index_reports_building_then_rebuild_restores_search() {
     // "Lose" the index: a brand-new empty database.
     let fresh_db = dir.path().join("fresh.db");
     let fresh = Vault::new(
-        FsHeadStore::new(FsStore::open(dir.path(), "default").unwrap()),
-        FsRevisionStore::new(FsStore::open(dir.path(), "default").unwrap()),
-        FsBlobStore::new(FsStore::open(dir.path(), "default").unwrap()),
+        vault.heads,
+        vault.revisions,
+        vault.blobs,
         SqliteIndex::open(&fresh_db).unwrap(),
         "default".into(),
         Limits::default(),

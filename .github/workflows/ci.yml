@@ -97,8 +97,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build server + web
         run: |
-          cargo build -p brains-server
+          cargo build -p brains-server -p brains-cli
           pnpm --dir apps/web build
+      - name: Standalone CLI and native server handoff
+        run: python3 tests/local-workflows.py
       - name: Install Playwright browser
         run: pnpm --dir tests/e2e exec playwright install --with-deps chromium
       - name: Run screenplay E2E
@@ -150,7 +152,8 @@ jobs:
       - name: Archive and profile-pair sync through the CLI
         run: |
           cargo build -p brains-server -p brains-cli
-          python3 scripts/run-workerd.py -- python3 tests/cli-workflows.py
+          python3 scripts/run-workerd.py -- python3 tests/cli-workflows.py --source-mode local
+          python3 scripts/run-workerd.py -- python3 tests/cli-workflows.py --source-mode remote
 
   worker-e2e:
     name: Browser E2E against the Worker (workerd)

@@ -4,7 +4,7 @@
 
 ## 存储和三种传输语义
 
-FS/R2 保存权威 HEAD、revision 和 blob；SQLite/D1 保存可重建的搜索、列表和链接投影。迁移通过两种 runtime 的共同 HTTP 契约进行，不复制数据库文件，也不把索引当作正文。现有服务端 store traits 保持分层；客户端的 `FileEndpoint` 供工作树导入导出、同步和核验复用，`ArchiveEndpoint` 只承载完整历史维护能力。
+FS/R2 保存权威 HEAD、revision 和 blob；SQLite/D1 保存可重建的搜索、列表和链接投影。local 模式直接调用应用层，remote 模式通过两种服务端 runtime 的共同 HTTP 契约访问。迁移复用同一套端点接口，不复制数据库文件，也不把索引当作正文。现有服务端 store traits 保持分层；客户端的 `FileEndpoint` 供工作树导入导出、同步和核验复用，`ArchiveEndpoint` 只承载完整历史维护能力。
 
 | 操作 | 保留内容 | 写入语义 | 合适场景 |
 | --- | --- | --- | --- |
@@ -39,18 +39,20 @@ bsx --version
 
 ## 配置本地和远端
 
+没有服务器时，先创建一个离线库：
+
 ```bash
-bsx profile add local --url http://127.0.0.1:45800
-printf '%s' "$LOCAL_TOKEN" | bsx --profile local login --stdin-token
+bsx init "$HOME/.brains/my-library" --profile local
 bsx --profile local capabilities --json
 bsx --profile local whoami --json
 
 # cloud URL 和 token 来自实际部署，不是示例常量。
 bsx profile add cloud --url "$CLOUD_URL"
 printf '%s' "$CLOUD_TOKEN" | bsx --profile cloud login --stdin-token
-bsx --profile cloud capabilities --json
 bsx --profile cloud whoami --json
 ```
+
+local 直接读写数据目录，不需要 token。remote 使用 URL 和 token，服务器也可以在 `127.0.0.1`。同目录服务器接管、多个服务器以及新配置的 `mode` 字段见[本地与远端模式](local-remote.md)。
 
 默认配置为 `~/.brains/config.json`，可用 `BRAIN_CONFIG` 指向独立文件。双 profile 同步和受验证切库要求使用已存储的命名 profile，执行前取消 `BRAINS_URL` / `BRAINS_TOKEN` 环境覆盖。配置不存在才按空配置处理，坏 JSON 和权限错误会明确失败；配置与 sync 状态使用 0600 临时文件、fsync 和原子 rename，避免截断上一次有效记录。`--profile cloud login` 只更新 cloud 的 token。
 
@@ -117,7 +119,7 @@ bsx profile list
 
 ## 已验证与待实测
 
-代码可证明：两种存储组合复用 ports/HTTP，索引可重建；普通传输与历史归档的语义不同；写入保留 CAS、不可变对象和权限边界。业务实测：native FS＋SQLite 与本地 workerd R2＋D1 往返、完整历史及 metadata、两种 SDK 的原始字节/null 往返、故障续传、冲突解决和受验证切库均已通过，具体输入和结果见验收记录。
+代码可证明：local 与 remote 共用应用规则、FileEndpoint 和 ArchiveEndpoint，索引可重建；普通传输与历史归档的语义不同；写入保留 CAS、不可变对象和权限边界。业务实测：native FS＋SQLite 与本地 workerd R2＋D1 往返、完整历史及 metadata、两种 SDK 的原始字节/null 往返、故障续传、冲突解决和受验证切库均已通过，具体输入和结果见验收记录。
 
 续验已覆盖 261 个路径/504 个 revision、130 代单路径历史、分页重建与并发 CAS；native Firefox/WebKit 及 Worker Chromium/HTTPS WebKit 的完整浏览器用例也已通过。这些是明确规模和本地 runtime 下的结果，不代表生产容量或系统 Safari/iOS 实机验收。
 

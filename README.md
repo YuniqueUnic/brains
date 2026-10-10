@@ -32,34 +32,38 @@ The web UI ships with **dark / light / system themes** and **i18n (zh-CN / Engli
 - **Local and cloud profiles sync in both directions.** `bsx sync` uses per-file revision bases and CAS, merges non-overlapping text edits, and leaves divergent files untouched for an explicit resolution.
 - **Portable current files and complete reachable history.** `bsx import/export` moves readable working trees; `--format archive` preserves reachable revisions and blobs across FS/SQLite and R2/D1. `profile use --verify-with` validates content and the rebuilt index before selecting the daily profile. See the [portable workflow](docs/portable-workflow.md) for the different guarantees, resumable failures, shell completion and Git-aware build versions.
 - **The on-disk layout is the backup.** `vaults/{vault}/heads|revisions|blobs` — copy the directory and you have a complete raw backup; the index (SQLite/D1) is a rebuildable projection you can delete at any time.
-- **One HTTP contract, three clients.** The Web app, the Rust CLI and `curl`/agents all speak the same versioned REST API, backed by the same axum layer on both runtimes.
+- **One HTTP contract, three clients.** The Web app, remote CLI and `curl`/agents speak the same versioned REST API; standalone CLI calls the same application layer directly, backed by the same axum layer on both runtimes.
 - **Bounded everything.** Literal-scan windows never fake a complete search; a lost index degrades loudly (`503` / `building`), and oversized text is stored but never indexed.
 
-## Quickstart (local profile)
+## Quickstart: standalone bsx
 
 ```bash
-cargo build -p brains-server -p brains-cli
-pnpm --dir apps/web build
-
-# boot the whole stack (API + web UI, same origin)
-./target/debug/brains-server \
-  --data-dir ./brain-data \
-  --token "$MY_TOKEN" \
-  --web-dist apps/web/dist
-# → http://127.0.0.1:45800  (paste your token into the login screen)
+mbx install --path apps/cli --locked --force
+bsx init "$HOME/.brains/my-library" --profile laptop
+bsx import ./notes --dry-run
+bsx import ./notes
+bsx ls
+bsx search "hello"
 ```
 
-CLI against the same server:
+This is `local` mode: bsx opens the native stores directly, without a server,
+listener or token. `init` creates an empty library and selects its profile;
+run `bsx seed` if you want the template notes.
+
+Add a `remote` profile when you want a Web UI or shared server. Loopback and
+public servers use the same commands:
 
 ```bash
-./target/debug/bsx profile add local --url http://127.0.0.1:45800 --token "$MY_TOKEN"
-./target/debug/bsx ls ""
-echo "# hello" > /tmp/hello.md
-./target/debug/bsx put notes/hello.md --from /tmp/hello.md --create
-./target/debug/bsx search "hello"
+bsx profile add cloud --url "$CLOUD_URL"
+printf '%s' "$CLOUD_TOKEN" | bsx --profile cloud login --stdin-token
+bsx --profile laptop sync --remote-profile cloud
 ```
 
-See the [runbook](docs/runbook.md) for auth model, backup layout, reindex and troubleshooting.
+Sync exchanges current state; use `export/import --format archive` for complete
+reachable history. See [local and remote workflows](docs/local-remote.md) for
+standalone use, server handoff and multiple servers. One process owns a data
+directory at a time: while a server owns it, access it through a remote profile.
+See the [runbook](docs/runbook.md) for server startup, auth, backups and recovery.
 
 ## Cloudflare local simulation (no cloud account needed)
 
@@ -82,7 +86,7 @@ Validated acceptance (local workerd): the **full 12-scenario browser E2E suite p
 
 ```
 Browser ──/ (static)──▶ Workers Static Assets │ native Axum + web dist
-CLI / curl ──/api/v1/*──┐
+remote CLI / curl ──/api/v1/*──┐
                         ▼
         shared axum layer (crates/api-http): routes · error mapping · auth
                         │
@@ -102,14 +106,16 @@ CLI / curl ──/api/v1/*──┐
 | `crates/api-http` | shared HTTP layer (routing, error mapping, auth) for both runtimes |
 | `crates/adapter-fs` / `adapter-sqlite` | local profile adapters |
 | `crates/adapter-r2` / `adapter-d1` | Worker profile adapters (same key layout, same SQL) |
-| `crates/client` | typed Rust HTTP client (CLI): conditional writes, two-phase export |
+| `crates/local` | native store assembly shared by CLI and server, without HTTP or auth |
+| `crates/client` | Library interface with local/HTTP adapters, shared archive and sync |
 | `apps/web` | React + CodeMirror editor (explicit load/clean/dirty/saving/conflict state machine) |
 | `apps/server` · `apps/worker` | thin runtime wiring per profile |
 
 ## Testing
 
-- **80 Rust tests** — domain, format, adapters, 28 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
+- **82 Rust tests** — domain, format, adapters, 28 application business tests (real fs+SQLite, injected CAS/index failures), HTTP + CLI contract tests.
 - **12 browser E2E** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
+- **Standalone CLI business scenarios and snapshot** — offline edits/history, pagination, directory ownership, and multi-server collaboration (`tests/local-workflows.py`); both local/remote sources exercise archive and sync against Worker.
 - **Worker business smoke** — the same acceptance list executed against workerd (`tests/worker-smoke.sh`).
 
 ```bash

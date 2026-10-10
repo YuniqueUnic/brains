@@ -60,6 +60,22 @@ impl SqliteIndex {
             conn: Mutex::new(conn),
         })
     }
+
+    /// Flush and close before publishing a newly built database by rename.
+    pub fn close(self) -> DomainResult<()> {
+        let conn = self.conn.into_inner().map_err(|_| poisoned())?;
+        let (busy, pages, checkpointed): (i64, i64, i64) = conn
+            .query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+            })
+            .map_err(index_err)?;
+        if busy != 0 || pages != checkpointed {
+            return Err(DomainError::IndexUnavailable(
+                "index checkpoint did not complete".into(),
+            ));
+        }
+        conn.close().map_err(|(_, error)| index_err(error))
+    }
 }
 
 fn index_err(e: rusqlite::Error) -> DomainError {

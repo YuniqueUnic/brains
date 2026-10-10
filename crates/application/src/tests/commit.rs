@@ -205,19 +205,10 @@ async fn index_failure_does_not_lose_the_commit() {
     let broken = Arc::new(AtomicUsize::new(0));
     let index = brains_adapter_sqlite::SqliteIndex::open(&dir.path().join("index.db")).unwrap();
     let flaky = FlakyIndex::new(index, 0, broken.clone());
-    let heads = brains_adapter_fs::FsHeadStore::new(
-        brains_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
-    );
-    let revisions = brains_adapter_fs::FsRevisionStore::new(
-        brains_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
-    );
-    let blobs = brains_adapter_fs::FsBlobStore::new(
-        brains_adapter_fs::FsStore::open(dir.path(), "default").unwrap(),
-    );
     let degraded = crate::Vault::new(
-        heads,
-        revisions,
-        blobs,
+        vault.heads,
+        vault.revisions,
+        vault.blobs,
         flaky,
         "default".into(),
         brains_domain::Limits::default(),

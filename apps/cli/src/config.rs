@@ -1,15 +1,44 @@
-//! Profile storage for the CLI (design §12): `~/.brains/config.json`
-//! keeps per-profile URL + token. `BRAINS_URL` / `BRAINS_TOKEN` override the
-//! active profile so scripts and CI stay explicit.
-
+//! Named local libraries and remote connections. Environment URL/token overrides
+//! apply only to remote profiles; they never turn a local operation into HTTP.
+use brains_client::{BrainClient, ClientError, ClientResult, Library, local::LocalClient};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct Profile {
-    pub url: String,
-    #[serde(default)]
-    pub token: String,
+#[serde(tag = "mode", rename_all = "lowercase", deny_unknown_fields)]
+pub enum Profile {
+    Local {
+        data_dir: PathBuf,
+        vault: String,
+    },
+    Remote {
+        url: String,
+        #[serde(default)]
+        token: String,
+    },
+}
+impl Profile {
+    pub fn connect(&self) -> ClientResult<Box<dyn Library>> {
+        match self {
+            Self::Local { data_dir, vault } => Ok(Box::new(LocalClient::open(data_dir, vault)?)),
+            Self::Remote { url, token } => Ok(Box::new(BrainClient::new(url, token))),
+        }
+    }
+    pub fn identity(&self, vault: &str) -> ClientResult<String> {
+        use sha2::{Digest, Sha256};
+        let location = match self {
+            Self::Local { data_dir, .. } => format!(
+                "local:{}",
+                data_dir
+                    .canonicalize()
+                    .map_err(|e| ClientError::transport(e.to_string()))?
+                    .display()
+            ),
+            // Keep existing remote pair identities: tokens/profile names do not identify a library.
+            Self::Remote { url, .. } => url.trim_end_matches('/').to_owned(),
+        };
+        Ok(hex::encode(Sha256::digest(format!("{location}\n{vault}"))))
+    }
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -44,44 +73,35 @@ impl Config {
         write_json_atomic(&Self::path(), self)
     }
 
-    /// Resolve URL/token: env overrides, then the active profile.
-    pub fn resolve(&self, profile: Option<&str>) -> Result<(String, String), String> {
-        let env_url = std::env::var("BRAINS_URL").ok();
-        let env_token = std::env::var("BRAINS_TOKEN").ok();
-        let name = profile
-            .map(str::to_owned)
-            .or_else(|| self.active.clone())
-            .unwrap_or_else(|| "default".into());
-        match self.profiles.get(&name) {
-            Some(profile) => Ok((
-                env_url.unwrap_or_else(|| profile.url.clone()),
-                env_token.unwrap_or_else(|| profile.token.clone()),
-            )),
-            None => {
-                if let (Some(url), Some(token)) = (env_url, env_token) {
-                    return Ok((url, token));
-                }
-                Err(format!(
-                    "no profile `{name}`; run `bsx profile add {name} --url <URL>` or set BRAINS_URL/BRAINS_TOKEN"
-                ))
+    pub fn resolve(&self, profile: Option<&str>) -> Result<Profile, String> {
+        let url = std::env::var("BRAINS_URL").ok();
+        let token = std::env::var("BRAINS_TOKEN").ok();
+        let name = profile.or(self.active.as_deref()).unwrap_or("default");
+        match self.profiles.get(name) {
+            Some(Profile::Local { .. }) if url.is_some() || token.is_some() => Err("local mode does not accept BRAINS_URL/BRAINS_TOKEN; unset these variables or select a remote profile".into()),
+            Some(Profile::Local { data_dir, vault }) => Ok(Profile::Local { data_dir: data_dir.clone(), vault: vault.clone() }),
+            Some(Profile::Remote { url: stored_url, token: stored_token }) => Ok(Profile::Remote { url: url.unwrap_or_else(|| stored_url.clone()), token: token.unwrap_or_else(|| stored_token.clone()) }),
+            None => match (url, token) {
+                (Some(url), Some(token)) => Ok(Profile::Remote { url, token }),
+                _ => Err(format!("no profile `{name}`; run `bsx init <directory>` for local use, or `bsx profile add {name} --url <URL>`")),
             }
         }
     }
 
-    /// Resolve a named profile without environment overrides. Pair commands
-    /// need two independent endpoints, so a single BRAINS_URL/TOKEN override
-    /// would make the selected pair ambiguous.
-    pub fn resolve_named(&self, name: &str) -> Result<(String, String), String> {
+    /// Pair operations require two explicit profiles and never apply environment overrides.
+    pub fn resolve_named(&self, name: &str) -> Result<Profile, String> {
         let profile = self
             .profiles
             .get(name)
             .ok_or_else(|| format!("no profile `{name}`; add it with `bsx profile add`"))?;
-        if profile.url.trim().is_empty() || profile.token.is_empty() {
+        if let Profile::Remote { url, token } = profile
+            && (url.trim().is_empty() || token.is_empty())
+        {
             return Err(format!(
                 "profile `{name}` needs both URL and token before pair sync"
             ));
         }
-        Ok((profile.url.clone(), profile.token.clone()))
+        Ok(profile.clone())
     }
 }
 

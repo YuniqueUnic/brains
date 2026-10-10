@@ -35,6 +35,8 @@ pub use revision::FsRevisionStore;
 pub struct FsStore {
     vault_dir: PathBuf,
     vault: String,
+    // Every adapter clone keeps the process ownership alive.
+    _ownership: std::sync::Arc<std::fs::File>,
 }
 
 pub fn validate_vault_name(vault: &str) -> DomainResult<()> {
@@ -59,6 +61,7 @@ impl FsStore {
         let store = Self {
             vault_dir: base.join("vaults").join(vault),
             vault: vault.to_owned(),
+            _ownership: Self::acquire(base, false)?,
         };
         let format = read_json_file(&store.vault_dir.join("format.json"))
             .map_err(|e| DomainError::StorageUnavailable(format!("store open failed: {e}")))?;
@@ -79,6 +82,7 @@ impl FsStore {
         let store = Self {
             vault_dir: base.join("vaults").join(vault),
             vault: vault.to_owned(),
+            _ownership: Self::acquire(base, true)?,
         };
         for dir in [
             store.heads_dir(),
@@ -110,6 +114,28 @@ impl FsStore {
             .and_then(|()| file.sync_all().map_err(serde_json::Error::io))
             .map_err(|e| DomainError::StorageUnavailable(format!("format.json: {e}")))?;
         Ok(store)
+    }
+
+    fn acquire(base: &Path, create: bool) -> DomainResult<std::sync::Arc<std::fs::File>> {
+        if create {
+            std::fs::create_dir_all(base)
+                .map_err(|e| DomainError::StorageUnavailable(e.to_string()))?;
+        }
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(base.join(".brains.lock"))
+            .map_err(|e| {
+                DomainError::StorageUnavailable(format!("open {}: {e}", base.display()))
+            })?;
+        fs2::FileExt::try_lock_exclusive(&file).map_err(|e| DomainError::StorageUnavailable(
+            if e.kind() == io::ErrorKind::WouldBlock {
+                format!("data directory {} is in use; close its local process, or use a remote profile to access the running server", base.display())
+            } else { format!("lock {}: {e}", base.display()) }
+        ))?;
+        Ok(std::sync::Arc::new(file))
     }
 
     pub fn vault(&self) -> &str {

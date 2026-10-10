@@ -134,6 +134,7 @@ where
             .project_committed(&revision, Some(input.content), false)
             .await;
         Ok(MutationOutcome {
+            state: HeadState::Live,
             path: input.path.as_str().to_owned(),
             revision: revision.revision.as_str().to_owned(),
             generation,
@@ -210,6 +211,7 @@ where
         }
         let index_state = self.project_committed(&revision, None, true).await;
         Ok(MutationOutcome {
+            state: HeadState::Trashed,
             path: path.as_str().to_owned(),
             revision: revision.revision.as_str().to_owned(),
             generation,
@@ -346,6 +348,7 @@ where
         }
         let index_state = self.project_committed(&revision, Some(&bytes), false).await;
         Ok(MutationOutcome {
+            state: HeadState::Live,
             path: path.as_str().to_owned(),
             revision: revision.revision.as_str().to_owned(),
             generation,

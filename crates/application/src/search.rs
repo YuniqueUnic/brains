@@ -68,8 +68,22 @@ where
     pub async fn search(
         &self,
         principal: &Principal,
-        query: SearchQuery,
+        mut query: SearchQuery,
     ) -> DomainResult<SearchResult> {
+        query.prefix = query.prefix.filter(|value| !value.is_empty());
+        query.tag = query.tag.filter(|value| !value.is_empty());
+        query.cursor = query.cursor.filter(|value| !value.is_empty());
+        if query.q.is_empty() || query.q.len() > 512 {
+            return Err(DomainError::InvalidArgument(
+                "q must contain 1..512 bytes".into(),
+            ));
+        }
+        if query.scan_limit == 0 || query.scan_limit > self.limits.scan_window_max {
+            return Err(DomainError::InvalidArgument(format!(
+                "scan_limit must be between 1 and {}",
+                self.limits.scan_window_max
+            )));
+        }
         // The effective prefix must sit inside one granted read scope; results
         // are never silently intersected (design §15.2).
         match &query.prefix {
@@ -197,7 +211,7 @@ where
         self.require_scope(principal, AccessLevel::Read, path)?;
         let direction = if backlinks { "backlinks" } else { "outbound" };
         let filter = format!("links:{direction}:path={}", path.as_str());
-        let after = match cursor {
+        let after = match cursor.filter(|value| !value.is_empty()) {
             None => None,
             Some(cursor) => Some(self.cursors.verify(Endpoint::Links, &filter, cursor)?),
         };

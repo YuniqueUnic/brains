@@ -1,0 +1,41 @@
+{
+  "entries": [
+    {
+      "path": "a.md",
+      "generation": 3,
+      "state": "live"
+    },
+    {
+      "path": "b.md",
+      "generation": 2,
+      "state": "live"
+    },
+    {
+      "path": "copy.md",
+      "generation": 2,
+      "state": "trashed"
+    },
+    {
+      "path": "moved.md",
+      "generation": 1,
+      "state": "live"
+    },
+    {
+      "path": "raw.bin",
+      "generation": 2,
+      "state": "trashed"
+    },
+    {
+      "path": "run.sh",
+      "generation": 1,
+      "state": "live"
+    }
+  ],
+  "session": {
+    "actor": "local:owner",
+    "scopes": [
+      "admin:/"
+    ]
+  },
+  "exported_text": "# Edited locally\n"
+}

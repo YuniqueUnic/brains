@@ -10,6 +10,7 @@ brains-adapter-fs.workspace = true
 brains-adapter-sqlite.workspace = true
 brains-api-http = { workspace = true, features = ["local"] }
 brains-application.workspace = true
+brains-local.workspace = true
 brains-domain.workspace = true
 clap.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "net"] }

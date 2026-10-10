@@ -83,6 +83,9 @@ where
             sort,
             include_deleted,
         } = query;
+        let prefix = prefix.filter(|value| !value.is_empty());
+        let tag = tag.filter(|value| !value.is_empty());
+        let cursor = cursor.filter(|value| !value.is_empty());
         if limit == 0 || limit > self.limits.list_page_max {
             return Err(DomainError::InvalidArgument(format!(
                 "limit must be between 1 and {}",

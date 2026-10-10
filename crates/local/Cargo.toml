@@ -1,0 +1,12 @@
+[package]
+name = "brains-local"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+brains-adapter-fs.workspace = true
+brains-adapter-sqlite.workspace = true
+brains-application.workspace = true
+brains-domain.workspace = true
+futures.workspace = true

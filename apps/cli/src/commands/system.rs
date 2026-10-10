@@ -43,14 +43,43 @@ pub(crate) fn whoami(client: &dyn Library, json: bool) -> ClientResult<i32> {
 
 pub(crate) fn profile_command(config: &mut Config, command: ProfileCommand) -> ClientResult<i32> {
     match command {
-        ProfileCommand::Add { name, url, token } => {
-            config.profiles.insert(
-                name.clone(),
-                Profile {
+        ProfileCommand::Add {
+            name,
+            url,
+            token,
+            data_dir,
+            vault,
+        } => {
+            if config.profiles.contains_key(&name) {
+                return Err(brains_domain::DomainError::InvalidArgument(format!(
+                    "profile `{name}` already exists; use login to update its remote token"
+                ))
+                .into());
+            }
+            let profile = match (url, data_dir) {
+                (Some(url), None) => Profile::Remote {
                     url,
                     token: token.unwrap_or_default(),
                 },
-            );
+                (None, Some(path)) => {
+                    let data_dir = path
+                        .canonicalize()
+                        .map_err(|e| ClientError::transport(e.to_string()))?;
+                    let profile = Profile::Local {
+                        data_dir,
+                        vault: vault.unwrap_or_else(|| "default".into()),
+                    };
+                    profile.connect()?;
+                    profile
+                }
+                _ => {
+                    return Err(brains_domain::DomainError::InvalidArgument(
+                        "choose --url or --data-dir".into(),
+                    )
+                    .into());
+                }
+            };
+            config.profiles.insert(name.clone(), profile);
             if config.active.is_none() {
                 config.active = Some(name);
             }
@@ -65,7 +94,13 @@ pub(crate) fn profile_command(config: &mut Config, command: ProfileCommand) -> C
                 } else {
                     " "
                 };
-                println!("{marker} {name}  {}", profile.url);
+                match profile {
+                    Profile::Local { data_dir, vault } => println!(
+                        "{marker} {name}  local  {}  vault={vault}",
+                        data_dir.display()
+                    ),
+                    Profile::Remote { url, .. } => println!("{marker} {name}  remote  {url}"),
+                }
             }
             Ok(0)
         }
@@ -110,11 +145,22 @@ pub(crate) fn login(
         .map(str::to_owned)
         .or_else(|| config.active.clone())
         .unwrap_or_else(|| "default".into());
-    let entry = config.profiles.entry(name).or_insert_with(|| Profile {
-        url: url.to_owned(),
-        token: String::new(),
-    });
-    entry.token = token;
+    let entry = config
+        .profiles
+        .entry(name)
+        .or_insert_with(|| Profile::Remote {
+            url: url.to_owned(),
+            token: String::new(),
+        });
+    match entry {
+        Profile::Remote { token: stored, .. } => *stored = token,
+        Profile::Local { .. } => {
+            return Err(brains_domain::DomainError::InvalidArgument(
+                "local profiles use filesystem access, not tokens".into(),
+            )
+            .into());
+        }
+    }
     config.save().map_err(ClientError::transport)?;
     eprintln!("token stored");
     Ok(0)
@@ -224,4 +270,42 @@ pub(crate) fn import(
             Ok(0)
         }
     }
+}
+
+/// Create an empty owned library and register its absolute location.
+pub(crate) fn init(
+    config: &mut Config,
+    name: Option<&str>,
+    directory: &std::path::Path,
+    vault: String,
+) -> ClientResult<i32> {
+    let name = name.unwrap_or("local").to_owned();
+    if config.profiles.contains_key(&name) {
+        return Err(brains_domain::DomainError::InvalidArgument(format!(
+            "profile `{name}` already exists; select a new --profile name"
+        ))
+        .into());
+    }
+    let client = brains_client::local::LocalClient::create(directory, &vault)?;
+    let data_dir = directory
+        .canonicalize()
+        .map_err(|e| ClientError::transport(e.to_string()))?;
+    config.profiles.insert(
+        name.clone(),
+        Profile::Local {
+            data_dir: data_dir.clone(),
+            vault,
+        },
+    );
+    config.active = Some(name.clone());
+    config.save().map_err(ClientError::transport)?;
+    println!(
+        "initialized {} (local profile `{name}`, now active)",
+        data_dir.display()
+    );
+    println!(
+        "Import documents with `bsx --profile {name} import <directory>`; no server or token required."
+    );
+    drop(client);
+    Ok(0)
 }

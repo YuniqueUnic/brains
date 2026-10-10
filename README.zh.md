@@ -22,7 +22,7 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 
 ## 核心性质
 
-- **开箱即有内容，不是空白屏。** 首次启动空库自动播种五篇模板笔记——欢迎页、使用规则、**AI 协作守则**、**自包含记忆写作**与收件箱，人和 agent 都从可用的约定开始（云端实例用 `bsx seed`）。
+- **开箱即有内容，不是空白屏。** 原生服务器首次启动空库自动播种五篇模板笔记——欢迎页、使用规则、**AI 协作守则**、**自包含记忆写作**与收件箱，人和 agent 都从可用的约定开始（纯本地 bsx 和云端实例用 `bsx seed`）。
 - **对 AI 天然友好。** [docs/ai-integration.md](docs/ai-integration.md) 是面向机器的 API 参考（端点、CAS 礼仪、错误模型），`llms.txt` 为爬虫/agent 提供项目索引，且每个库内部自带精简守则（`docs/ai-guide.md`）。
 
 - **不可变修订 + 唯一原子提交点。** 每次保存写入内容寻址的 blob 与修订记录，再以 CAS（compare-and-swap）原子替换该路径的 HEAD。两个客户端基于同一版本并发保存：恰好一个成功，另一个收到携带当前版本的 `412`——不存在静默覆盖。
@@ -32,33 +32,33 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 - **本地与云端 profile 双向同步。** `bsx sync` 依据逐文件 revision 基线与 CAS 传递变更；无重叠文本修改自动合并，分歧文件保留两侧内容并交由用户明确解决。
 - **普通目录与完整历史各有明确入口。** `bsx import/export` 搬运可读工作树；`--format archive` 在 FS/SQLite 与 R2/D1 间保留完整可达 revision 和 blob。`profile use --verify-with` 实读正文、重建并核验目标索引后才切换日常主库；中断恢复、shell 补全及带 Git hash 的构建身份见[可移植工作流](docs/portable-workflow.md)。
 - **磁盘布局即备份。** `vaults/{vault}/heads|revisions|blobs`——拷贝目录即完整裸备份；索引（SQLite/D1）是可随时删除重建的投影。
-- **一份 HTTP 契约，三类客户端。** Web、Rust CLI、curl/agent 走同一套版本化 REST API；两个运行时（原生 Axum 与 Cloudflare Worker）复用同一 axum 层。
+- **一份 HTTP 契约，三类客户端。** Web、remote 模式 CLI、curl/agent 走同一套版本化 REST API；local 模式 CLI 直接调用同一应用层；两个运行时（原生 Axum 与 Cloudflare Worker）复用同一 axum 层。
 - **一切有界。** 字面检索是有界窗口、绝不伪造"已搜完全库"；索引损坏时响亮降级（`503` / `building`）；超限文本只存储、不入索引。
 
-## 快速开始（本地 profile）
+## 快速开始：先用一个 bsx
 
 ```bash
-cargo build -p brains-server -p brains-cli
-pnpm --dir apps/web build
-
-# 一条命令起全栈（API + Web 同域）
-./target/debug/brains-server \
-  --data-dir ./brain-data \
-  --token "$MY_TOKEN" \
-  --web-dist apps/web/dist
-# → http://127.0.0.1:45800 （把 token 粘进登录页）
+mbx install --path apps/cli --locked --force
+bsx init "$HOME/.brains/my-library" --profile laptop
+bsx import ./notes --dry-run
+bsx import ./notes
+bsx ls
+bsx search "关键词"
 ```
 
-CLI 对接同一服务：
+这是 `local` 模式：bsx 直接管理本地文件存储与索引，无需服务、端口或 token。`init` 创建空库并设为默认 profile；需要模板时执行 `bsx seed`。
+
+需要 Web 或多人协作时，再启动服务器并添加 `remote` profile。服务器在本机还是公网，用法相同：
 
 ```bash
-./target/debug/bsx profile add local --url http://127.0.0.1:45800 --token "$MY_TOKEN"
-./target/debug/bsx ls ""
-echo "# hello" > /tmp/hello.md && ./target/debug/bsx put notes/hello.md --from /tmp/hello.md --create
-./target/debug/bsx search "关键词"
+bsx profile add cloud --url "$CLOUD_URL"
+printf '%s' "$CLOUD_TOKEN" | bsx --profile cloud login --stdin-token
+bsx --profile laptop sync --remote-profile cloud
 ```
 
-认证模型、备份布局、索引重建与排障见[运行手册](docs/runbook.md)。
+同步用于当前状态协作；保留每代历史用 `export/import --format archive`。完整的“离线首用 → 远端协作 → 本机 Web → 多服务器同步”步骤见[本地与远端模式](docs/local-remote.md)。同一个数据目录只允许一个进程直接打开，服务器接管期间通过 remote profile 访问它。
+
+认证、服务器启动、备份与排障见[运行手册](docs/runbook.md)。
 
 ## Cloudflare 本地模拟（无需云账号）
 
@@ -81,7 +81,7 @@ bash tests/worker-smoke.sh                  # CAS 竞争、搜索、回收站/�
 
 ```
 浏览器 ──/ (静态)──▶ Workers Static Assets  │  原生 Axum + web dist
-CLI / curl ──/api/v1/*──┐
+remote CLI / curl ──/api/v1/*──┐
                         ▼
       共享 axum 层（crates/api-http）：路由 · 错误映射 · 鉴权
                         │
@@ -101,14 +101,16 @@ CLI / curl ──/api/v1/*──┐
 | `crates/api-http` | 两个运行时共享的 HTTP 层（路由、错误映射、鉴权） |
 | `crates/adapter-fs` / `adapter-sqlite` | 本地 profile 适配器 |
 | `crates/adapter-r2` / `adapter-d1` | Worker profile 适配器（同键布局、同 SQL） |
-| `crates/client` | CLI 的类型化 HTTP 客户端：条件写、两阶段导出 |
+| `crates/local` | CLI 与原生服务器共用的本地存储装配，无 HTTP 与认证 |
+| `crates/client` | 统一 Library 接口与 local/HTTP 实现，共用归档和同步 |
 | `apps/web` | React + CodeMirror 编辑器（显式 load/clean/dirty/saving/conflict 状态机） |
 | `apps/server` · `apps/worker` | 各 profile 的薄装配 |
 
 ## 测试
 
-- **80 个 Rust 测试**——domain、format、适配器、28 个业务测试（真实 fs+SQLite，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
+- **82 个 Rust 测试**——domain、format、适配器、28 个业务测试（真实 fs+SQLite，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
 - **12 个浏览器 E2E**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
+- **独立 CLI 业务验收与快照**——离线导入、编辑、历史、分页、服务器接管与多端协作，见 `tests/local-workflows.py`；local/remote 两类来源分别与 Worker 验证归档和同步。
 - **Worker 业务冒烟**——同一验收清单对 workerd 执行（`tests/worker-smoke.sh`）。
 
 ```bash

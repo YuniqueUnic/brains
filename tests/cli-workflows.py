@@ -5,47 +5,24 @@ Build brains-server and brains-cli first. This owns one disposable native
 server; the outer harness owns the empty Worker and its isolated R2/D1 state.
 """
 
+import argparse
 import hashlib
 import json
 import os
 from pathlib import Path
-import secrets
-import socket
-import subprocess
 import tempfile
-import time
-import urllib.request
+
+from cli_support import Cli, native_server
 
 
-def exercise(root, local_url, local_token):
-    repo = Path(__file__).resolve().parent.parent
-    config = root / "config.json"
-    config.write_text(json.dumps({"active": "local", "profiles": {
-        "local": {"url": local_url, "token": local_token},
-        "cloud": {"url": os.environ["BRAINS_BASE_URL"],
-                  "token": os.environ["BRAINS_E2E_TOKEN"]},
-    }}))
-    config.chmod(0o600)
-    env = {key: value for key, value in os.environ.items()
-           if key not in ("BRAINS_URL", "BRAINS_TOKEN")}
-    env["BRAIN_CONFIG"] = str(config)
-
-    def cli(profile, *args, data=None, expected=0):
-        result = subprocess.run(
-            [str(repo / "target/debug/bsx"), "--profile", profile, *map(str, args)],
-            input=data, capture_output=True, env=env, timeout=120,
-        )
-        assert result.returncode == expected, (
-            args, result.returncode, result.stdout.decode(errors="replace"),
-            result.stderr.decode(errors="replace"),
-        )
-        return result.stdout
-
-    def stat(profile, path):
-        return json.loads(cli(profile, "stat", path, "--json"))
-
-    def put(profile, path, data):
-        cli(profile, "put", path, "--if-revision", stat(profile, path)["revision"], data=data)
+def exercise(root, source_mode, local_url=None, local_token=None):
+    cli = Cli(root)
+    if source_mode == "local":
+        cli("local", "init", root / "data", "--vault", "cli-proof")
+    else:
+        cli.remote("local", local_url, local_token)
+    cli.remote("cloud", os.environ["BRAINS_BASE_URL"], os.environ["BRAINS_E2E_TOKEN"])
+    stat, put = cli.stat, cli.put
 
     assert cli("cloud", "ls", "--json", "--deleted") == b"", "Worker must be empty"
     source = root / "input"
@@ -137,41 +114,17 @@ def exercise(root, local_url, local_token):
 
 
 def main():
-    repo = Path(__file__).resolve().parent.parent
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-mode", choices=("local", "remote"), default="remote")
+    args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="brains-cli-workflows-") as directory:
         root = Path(directory)
-        token = secrets.token_urlsafe(32)
-        with socket.socket() as reservation:
-            reservation.bind(("127.0.0.1", 0))
-            port = reservation.getsockname()[1]
-        base = f"http://127.0.0.1:{port}"
-        with (root / "server.log").open("w+") as log:
-            server = subprocess.Popen([
-                str(repo / "target/debug/brains-server"), "--data-dir", str(root / "data"),
-                "--bind", "127.0.0.1", "--port", str(port), "--token", token,
-                "--vault", "cli-proof", "--no-seed",
-            ], stdout=log, stderr=subprocess.STDOUT)
-            try:
-                deadline = time.monotonic() + 30
-                while True:
-                    assert server.poll() is None, "native server exited"
-                    try:
-                        request = urllib.request.Request(base + "/api/v1/session",
-                            headers={"Authorization": "Bearer " + token})
-                        with urllib.request.urlopen(request, timeout=1):
-                            break
-                    except OSError:
-                        if time.monotonic() >= deadline:
-                            raise TimeoutError("native server did not become ready") from None
-                        time.sleep(0.1)
-                exercise(root, base, token)
-            finally:
-                server.terminate()
-                try:
-                    server.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    server.kill()
-                    server.wait()
+        if args.source_mode == "local":
+            exercise(root, "local")
+        else:
+            with native_server(root, root / "data", "cli-proof") as (base, token):
+                exercise(root, "remote", base, token)
+    print(f"{args.source_mode} source ↔ Worker: all workflows passed")
 
 
 if __name__ == "__main__":

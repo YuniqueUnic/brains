@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 
 struct TestServer {
+    config_path: std::path::PathBuf,
     url: String,
     token: String,
 }
@@ -41,9 +42,11 @@ fn boot_server() -> TestServer {
         }
     });
     let addr = addr_rx.recv().unwrap();
+    let config_path = dir.path().join("cli-config.json");
     std::mem::forget(dir);
     std::thread::sleep(Duration::from_millis(100));
     TestServer {
+        config_path,
         url: format!("http://{addr}"),
         token: "cli-contract-token-0123456789".into(),
     }
@@ -52,6 +55,7 @@ fn boot_server() -> TestServer {
 fn brain(server: &TestServer) -> Command {
     let mut command = Command::new(cargo_bin("bsx"));
     command
+        .env("BRAIN_CONFIG", &server.config_path)
         .env("BRAINS_URL", &server.url)
         .env("BRAINS_TOKEN", &server.token);
     command
@@ -253,6 +257,7 @@ fn whoami_reports_scopes_and_reauth_fails_cleanly() {
 
     // A wrong token is exit 4 with a message on stderr only.
     let output = Command::new(cargo_bin("bsx"))
+        .env("BRAIN_CONFIG", &server.config_path)
         .env("BRAINS_URL", &server.url)
         .env("BRAINS_TOKEN", "wrong-token")
         .args(["whoami"])

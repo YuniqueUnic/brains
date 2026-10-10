@@ -11,6 +11,16 @@ mbx build -p brains-server -p brains-cli   # 服务端 + CLI（二进制名 bsx�
 pnpm --dir apps/web build                            # Web 前端（产物 apps/web/dist）
 ```
 
+## 只用 bsx
+
+```bash
+bsx init "$HOME/.brains/my-library" --profile laptop
+bsx import ./notes
+bsx ls
+```
+
+以上 local 模式无需服务器和 token。Web 是可选入口；离线库和服务器之间的接管、同步、完整历史搬迁见[本地与远端模式](local-remote.md)。
+
 ## 启动服务
 
 ```bash
@@ -26,7 +36,7 @@ pnpm --dir apps/web build                            # Web 前端（产物 apps/
 - `--origin`：额外允许的 cookie 流 Origin；默认仅同源。
 - 服务启动时自动应用 `migrations/` 内嵌 SQL（索引库）；无需手工迁移。
 
-认证模型：root token 存 `auth.json`（0600）；Web 登录后发 HMAC 签名会话 cookie `brains_session`（HttpOnly, SameSite=Lax），cookie 变更请求要求 CSRF token + Origin 校验；API 直连用 `Authorization: Bearer`。native 仅在实际配置绑定 loopback IP，且请求为同源 loopback HTTP 时省略 `Secure`，使 WebKit 可在本机登录；HTTPS、公共 Host、跨源 allowlist、非 loopback 绑定和 Worker 始终保留 `Secure`。转发头不会放宽策略。IPv6 本机绑定使用 `--bind ::1`，浏览器使用 `http://[::1]:<port>`。详见 [architecture.md](architecture.md)。
+认证模型：token 注册表存 `auth.json`（0600）。显式提供的 token 只存 SHA-256 摘要；首次自动生成的 root token 另存可恢复明文。CLI 的原始 token 存私有配置；Web 登录后发 HMAC 签名会话 cookie `brains_session`（HttpOnly, SameSite=Lax），cookie 变更请求要求 CSRF token + Origin 校验；API 直连用 `Authorization: Bearer`。native 仅在实际配置绑定 loopback IP，且请求为同源 loopback HTTP 时省略 `Secure`，使 WebKit 可在本机登录；HTTPS、公共 Host、跨源 allowlist、非 loopback 绑定和 Worker 始终保留 `Secure`。转发头不会放宽策略。IPv6 本机绑定使用 `--bind ::1`，浏览器使用 `http://[::1]:<port>`。详见 [architecture.md](architecture.md)。
 
 ## 数据布局（即裸备份布局）
 
@@ -38,11 +48,12 @@ pnpm --dir apps/web build                            # Web 前端（产物 apps/
     revisions/<hex>.json   # 不可变修订元数据
     blobs/<hex>/<name>     # 不可变内容（hard_link 去重）
     locks/                 # 路径级排他锁
-  index.sqlite*            # 可重建投影（搜索/列表/链接）
+    index.db*              # 每个 vault 独立的可重建索引
+  .brains.lock             # 数据目录所有权锁
   auth.json  secret.key    # token 注册表 / 会话签名密钥
 ```
 
-**备份 = 拷贝 `<data-dir>`（或其下 `vaults/<vault>/`）**。索引库可随时删除重建，不在备份关键路径上。
+**备份 = 拷贝 `<data-dir>`（或其下 `vaults/<vault>/`）**。备份前停止写入；索引是派生数据，不是正文备份。新位置没有索引时自动从权威 HEAD 完整重建，失败不发布半成品。停止进程后才能维护其数据库和目录锁文件。
 
 ## CLI
 
@@ -50,27 +61,27 @@ pnpm --dir apps/web build                            # Web 前端（产物 apps/
 
 ```bash
 unset BRAINS_URL BRAINS_TOKEN
-bsx profile add local --url http://127.0.0.1:45800
-bsx --profile local login --stdin-token < /absolute/private/local-token.txt
-bsx --profile local capabilities
-bsx --profile local whoami
-bsx --profile local ls ""                       # prefix 是位置参数；自动遍历所有页
-bsx --profile local put note.md --from local.md --create
-bsx --profile local cat note.md
-bsx --profile local stat note.md --json
-bsx --profile local history note.md --json
-bsx --profile local show note.md --revision "$OLD_REVISION"
-bsx --profile local search "关键词" --mode literal
-bsx --profile local links note.md               # 默认出链；反链加 --backlinks
-bsx --profile local patch note.md --if-revision "$BASE_REVISION" --old "old text" --new "new text"
-bsx --profile local cp note.md copy.md --if-revision "$BASE_REVISION"
-bsx --profile local mv note.md moved.md --if-revision "$BASE_REVISION"
-bsx --profile local diff note.md --from "$OLD_REVISION" --to "$NEW_REVISION"
-bsx --profile local restore note.md --revision "$OLD_REVISION" --if-revision "$BASE_REVISION"
-bsx --profile local reindex --all-pages         # 重建索引投影，不改权威历史
-bsx --profile local seed                        # 已有路径或墓碑跳过
-bsx --profile local export ./worktree           # 可读工作树；输出目录必须不存在
-bsx --profile local edit note.md --if-revision "$BASE_REVISION"  # 用 $EDITOR 编辑已有文件
+bsx profile add home --url http://127.0.0.1:45800
+bsx --profile home login --stdin-token < /absolute/private/local-token.txt
+bsx --profile home capabilities
+bsx --profile home whoami
+bsx --profile home ls ""                       # prefix 是位置参数；自动遍历所有页
+bsx --profile home put note.md --from local.md --create
+bsx --profile home cat note.md
+bsx --profile home stat note.md --json
+bsx --profile home history note.md --json
+bsx --profile home show note.md --revision "$OLD_REVISION"
+bsx --profile home search "关键词" --mode literal
+bsx --profile home links note.md               # 默认出链；反链加 --backlinks
+bsx --profile home patch note.md --if-revision "$BASE_REVISION" --old "old text" --new "new text"
+bsx --profile home cp note.md copy.md --if-revision "$BASE_REVISION"
+bsx --profile home mv note.md moved.md --if-revision "$BASE_REVISION"
+bsx --profile home diff note.md --from "$OLD_REVISION" --to "$NEW_REVISION"
+bsx --profile home restore note.md --revision "$OLD_REVISION" --if-revision "$BASE_REVISION"
+bsx --profile home reindex --all-pages         # 重建索引投影，不改权威历史
+bsx --profile home seed                        # 已有路径或墓碑跳过
+bsx --profile home export ./worktree           # 可读工作树；输出目录必须不存在
+bsx --profile home edit note.md --if-revision "$BASE_REVISION"  # 用 $EDITOR 编辑已有文件
 ```
 
 冲突语义与 HTTP 一致：预置条件失败返回 412（携带当前 revision），CLI 报错并提示远端当前版本；不自动重试。
@@ -81,8 +92,8 @@ bsx --profile local edit note.md --if-revision "$BASE_REVISION"  # 用 $EDITOR �
 
 ```bash
 unset BRAINS_URL BRAINS_TOKEN
-bsx profile add local --url http://127.0.0.1:45800
-bsx --profile local login --stdin-token < local-token.txt
+bsx profile add home --url http://127.0.0.1:45800
+bsx --profile home login --stdin-token < local-token.txt
 bsx profile add cloud --url https://<worker>.workers.dev
 bsx --profile cloud login --stdin-token < cloud-token.txt
 ```
@@ -90,16 +101,16 @@ bsx --profile cloud login --stdin-token < cloud-token.txt
 先预览再同步。第一次运行会把只存在于一端的 live 文件导入另一端；之后的运行会双向传递新版本和软删除：
 
 ```bash
-bsx --profile local sync --remote-profile cloud --dry-run
-bsx --profile local sync --remote-profile cloud
+bsx --profile home sync --remote-profile cloud --dry-run
+bsx --profile home sync --remote-profile cloud
 ```
 
 两端对同一文本的修改没有重叠时会自动三方合并。首次同步时同路径内容不同、重叠修改、二进制双改以及删除/修改都会列为冲突，保持两边当前内容不变并以退出码 `5` 返回。选择一侧，或准备好人工合并文件后写回两端：
 
 ```bash
-bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --keep local
-bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --keep remote
-bsx --profile local sync --remote-profile cloud resolve 'docs/guide.md' --merged-file /tmp/guide.md
+bsx --profile home sync --remote-profile cloud resolve 'docs/guide.md' --keep local
+bsx --profile home sync --remote-profile cloud resolve 'docs/guide.md' --keep remote
+bsx --profile home sync --remote-profile cloud resolve 'docs/guide.md' --merged-file /tmp/guide.md
 ```
 
 执行 `resolve` 前会重新读取两端 HEAD 并确认路径仍处于冲突；如果内容已经收敛或可自动合并，命令会拒绝过期决策并要求先重新运行 `sync`。
@@ -161,17 +172,17 @@ Wrangler 的 `[build]` 会在 dev/deploy 时执行 `worker-build --release`。De
 
 ```bash
 unset BRAINS_URL BRAINS_TOKEN
-bsx --profile local whoami
+bsx --profile home whoami
 bsx profile add cloud --url https://<worker>.workers.dev
 bsx --profile cloud login --stdin-token < /absolute/private/cloud-token.txt
 bsx --profile cloud capabilities
 bsx --profile cloud whoami
 bsx --profile cloud ls "" --deleted --json
 bsx --profile cloud ls "" --source index --json
-bsx --profile local export ./before-cloud.archive --format archive
+bsx --profile home export ./before-cloud.archive --format archive
 bsx --profile cloud import ./before-cloud.archive --format archive --dry-run
 bsx --profile cloud import ./before-cloud.archive --format archive
-bsx --profile local sync --remote-profile cloud verify
+bsx --profile home sync --remote-profile cloud verify
 bsx profile use cloud --verify-with local
 ```
 

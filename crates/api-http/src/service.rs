@@ -7,7 +7,7 @@
 
 use brains_application::Precondition;
 use brains_application::commit::CommitInput;
-use brains_domain::{DomainError, HeadState, HexId, VaultPath};
+use brains_domain::{DomainError, HexId, VaultPath};
 use sha2::{Digest, Sha256};
 
 use crate::auth::AuthSource;
@@ -304,7 +304,7 @@ fn mutation_result(outcome: &brains_application::MutationOutcome) -> contract::M
         path: outcome.path.clone(),
         revision: outcome.revision.clone(),
         generation: outcome.generation,
-        state: HeadState::Live.as_str().to_owned(),
+        state: outcome.state.as_str().to_owned(),
         updated_at: Some(outcome.updated_at.clone()),
         size: Some(outcome.size),
         sha256: if outcome.sha256.is_empty() {
@@ -571,15 +571,15 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
                 .unwrap_or("store")
                 .parse()
                 .map_err(|e| list_files_error(e, rid))?,
-            prefix: prefix.filter(|v| !v.is_empty()),
+            prefix,
             limit: clamp_limit(
                 limit,
                 self.state.limits.list_page_default,
                 self.state.limits.list_page_max,
             )
             .map_err(|e| list_files_error(e, rid))?,
-            cursor: cursor.filter(|v| !v.is_empty()),
-            tag: tag.filter(|v| !v.is_empty()),
+            cursor,
+            tag,
             kind: kind.as_deref().and_then(brains_domain::FileKind::parse),
             sort: if sort.as_deref() == Some("updated_desc") {
                 brains_ports::ListOrder::UpdatedDesc
@@ -829,26 +829,21 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             required_if_match(if_match.as_deref()).map_err(|e| patch_file_error(e, rid))?;
         let op_id =
             parse_operation_id(operation_id.as_ref()).map_err(|e| patch_file_error(e, rid))?;
-        if body.edits.len() > 20 {
-            return Err(patch_file_error(
-                DomainError::InvalidArgument("at most 20 edits per patch".into()),
-                rid,
-            ));
-        }
-        let mut edits = Vec::with_capacity(body.edits.len());
-        for edit in body.edits {
-            if edit.expected_matches != 1 {
-                return Err(patch_file_error(
-                    DomainError::InvalidArgument("P0/P1 supports expected_matches=1 only".into()),
-                    rid,
-                ));
-            }
-            edits.push(brains_application::patch::PatchEdit {
-                old_text: edit.old_text,
-                new_text: edit.new_text,
-                expected_matches: 1,
-            });
-        }
+        let edits = body
+            .edits
+            .into_iter()
+            .map(|edit| {
+                let expected_matches = usize::try_from(edit.expected_matches).map_err(|_| {
+                    DomainError::InvalidArgument("expected_matches must be nonnegative".into())
+                })?;
+                Ok(brains_application::patch::PatchEdit {
+                    old_text: edit.old_text,
+                    new_text: edit.new_text,
+                    expected_matches,
+                })
+            })
+            .collect::<Result<Vec<_>, DomainError>>()
+            .map_err(|e| patch_file_error(e, rid))?;
         let outcome = self
             .state
             .vault
@@ -894,7 +889,6 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             self.state.limits.history_page_max,
         )
         .map_err(|e| list_revisions_error(e, rid))?;
-        let cursor = cursor.filter(|c| !c.is_empty());
         let page = self
             .state
             .vault
@@ -999,18 +993,6 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
     ) -> Result<contract::SearchPage, contract::FilesSearchError> {
         let ctx = current();
         let rid = ctx.request_id.as_str();
-        if q.is_empty() {
-            return Err(search_error(
-                DomainError::InvalidArgument("missing `q`".into()),
-                rid,
-            ));
-        }
-        if q.len() > 512 {
-            return Err(search_error(
-                DomainError::InvalidArgument("q must be at most 512 bytes".into()),
-                rid,
-            ));
-        }
         let mode = match mode.as_deref().unwrap_or("literal") {
             "literal" => brains_application::search::SearchMode::Literal,
             "fts" => brains_application::search::SearchMode::Fts,
@@ -1021,27 +1003,23 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
                 ));
             }
         };
-        let scan_limit = match scan_limit {
-            None => self.state.limits.scan_window_max,
-            Some(raw) => {
-                let max = self.state.limits.scan_window_max;
-                if raw < 1 || raw as usize > max {
-                    return Err(search_error(
-                        DomainError::InvalidArgument(format!(
-                            "scan_limit must be between 1 and {max}"
-                        )),
+        let scan_limit = scan_limit
+            .map(|v| {
+                usize::try_from(v).map_err(|_| {
+                    search_error(
+                        DomainError::InvalidArgument("scan_limit must be positive".into()),
                         rid,
-                    ));
-                }
-                raw as usize
-            }
-        };
+                    )
+                })
+            })
+            .transpose()?
+            .unwrap_or(self.state.limits.scan_window_max);
         let query = brains_application::search::SearchQuery {
             q: q.clone(),
             mode,
-            prefix: prefix.filter(|p| !p.is_empty()),
-            tag: tag.filter(|t| !t.is_empty()),
-            cursor: cursor.filter(|c| !c.is_empty()),
+            prefix,
+            tag,
+            cursor,
             scan_limit,
         };
         let result = self
@@ -1091,7 +1069,6 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
                 ));
             }
         };
-        let cursor = cursor.filter(|c| !c.is_empty());
         let page = self
             .state
             .vault

@@ -29,6 +29,7 @@ pub struct PurgeOutcome {
 /// Outcome of a committed mutation: the committed entry plus index state.
 #[derive(Clone, Debug)]
 pub struct MutationOutcome {
+    pub state: brains_domain::HeadState,
     pub path: String,
     pub revision: String,
     pub generation: i64,
@@ -68,10 +69,12 @@ pub enum Precondition {
 
 /// The vault facade binding four stores and instance configuration.
 pub struct Vault<H, R, B, I> {
+    // Fields drop in declaration order: close the derived index before the
+    // durable stores release their shared directory ownership guard.
+    pub index: I,
     pub heads: H,
     pub revisions: R,
     pub blobs: B,
-    pub index: I,
     pub vault: String,
     pub limits: Limits,
     pub cursors: CursorSigner,

@@ -395,9 +395,11 @@ dependencies = [
  "brains-api-types",
  "brains-application",
  "brains-domain",
+ "brains-local",
  "brains-ports",
  "brains-sdk",
  "diffy",
+ "futures",
  "hex",
  "reqwest",
  "serde",
@@ -438,6 +440,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "brains-local"
+version = "0.1.0"
+dependencies = [
+ "brains-adapter-fs",
+ "brains-adapter-sqlite",
+ "brains-application",
+ "brains-domain",
+ "futures",
+]
+
+[[package]]
 name = "brains-ports"
 version = "0.1.0"
 dependencies = [
@@ -469,6 +482,7 @@ dependencies = [
  "brains-api-http",
  "brains-application",
  "brains-domain",
+ "brains-local",
  "brains-sdk",
  "clap",
  "hex",

@@ -44,6 +44,16 @@ where
         operation_id: HexId,
         input: PatchInput,
     ) -> DomainResult<PatchOutcome> {
+        if input.edits.len() > 20 {
+            return Err(DomainError::InvalidArgument(
+                "at most 20 edits per patch".into(),
+            ));
+        }
+        if input.edits.iter().any(|edit| edit.expected_matches != 1) {
+            return Err(DomainError::InvalidArgument(
+                "P0/P1 supports expected_matches=1 only".into(),
+            ));
+        }
         self.require_scope(principal, AccessLevel::Write, path)?;
         let current = self.check_precondition(path, &precondition).await?;
         let Some(stored) = current else {

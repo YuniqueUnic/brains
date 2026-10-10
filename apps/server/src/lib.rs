@@ -6,12 +6,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
+use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore};
 use brains_adapter_sqlite::SqliteIndex;
 use brains_api_http::auth::SecurityStore;
 use brains_api_http::state::{AppState, Blob, Head, Idx, Rev};
-use brains_application::Vault;
-use brains_domain::{CursorSigner, Limits};
+use brains_domain::Limits;
 
 pub use brains_api_http::error;
 pub use brains_api_http::routes;
@@ -46,7 +45,6 @@ impl ServerConfig {
     }
 }
 
-pub type LocalVault = Vault<FsHeadStore, FsRevisionStore, FsBlobStore, SqliteIndex>;
 pub type LocalState = AppState<FsHeadStore, FsRevisionStore, FsBlobStore, SqliteIndex>;
 pub type SharedState = Arc<LocalState>;
 
@@ -55,29 +53,14 @@ pub type SharedState = Arc<LocalState>;
 /// created/replaced it.
 pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool), String> {
     let limits = Limits::default();
-    let store = FsStore::create(&config.data_dir, &config.vault)
-        .or_else(|_| FsStore::open(&config.data_dir, &config.vault))
+    let vault = brains_local::open_or_create(&config.data_dir, &config.vault)
         .map_err(|e| format!("store init failed: {e}"))?;
-    let index = brains_adapter_sqlite::SqliteIndex::open(&config.data_dir.join("index.db"))
-        .map_err(|e| format!("index init failed: {e}"))?;
     let security =
         SecurityStore::open(&config.data_dir).map_err(|e| format!("security init failed: {e}"))?;
     let (plaintext, token_new) = security
         .ensure_root_token(config.token.as_deref())
         .map_err(|e| format!("token bootstrap failed: {e}"))?;
 
-    let heads = FsHeadStore::new(store.clone());
-    let revisions = FsRevisionStore::new(store.clone());
-    let blobs = FsBlobStore::new(store);
-    let vault: LocalVault = Vault::new(
-        heads,
-        revisions,
-        blobs,
-        index,
-        config.vault.clone(),
-        limits.clone(),
-        CursorSigner::generate(),
-    );
     let capabilities = brains_domain::Capabilities::local(
         &config.vault,
         limits.max_text_bytes,

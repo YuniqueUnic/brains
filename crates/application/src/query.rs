@@ -116,7 +116,7 @@ where
         limit: usize,
     ) -> DomainResult<HistoryPageResult> {
         self.require_scope(principal, AccessLevel::Read, path)?;
-        let (anchor, next_parent) = match cursor {
+        let (anchor, next_parent) = match cursor.filter(|value| !value.is_empty()) {
             None => {
                 let stored =
                     self.current_head(path)
