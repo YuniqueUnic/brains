@@ -59,8 +59,11 @@ async fn conditional_write_contract_end_to_end() {
         .send()
         .await
         .unwrap();
-    assert_eq!(created.status(), 201);
+    // The success status is fixed at 200 by the generated transport;
+    // create-vs-replace travels in-band.
+    assert_eq!(created.status(), 200);
     let body: Value = created.json().await.unwrap();
+    assert_eq!(body["created"], true);
     assert_eq!(body["index_state"], "ready");
     assert_eq!(body["operation_id"], "11112222333344445555666677778888");
     let rev1 = body["revision"].as_str().unwrap().to_owned();
@@ -115,7 +118,8 @@ async fn conditional_write_contract_end_to_end() {
         .unwrap();
     assert_eq!(cached.status(), 304);
 
-    // HEAD /file has no body; errors surface as X-Brain-Error-Code.
+    // HEAD is served by the generated GET route (the body is stripped);
+    // errors keep their status and carry no body.
     let head = http
         .head(url("missing.md"))
         .header("Authorization", &auth)
@@ -123,7 +127,6 @@ async fn conditional_write_contract_end_to_end() {
         .await
         .unwrap();
     assert_eq!(head.status(), 404);
-    assert_eq!(head.headers()["X-Brain-Error-Code"], "NOT_FOUND");
     assert_eq!(head.bytes().await.unwrap().len(), 0);
 
     // Trash needs If-Match; reading a tombstone is 410 with its ETag.
@@ -264,7 +267,8 @@ async fn session_cookie_flow_with_csrf_and_origin() {
         .send()
         .await
         .unwrap();
-    assert_eq!(with_csrf.status(), 201);
+    assert_eq!(with_csrf.status(), 200);
+    assert_eq!(with_csrf.json::<Value>().await.unwrap()["created"], true);
 
     // Cross-origin cookie mutation with a foreign Origin is forbidden.
     let foreign = http

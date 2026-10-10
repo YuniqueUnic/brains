@@ -119,7 +119,7 @@ where
     let router = routes::build_router(state);
     let router = match config.web_dist {
         Some(_) => router,
-        None => router.fallback(routes::api_not_found),
+        None => router.fallback(brains_api_http::error::api_not_found),
     };
     let addr = format!("{}:{}", config.bind, config.port);
     let listener = tokio::net::TcpListener::bind(&addr)

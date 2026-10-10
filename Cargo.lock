@@ -313,9 +313,9 @@ dependencies = [
 name = "brains-api-http"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "axum",
  "base64 0.23.1",
- "brains-api-types",
  "brains-application",
  "brains-domain",
  "brains-ports",
@@ -327,7 +327,9 @@ dependencies = [
  "serde_json",
  "sha2",
  "time",
+ "tokio",
  "tower-http 0.7.1",
+ "xidl-rust-axum",
 ]
 
 [[package]]
@@ -459,14 +461,18 @@ dependencies = [
  "brains-api-http",
  "brains-application",
  "brains-domain",
+ "brains-sdk",
  "clap",
+ "hex",
  "reqwest",
  "serde_json",
+ "sha2",
  "tempfile",
  "tokio",
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
+ "xidl-rust-axum",
 ]
 
 [[package]]
@@ -3112,14 +3118,14 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xidl-rust-axum"
-version = "0.95.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0866823207c0210d69c302858ca6f559ef0260490baa8d40b718591123ca0e1f"
+version = "0.96.1"
 dependencies = [
  "axum",
  "axum-extra",
  "base64 0.23.1",
+ "bytes",
  "futures-util",
+ "http",
  "hyper",
  "hyper-util",
  "reqwest",
@@ -3129,7 +3135,6 @@ dependencies = [
  "serde_urlencoded",
  "thiserror",
  "tokio",
- "tokio-util",
  "tower-http 0.7.1",
 ]
 

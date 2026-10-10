@@ -19,6 +19,17 @@
         ],
         "type": "object"
       },
+      "brains.BadRequest": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
       "brains.Capabilities": {
         "properties": {
           "api_version": {
@@ -70,6 +81,17 @@
         "required": [
           "max_text_bytes",
           "max_attachment_bytes"
+        ],
+        "type": "object"
+      },
+      "brains.Conflict": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
         ],
         "type": "object"
       },
@@ -216,6 +238,48 @@
         ],
         "type": "object"
       },
+      "brains.FilePayload": {
+        "oneOf": [
+          {
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/Entry"
+              }
+            },
+            "required": [
+              "meta"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "raw": {
+                "items": {
+                  "format": "int32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "raw"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "brains.Gone": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
       "brains.HistoryPage": {
         "properties": {
           "anchor_revision": {
@@ -234,6 +298,17 @@
         "required": [
           "items",
           "anchor_revision"
+        ],
+        "type": "object"
+      },
+      "brains.Internal": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
         ],
         "type": "object"
       },
@@ -278,6 +353,9 @@
       },
       "brains.MutationResult": {
         "properties": {
+          "created": {
+            "type": "boolean"
+          },
           "generation": {
             "format": "int64",
             "type": "integer"
@@ -325,6 +403,31 @@
           "index_state",
           "operation_id"
         ],
+        "type": "object"
+      },
+      "brains.NotFound": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "brains.NotImplemented": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "brains.NotModified": {
         "type": "object"
       },
       "brains.OkResult": {
@@ -387,6 +490,46 @@
           "old_text",
           "new_text",
           "expected_matches"
+        ],
+        "type": "object"
+      },
+      "brains.PayloadTooLarge": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "brains.PayloadType": {
+        "enum": [
+          "application/json",
+          "application/octet-stream"
+        ],
+        "type": "string"
+      },
+      "brains.PreconditionFailed": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "brains.PreconditionRequired": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
         ],
         "type": "object"
       },
@@ -503,11 +646,42 @@
         ],
         "type": "object"
       },
+      "brains.RevisionPayload": {
+        "oneOf": [
+          {
+            "properties": {
+              "meta": {
+                "$ref": "#/components/schemas/Revision"
+              }
+            },
+            "required": [
+              "meta"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "raw": {
+                "items": {
+                  "format": "int32",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "raw"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "brains.Runtime": {
         "enum": [
-          "LOCAL_RUST",
-          "CLOUDFLARE_RUST",
-          "CLOUDFLARE_TYPESCRIPT"
+          "local-rust",
+          "cloudflare-rust",
+          "cloudflare-typescript"
         ],
         "type": "string"
       },
@@ -560,6 +734,17 @@
         ],
         "type": "object"
       },
+      "brains.ServiceUnavailable": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
       "brains.Session": {
         "properties": {
           "actor": {
@@ -607,6 +792,38 @@
         ],
         "type": "object"
       },
+      "brains.TransferConflict": {
+        "properties": {
+          "copied": {
+            "type": "boolean"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          },
+          "operation_id": {
+            "type": "string"
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "source_revision": {
+            "type": "string"
+          },
+          "source_trashed": {
+            "type": "boolean"
+          },
+          "target_revision": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "copied",
+          "source_trashed",
+          "partial",
+          "operation_id"
+        ],
+        "type": "object"
+      },
       "brains.TransferResult": {
         "properties": {
           "copied": {
@@ -638,12 +855,17 @@
           "operation_id"
         ],
         "type": "object"
-      }
-    },
-    "securitySchemes": {
-      "http_bearer": {
-        "scheme": "bearer",
-        "type": "http"
+      },
+      "brains.UnprocessableEntity": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
       }
     }
   },
@@ -667,16 +889,6 @@
             },
             "description": "OK"
           },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
           "500": {
             "content": {
               "application/json": {
@@ -688,11 +900,7 @@
             "description": "Internal Server Error"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -725,38 +933,88 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.NotFound"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: NotFound"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.TransferConflict"
+                }
+              }
+            },
+            "description": "Error: TransferConflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -806,38 +1064,44 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.NotFound"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: NotFound"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -853,14 +1117,6 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "purge",
-            "required": false,
-            "schema": {
-              "type": "boolean"
             }
           },
           {
@@ -895,44 +1151,94 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.NotFound"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: NotFound"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionRequired"
+                }
+              }
+            },
+            "description": "Error: PreconditionRequired"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
       },
       "get": {
-        "operationId": "brains.Files.get_file_meta",
+        "operationId": "brains.Files.get_file",
         "parameters": [
           {
             "in": "query",
@@ -949,6 +1255,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -958,46 +1272,85 @@
                 "schema": {
                   "$ref": "#/components/schemas/Entry"
                 }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
               }
             },
             "description": "OK"
+          },
+          "304": {
+            "description": "Error: NotModified",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.NotFound"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: NotFound"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1044,48 +1397,118 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MutationResult"
+                  "$ref": "#/components/schemas/brains.PatchDryRun"
                 }
               }
             },
-            "description": "OK"
+            "description": "Error: PatchDryRun"
           },
           "400": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.NotFound"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: NotFound"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Conflict"
+                }
+              }
+            },
+            "description": "Error: Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.UnprocessableEntity"
+                }
+              }
+            },
+            "description": "Error: UnprocessableEntity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionRequired"
+                }
+              }
+            },
+            "description": "Error: PreconditionRequired"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1136,14 +1559,9 @@
         ],
         "requestBody": {
           "content": {
-            "application/json": {
+            "application/octet-stream": {
               "schema": {
-                "items": {
-                  "format": "int32",
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "type": "array"
+                "type": "string"
               }
             }
           }
@@ -1163,38 +1581,98 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "410": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Gone"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PayloadTooLarge"
+                }
+              }
+            },
+            "description": "Error: PayloadTooLarge"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.UnprocessableEntity"
+                }
+              }
+            },
+            "description": "Error: UnprocessableEntity"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionRequired"
+                }
+              }
+            },
+            "description": "Error: PreconditionRequired"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1285,38 +1763,34 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "Unauthorized"
+            "description": "Error: BadRequest"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1344,15 +1818,6 @@
           },
           {
             "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
             "name": "cursor",
             "required": false,
             "schema": {
@@ -1375,38 +1840,34 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "Unauthorized"
+            "description": "Error: BadRequest"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1439,21 +1900,45 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/maintenance/validate": {
+      "post": {
+        "operationId": "brains.Files.validate",
+        "responses": {
+          "204": {
+            "description": "OK"
           },
           "500": {
             "content": {
@@ -1464,13 +1949,19 @@
               }
             },
             "description": "Internal Server Error"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotImplemented"
+                }
+              }
+            },
+            "description": "Error: NotImplemented"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1503,38 +1994,88 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.NotFound"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: NotFound"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.TransferConflict"
+                }
+              }
+            },
+            "description": "Error: TransferConflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1547,6 +2088,14 @@
           {
             "in": "header",
             "name": "If-Match",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Operation-ID",
             "required": false,
             "schema": {
               "type": "string"
@@ -1577,38 +2126,198 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.NotFound"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: NotFound"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionRequired"
+                }
+              }
+            },
+            "description": "Error: PreconditionRequired"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
+        "security": [],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/revision": {
+      "get": {
+        "operationId": "brains.Files.get_revision",
+        "parameters": [
           {
-            "http_bearer": []
+            "in": "query",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Revision"
+                }
+              },
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.BadRequest"
+                }
+              }
+            },
+            "description": "Error: BadRequest"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotFound"
+                }
+              }
+            },
+            "description": "Error: NotFound"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Internal"
+                }
+              }
+            },
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
+          }
+        },
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1659,38 +2368,61 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
-          "401": {
+          "404": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.NotFound"
                 }
               }
             },
-            "description": "Unauthorized"
+            "description": "Error: NotFound"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1726,7 +2458,15 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "scan_limit",
             "required": false,
             "schema": {
               "format": "int64",
@@ -1757,38 +2497,34 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            },
-            "description": "Unauthorized"
+            "description": "Error: BadRequest"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
-        "security": [
-          {
-            "http_bearer": []
-          }
-        ],
+        "security": [],
         "tags": [
           "Files"
         ]
@@ -1796,7 +2532,7 @@
     },
     "/session": {
       "delete": {
-        "operationId": "brains.Session.logout",
+        "operationId": "brains.Sessions.logout",
         "responses": {
           "200": {
             "content": {
@@ -1821,11 +2557,11 @@
         },
         "security": [],
         "tags": [
-          "Session"
+          "Sessions"
         ]
       },
       "get": {
-        "operationId": "brains.Session.current",
+        "operationId": "brains.Sessions.current",
         "responses": {
           "200": {
             "content": {
@@ -1850,24 +2586,16 @@
         },
         "security": [],
         "tags": [
-          "Session"
+          "Sessions"
         ]
       },
       "post": {
-        "operationId": "brains.Session.login",
+        "operationId": "brains.Sessions.login",
         "parameters": [
           {
             "in": "header",
             "name": "authorization",
             "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "X-CSRF-Token",
-            "required": false,
             "schema": {
               "type": "string"
             }
@@ -1888,26 +2616,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.BadRequest"
                 }
               }
             },
-            "description": "Bad Request"
+            "description": "Error: BadRequest"
           },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
           }
         },
         "security": [],
         "tags": [
-          "Session"
+          "Sessions"
         ]
       }
     }
@@ -1923,7 +2651,7 @@
       "name": "Files"
     },
     {
-      "name": "Session"
+      "name": "Sessions"
     }
   ]
 }

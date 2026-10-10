@@ -4,12 +4,26 @@
 
 // ---------------------------------------------------------------------------
 // Brains wire contract (design §11): the source of truth for SDKs and the
-// OpenAPI document. The axum server in crates/api-http implements this
-// contract by hand because parts of it are beyond the current IDL (see the
-// BLOCKER notes per method and docs/ai-integration.md):
-//   1. conditional GET (If-None-Match -> 304 with ETag header),
-//   2. response headers on the error channel (412/410 carry ETag),
-//   3. per-response dynamic Content-Type on GET /file (raw vs JSON).
+// OpenAPI document. Both the axum server (crates/api-http) and the Rust/TS
+// SDKs are generated from this file.
+//
+// Error channel (xidl #294): operations declare `raises(...)`; each
+// exception carries an HTTP status via `@http(N)`, optional response
+// headers (the ETag on 304/410/412) and the shared `{"error": ErrorDetail}`
+// body. Statuses an operation does not raise are still possible at the
+// framework edges (malformed input never reaches a handler, authentication
+// is enforced by middleware) and surface as generic transport errors.
+//
+// Representation switching (xidl #296): `GET /file` and `GET /revision`
+// return `@http` unions — JSON metadata or raw bytes — negotiated per
+// response Content-Type. The `format` query param keeps its historical
+// meaning (`raw` default) as the server-side selector; `Accept` must
+// include the served media type or the server answers 406.
+//
+// Authentication is enforced by server middleware (design §15): Bearer
+// tokens or signed session cookies authenticate every route; cookie-driven
+// mutations additionally pass the CSRF/Origin guard. The IDL therefore
+// models neither and clients attach credentials out of band.
 // ---------------------------------------------------------------------------
 
 module brains {
@@ -20,9 +34,13 @@ struct CapabilityLimits {
 };
 
 enum Runtime {
-    LOCAL_RUST,
-    CLOUDFLARE_RUST,
-    CLOUDFLARE_TYPESCRIPT,
+    // Wire values are kebab-case (historical); variant idents are idiomatic.
+    @rename("local-rust")
+    LocalRust,
+    @rename("cloudflare-rust")
+    CloudflareRust,
+    @rename("cloudflare-typescript")
+    CloudflareTypescript,
 };
 
 struct Capabilities {
@@ -60,6 +78,9 @@ struct MutationResult {
     @optional string title;
     string index_state;
     string operation_id;
+    // Create-vs-replace is answered in-band (the success status is fixed at
+    // 200 by the generated transport).
+    @optional boolean created;
 };
 
 struct FilePage {
@@ -166,11 +187,6 @@ struct PatchBody {
     @optional boolean dry_run;
 };
 
-struct PatchDryRun {
-    string diff;
-    string base_revision;
-};
-
 struct RestoreBody {
     string path;
     string revision;
@@ -205,11 +221,131 @@ struct DiffResult {
     string diff;
 };
 
+// -- Error vocabulary -------------------------------------------------------
+
+// A dry-run patch answers 200 with the unified diff instead of a commit.
+// Both JSON shapes share one Content-Type, so content negotiation cannot
+// switch them; the typed channel carries the request-correlated alternate
+// (clients match the `PatchDryRun` case before the success payload).
+@http(200)
+exception PatchDryRun {
+    string diff;
+    string base_revision;
+};
+// Bodies mirror the server's `ErrorBody` envelope exactly: `{"error": ...}`.
+// 410/412 carry the current HEAD ETag so clients can rebase; 304 carries the
+// unchanged ETag and, per RFC 9110, no body.
+
+@http(400)
+exception BadRequest {
+    ErrorDetail error;
+};
+
+@http(404)
+exception NotFound {
+    ErrorDetail error;
+};
+
+@http(409)
+exception Conflict {
+    ErrorDetail error;
+};
+
+@http(410)
+exception Gone {
+    ErrorDetail error;
+    @header @rename("ETag") @optional string etag;
+};
+
+@http(412)
+exception PreconditionFailed {
+    ErrorDetail error;
+    @header @rename("ETag") @optional string etag;
+};
+
+@http(413)
+exception PayloadTooLarge {
+    ErrorDetail error;
+};
+
+@http(422)
+exception UnprocessableEntity {
+    ErrorDetail error;
+};
+
+@http(428)
+exception PreconditionRequired {
+    ErrorDetail error;
+};
+
+@http(500)
+exception Internal {
+    ErrorDetail error;
+};
+
+@http(501)
+exception NotImplemented {
+    ErrorDetail error;
+};
+
+@http(503)
+exception ServiceUnavailable {
+    ErrorDetail error;
+};
+
+@http(304)
+exception NotModified {
+    @header @rename("ETag") string etag;
+};
+
+// A partially failed transfer answers 409 with a TransferResult-shaped body
+// (the outcome is data, not an error envelope). The exception mirrors those
+// members so the wire stays byte-identical while clients can match the case.
+@http(409)
+exception TransferConflict {
+    boolean copied;
+    boolean source_trashed;
+    boolean partial;
+    string operation_id;
+    @optional string target_revision;
+    @optional string source_revision;
+    @optional ErrorDetail error;
+};
+
+// -- Representation switching ----------------------------------------------
+// Media types for `@http` union cases; the discriminator travels as the
+// response Content-Type, never on the wire as a tag.
+
+enum PayloadType {
+    @rename("application/json")
+    Json,
+    @rename("application/octet-stream")
+    OctetStream,
+};
+
+// GET /file: current-HEAD metadata or the raw bytes.
+@http
+union FilePayload switch (PayloadType) {
+    case Json: Entry meta;
+    case OctetStream: sequence<octet> raw;
+};
+
+// GET /revision: one immutable revision's metadata or its raw bytes.
+@http
+union RevisionPayload switch (PayloadType) {
+    case Json: Revision meta;
+    case OctetStream: sequence<octet> raw;
+};
+
+// Request bodies are inline (the JSON document is the value itself, no
+// envelope), so every struct body is declared `@flatten`.
 // Shared mutation headers. `If-Match`/`If-None-Match` carry STRONG revision
 // ETags; `*` on If-None-Match means create-only. `X-Operation-ID` makes
 // retries idempotent (design §8.2).
 
-@http_bearer
+// Auth is enforced by middleware (Bearer or session cookie; CSRF for
+// cookie-driven mutations), so the interface declares no scheme.
+@no_security
 interface Files {
     // Instance capabilities and limits.
     @get(path = "/capabilities")
@@ -228,7 +364,7 @@ interface Files {
         @query @optional string kind,
         @query @optional string sort,
         @query @rename("include_deleted") @optional boolean include_deleted
-    );
+    ) raises(BadRequest, ServiceUnavailable, Internal);
 
     // Create or conditionally replace one file's exact bytes (design §8.2).
     // Raw body = application/octet-stream; text media types are declared via
@@ -240,42 +376,47 @@ interface Files {
         @header @rename("If-None-Match") @optional string if_none_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("X-Content-SHA256") @optional string content_sha256,
+        @header @rename("ETag") @optional out string etag,
         in sequence<octet> body
-    );
+    ) raises(BadRequest, Gone, PreconditionRequired, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
 
-    // Current-HEAD read (JSON metadata view). The same route also serves
-    // raw bytes (`format` omitted -> application/octet-stream) with a strong
-    // ETag and answers If-None-Match with 304 + ETag. BLOCKED in IDL:
-    // one route cannot declare two representations, and the error/success
-    // channels cannot attach response headers (304's ETag is REQUIRED by
-    // RFC 9110) — filed upstream; raw reads stay on the documented wire
-    // format for generated SDKs until then. 410 once the path is trashed.
+    // Current-HEAD read: JSON metadata (`format=meta`) or raw bytes
+    // (`format` omitted). Both views answer If-None-Match with 304 + ETag;
+    // 410 once the path is trashed. The response Content-Type selects the
+    // union case; `Accept` must include it.
     @get(path = "/file")
-    Entry get_file_meta(
+    FilePayload get_file(
         @query string path,
-        @query @rename("format") @optional string format
-    );
+        @query @rename("format") @optional string format,
+        @header @rename("If-None-Match") @optional string if_none_match,
+        @header @rename("ETag") @optional out string etag,
+        @header @rename("X-Brain-Media-Type") @optional out string media_type,
+        @header @rename("Content-Disposition") @optional out string content_disposition
+    ) raises(BadRequest, NotFound, Gone, NotModified, ServiceUnavailable, Internal);
 
     // Conditional delete: writes a tombstone revision. 412 on stale base.
     @delete(path = "/file")
     MutationResult delete_file(
         @query string path,
         @header @rename("If-Match") @optional string if_match,
-        @header @rename("X-Operation-ID") @optional string operation_id
-    );
+        @header @rename("X-Operation-ID") @optional string operation_id,
+        @header @rename("ETag") @optional out string etag
+    ) raises(BadRequest, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
 
     // Patch text in place: exact-match replacements on the stored bytes.
     // With body.dry_run the server answers the unified diff
     // (`PatchDryRun`: diff + base_revision) instead of committing — one
-    // route, two response representations, kept out of the typed SDK the
-    // same way as the raw file read (see get_file_meta).
+    // route, two JSON shapes selected by the request, which content
+    // negotiation cannot express; the typed SDK covers the committed
+    // response and dry-run stays a raw-HTTP affordance.
     @patch(path = "/file")
     MutationResult patch_file(
         @query string path,
         @header @rename("If-Match") @optional string if_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
-        in PatchBody body
-    );
+        @header @rename("ETag") @optional out string etag,
+        @flatten in PatchBody body
+    ) raises(PatchDryRun, BadRequest, NotFound, Gone, Conflict, PreconditionRequired, PreconditionFailed, UnprocessableEntity, ServiceUnavailable, Internal);
 
     // Reachable history of one path, newest first (signed cursor pages).
     @get(path = "/revisions")
@@ -283,15 +424,28 @@ interface Files {
         @query string path,
         @query @optional int64 limit,
         @query @optional string cursor
-    );
+    ) raises(BadRequest, NotFound, Gone, ServiceUnavailable, Internal);
+
+    // One immutable revision by ID: metadata (`format=meta`) or raw bytes.
+    @get(path = "/revision")
+    RevisionPayload get_revision(
+        @query string path,
+        @query string revision,
+        @query @rename("format") @optional string format,
+        @header @rename("ETag") @optional out string etag,
+        @header @rename("X-Brain-Media-Type") @optional out string media_type,
+        @header @rename("Content-Disposition") @optional out string content_disposition
+    ) raises(BadRequest, NotFound, Gone, ServiceUnavailable, Internal);
 
     // Restore a prior revision's content as a NEW revision (gen only moves
     // forward). If-Match anchors on the current head.
     @post(path = "/restore")
     MutationResult restore(
         @header @rename("If-Match") @optional string if_match,
-        in RestoreBody body
-    );
+        @header @rename("X-Operation-ID") @optional string operation_id,
+        @header @rename("ETag") @optional out string etag,
+        @flatten in RestoreBody body
+    ) raises(BadRequest, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
 
     // Literal (case-sensitive UTF-8 substring) or FTS (tokenized) search.
     @get(path = "/search")
@@ -299,26 +453,34 @@ interface Files {
         @query string q,
         @query @rename("mode") @optional string mode,
         @query @optional string prefix,
-        @query @optional int64 limit,
+        @query @optional string tag,
+        @query @rename("scan_limit") @optional int64 scan_limit,
         @query @optional string cursor
-    );
+    ) raises(BadRequest, ServiceUnavailable, Internal);
 
-    // Wiki-link graph induced by [[links]] in stored text.
+    // Wiki-link graph induced by [[links]] in stored text. Pages are fixed
+    // at 50 rows; `cursor` walks the rest.
     @get(path = "/links")
     LinkPage links(
         @query string path,
         @query @rename("direction") @optional string direction,
-        @query @optional int64 limit,
         @query @optional string cursor
-    );
+    ) raises(BadRequest, ServiceUnavailable, Internal);
 
-    // Copy: create target from a source revision; source stays live.
+    // Copy: create target from a source revision; source stays live. A
+    // partially failed transfer answers TransferConflict (409) whose body
+    // is the outcome report.
     @post(path = "/copy")
-    TransferResult copy(in TransferBody body);
+    TransferResult copy(
+        @flatten in TransferBody body
+    ) raises(BadRequest, NotFound, Gone, PreconditionFailed, TransferConflict, ServiceUnavailable, Internal);
 
-    // Move: copy + trash source; partial outcomes are reported, never hidden.
+    // Move: copy + trash source; partial outcomes are TransferConflict (409),
+    // never hidden.
     @post(path = "/move")
-    TransferResult move(in TransferBody body);
+    TransferResult move(
+        @flatten in TransferBody body
+    ) raises(BadRequest, NotFound, Gone, PreconditionFailed, TransferConflict, ServiceUnavailable, Internal);
 
     // Unified diff between two revisions of one path.
     @get(path = "/diff")
@@ -326,28 +488,40 @@ interface Files {
         @query string path,
         @query string from,
         @query @optional string to
-    );
+    ) raises(BadRequest, NotFound, ServiceUnavailable, Internal);
 
     // Paged index rebuild from authoritative storage (safe anytime).
     @post(path = "/maintenance/reindex")
-    ReindexPage reindex(in ReindexRequest body);
+    ReindexPage reindex(
+        @flatten in ReindexRequest body
+    ) raises(BadRequest, ServiceUnavailable, Internal);
+
+    // Reserved server-side consistency check; answers 501 until delivered
+    // (design §22.5).
+    @post(path = "/maintenance/validate")
+    void validate() raises(NotImplemented);
 };
 
 // Session exchange for browser flows: token -> signed cookie + CSRF token.
-// API agents can ignore this interface and use bearer tokens throughout.
+// The cookie itself rides the `Set-Cookie` response header. API agents can
+// ignore this interface and use bearer tokens throughout. (The interface is
+// named `Sessions` because the generated server module shares one namespace
+// with payload structs, and `Session` names the payload.)
 @no_security
-interface Session {
+interface Sessions {
     @post(path = "/session")
     Session login(
         @header string authorization,
-        @header @rename("X-CSRF-Token") @optional string csrf_token
-    );
+        @header @rename("Set-Cookie") @optional out string set_cookie
+    ) raises(BadRequest, Internal);
 
     @get(path = "/session")
     Session current();
 
     @delete(path = "/session")
-    OkResult logout();
+    OkResult logout(
+        @header @rename("Set-Cookie") @optional out string set_cookie
+    );
 };
 
 };

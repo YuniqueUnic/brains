@@ -1,83 +1,59 @@
-//! Domain error → HTTP mapping (design §11.3). The domain never names a
-//! status; this module owns the whole table.
+//! The error envelope for statuses that never reach a generated handler:
+//! authentication (401) and the CSRF/Origin guard (403) live in middleware,
+//! which owns the whole `{"error": ErrorDetail}` table for them (design
+//! §11.3, §15). Every status a handler can produce is a typed `raises(...)`
+//! exception in `api/brains.idl`, serialized by the generated transport.
 
-use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
-use brains_api_types::{ErrorBody, ErrorDetail};
-use brains_domain::DomainError;
-
-pub fn status_for(error: &DomainError) -> StatusCode {
-    match error {
-        DomainError::InvalidArgument(_) => StatusCode::BAD_REQUEST,
-        DomainError::Unauthenticated => StatusCode::UNAUTHORIZED,
-        DomainError::Forbidden(_) => StatusCode::FORBIDDEN,
-        DomainError::NotFound { .. } => StatusCode::NOT_FOUND,
-        DomainError::EditMismatch { .. } => StatusCode::CONFLICT,
-        DomainError::Trashed { .. } => StatusCode::GONE,
-        DomainError::RevisionConflict { .. } => StatusCode::PRECONDITION_FAILED,
-        DomainError::TooLarge { .. } => StatusCode::PAYLOAD_TOO_LARGE,
-        DomainError::InvalidFormat(_) | DomainError::ChecksumMismatch { .. } => {
-            StatusCode::UNPROCESSABLE_ENTITY
+/// Build the shared error envelope: `{"error": {code, message, request_id}}`.
+fn envelope(code: &str, message: String, request_id: &str) -> serde_json::Value {
+    serde_json::json!({
+        "error": {
+            "code": code,
+            "message": message,
+            "request_id": request_id,
         }
-        DomainError::PreconditionRequired => StatusCode::PRECONDITION_REQUIRED,
-        DomainError::CapabilityUnsupported(_) => StatusCode::NOT_IMPLEMENTED,
-        DomainError::IndexUnavailable(_) | DomainError::StorageUnavailable(_) => {
-            StatusCode::SERVICE_UNAVAILABLE
-        }
-        DomainError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-    }
+    })
 }
 
-pub struct ApiError {
-    pub error: DomainError,
-    pub request_id: String,
+fn respond(status: StatusCode, code: &str, message: String, request_id: &str) -> Response {
+    (status, axum::Json(envelope(code, message, request_id))).into_response()
 }
 
-impl ApiError {
-    pub fn new(error: DomainError, request_id: impl Into<String>) -> Self {
-        Self {
-            error,
-            request_id: request_id.into(),
-        }
-    }
-
-    pub fn status(&self) -> StatusCode {
-        status_for(&self.error)
-    }
-
-    pub fn body(&self) -> ErrorBody {
-        ErrorBody::new(ErrorDetail {
-            code: self.error.code().to_owned(),
-            message: self.error.to_string(),
-            request_id: self.request_id.clone(),
-            path: self.error.path().map(str::to_owned),
-            current_revision: self.error.current_revision().map(str::to_owned),
-            details: None,
-        })
-    }
-
-    /// The ETag of the current HEAD revision, for 410/412 responses.
-    pub fn current_etag(&self) -> Option<String> {
-        self.error
-            .current_revision()
-            .map(|rev| format!("\"{rev}\""))
-    }
+/// 401 for requests without (or with invalid) credentials.
+pub fn unauthorized(message: String, request_id: &str) -> Response {
+    respond(
+        StatusCode::UNAUTHORIZED,
+        "UNAUTHENTICATED",
+        message,
+        request_id,
+    )
 }
 
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let mut response = (self.status(), Json(self.body())).into_response();
-        if let Some(etag) = self.current_etag()
-            && let Ok(value) = axum::http::HeaderValue::from_str(&etag)
-        {
-            response
-                .headers_mut()
-                .insert(axum::http::header::ETAG, value);
-        }
-        response
-    }
+/// 403 for failed CSRF/Origin validation on cookie-driven mutations.
+pub fn forbidden(message: String, request_id: &str) -> Response {
+    respond(StatusCode::FORBIDDEN, "FORBIDDEN", message, request_id)
 }
 
-pub type ApiResult<T> = Result<T, ApiError>;
+/// JSON 404 for unknown API routes, never the SPA shell (§5.1).
+pub async fn api_not_found() -> Response {
+    let request_id = brains_domain::HexId::generate().as_str().to_owned();
+    respond(
+        StatusCode::NOT_FOUND,
+        "NOT_FOUND",
+        "no such API route".into(),
+        &request_id,
+    )
+}
+
+/// Liveness probe, identical on both runtimes: no auth, JSON, before the
+/// local-profile SPA fallback (which would otherwise swallow the path).
+pub async fn healthz() -> Response {
+    (
+        StatusCode::OK,
+        axum::Json(serde_json::json!({ "ok": true })),
+    )
+        .into_response()
+}
