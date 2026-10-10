@@ -3076,8 +3076,8 @@ checksum = "3ad82d2a33cdc9674dc7465672f271e096168fcdbe0f799d9e6db8c5892679dc"
 
 [[package]]
 name = "xidl-rust-axum"
-version = "0.96.1"
-source = "git+https://github.com/YuniqueUnic/xidl?rev=b436a515402b5d0d16f3a851266e45d01ccf07d1#b436a515402b5d0d16f3a851266e45d01ccf07d1"
+version = "0.97.0"
+source = "git+https://github.com/YuniqueUnic/xidl?rev=e34124efb528560991bb001b9019698ca27a553b#e34124efb528560991bb001b9019698ca27a553b"
 dependencies = [
  "axum",
  "axum-extra",

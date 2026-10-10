@@ -25,7 +25,7 @@ license = "MIT"
 repository = "https://example.com/brains"
 
 [workspace.dependencies]
-xidl-rust-axum = { git = "https://github.com/YuniqueUnic/xidl", rev = "b436a515402b5d0d16f3a851266e45d01ccf07d1", default-features = false }
+xidl-rust-axum = { git = "https://github.com/YuniqueUnic/xidl", rev = "e34124efb528560991bb001b9019698ca27a553b", default-features = false }
 brains-domain = { path = "crates/domain" }
 brains-format = { path = "crates/format" }
 brains-ports = { path = "crates/ports" }

@@ -4,7 +4,7 @@
 # then pass XIDLC=/path/to/xidl/target/debug/xidlc (see the HTTP handoff).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-XIDLC="${XIDLC:-$HOME/.cargo/bin/xidlc}"
+: "${XIDLC:?set XIDLC to the compiler built from the pinned xidl revision}"
 command -v "$XIDLC" >/dev/null
 generated_tmp=$(mktemp)
 trap 'rm -f "$generated_tmp"' EXIT

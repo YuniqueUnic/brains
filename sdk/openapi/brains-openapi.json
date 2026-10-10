@@ -22,7 +22,7 @@
       "brains.BadRequest": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -42,10 +42,10 @@
             "type": "object"
           },
           "limits": {
-            "$ref": "#/components/schemas/CapabilityLimits"
+            "$ref": "#/components/schemas/brains.CapabilityLimits"
           },
           "runtime": {
-            "$ref": "#/components/schemas/Runtime"
+            "$ref": "#/components/schemas/brains.Runtime"
           },
           "store_format": {
             "format": "int64",
@@ -87,7 +87,7 @@
       "brains.Conflict": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -220,7 +220,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Entry"
+              "$ref": "#/components/schemas/brains.Entry"
             },
             "type": "array"
           },
@@ -243,7 +243,7 @@
           {
             "properties": {
               "meta": {
-                "$ref": "#/components/schemas/Entry"
+                "$ref": "#/components/schemas/brains.Entry"
               }
             },
             "required": [
@@ -272,7 +272,7 @@
       "brains.Forbidden": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -283,7 +283,7 @@
       "brains.Gone": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -298,7 +298,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/Revision"
+              "$ref": "#/components/schemas/brains.Revision"
             },
             "type": "array"
           },
@@ -315,7 +315,7 @@
       "brains.Internal": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -349,7 +349,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/LinkItem"
+              "$ref": "#/components/schemas/brains.LinkItem"
             },
             "type": "array"
           },
@@ -419,7 +419,7 @@
       "brains.NotFound": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -430,7 +430,7 @@
       "brains.NotImplemented": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -459,7 +459,7 @@
           },
           "edits": {
             "items": {
-              "$ref": "#/components/schemas/PatchEdit"
+              "$ref": "#/components/schemas/brains.PatchEdit"
             },
             "type": "array"
           }
@@ -495,7 +495,7 @@
             "type": "string"
           },
           "committed": {
-            "$ref": "#/components/schemas/MutationResult"
+            "$ref": "#/components/schemas/brains.MutationResult"
           },
           "diff": {
             "type": "string"
@@ -510,7 +510,7 @@
       "brains.PayloadTooLarge": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -528,7 +528,7 @@
       "brains.PreconditionFailed": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -539,7 +539,7 @@
       "brains.PreconditionRequired": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -566,7 +566,7 @@
         "properties": {
           "failed": {
             "items": {
-              "$ref": "#/components/schemas/ReindexFailure"
+              "$ref": "#/components/schemas/brains.ReindexFailure"
             },
             "type": "array"
           },
@@ -623,10 +623,10 @@
             "type": "string"
           },
           "content": {
-            "$ref": "#/components/schemas/ContentRef"
+            "$ref": "#/components/schemas/brains.ContentRef"
           },
           "copied_from": {
-            "$ref": "#/components/schemas/CopiedFrom"
+            "$ref": "#/components/schemas/brains.CopiedFrom"
           },
           "created_at": {
             "type": "string"
@@ -665,7 +665,7 @@
           {
             "properties": {
               "meta": {
-                "$ref": "#/components/schemas/Revision"
+                "$ref": "#/components/schemas/brains.Revision"
               }
             },
             "required": [
@@ -728,7 +728,7 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/SearchHit"
+              "$ref": "#/components/schemas/brains.SearchHit"
             },
             "type": "array"
           },
@@ -751,7 +751,7 @@
       "brains.ServiceUnavailable": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -812,7 +812,7 @@
             "type": "boolean"
           },
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           },
           "operation_id": {
             "type": "string"
@@ -844,7 +844,7 @@
             "type": "boolean"
           },
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           },
           "operation_id": {
             "type": "string"
@@ -873,7 +873,7 @@
       "brains.UnprocessableEntity": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
+            "$ref": "#/components/schemas/brains.ErrorDetail"
           }
         },
         "required": [
@@ -897,7 +897,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Capabilities"
+                  "$ref": "#/components/schemas/brains.Capabilities"
                 }
               }
             },
@@ -927,7 +927,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TransferBody"
+                "$ref": "#/components/schemas/brains.TransferBody"
               }
             }
           }
@@ -937,7 +937,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TransferResult"
+                  "$ref": "#/components/schemas/brains.TransferResult"
                 }
               }
             },
@@ -1078,7 +1078,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DiffResult"
+                  "$ref": "#/components/schemas/brains.DiffResult"
                 }
               }
             },
@@ -1175,7 +1175,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MutationResult"
+                  "$ref": "#/components/schemas/brains.MutationResult"
                 }
               }
             },
@@ -1314,7 +1314,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Entry"
+                  "$ref": "#/components/schemas/brains.Entry"
                 }
               },
               "application/octet-stream": {
@@ -1441,7 +1441,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PatchBody"
+                "$ref": "#/components/schemas/brains.PatchBody"
               }
             }
           }
@@ -1451,7 +1451,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PatchResult"
+                  "$ref": "#/components/schemas/brains.PatchResult"
                 }
               }
             },
@@ -1653,7 +1653,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MutationResult"
+                  "$ref": "#/components/schemas/brains.MutationResult"
                 }
               }
             },
@@ -1845,7 +1845,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FilePage"
+                  "$ref": "#/components/schemas/brains.FilePage"
                 }
               }
             },
@@ -1932,7 +1932,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LinkPage"
+                  "$ref": "#/components/schemas/brains.LinkPage"
                 }
               }
             },
@@ -1992,7 +1992,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ReindexRequest"
+                "$ref": "#/components/schemas/brains.ReindexRequest"
               }
             }
           }
@@ -2002,7 +2002,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReindexPage"
+                  "$ref": "#/components/schemas/brains.ReindexPage"
                 }
               }
             },
@@ -2096,7 +2096,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TransferBody"
+                "$ref": "#/components/schemas/brains.TransferBody"
               }
             }
           }
@@ -2106,7 +2106,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TransferResult"
+                  "$ref": "#/components/schemas/brains.TransferResult"
                 }
               }
             },
@@ -2238,7 +2238,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RestoreBody"
+                "$ref": "#/components/schemas/brains.RestoreBody"
               }
             }
           }
@@ -2248,7 +2248,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MutationResult"
+                  "$ref": "#/components/schemas/brains.MutationResult"
                 }
               }
             },
@@ -2389,7 +2389,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Revision"
+                  "$ref": "#/components/schemas/brains.Revision"
                 }
               },
               "application/octet-stream": {
@@ -2510,7 +2510,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HistoryPage"
+                  "$ref": "#/components/schemas/brains.HistoryPage"
                 }
               }
             },
@@ -2649,7 +2649,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SearchPage"
+                  "$ref": "#/components/schemas/brains.SearchPage"
                 }
               }
             },
@@ -2710,7 +2710,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OkResult"
+                  "$ref": "#/components/schemas/brains.OkResult"
                 }
               }
             },
@@ -2739,7 +2739,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Session"
+                  "$ref": "#/components/schemas/brains.Session"
                 }
               }
             },
@@ -2778,7 +2778,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Session"
+                  "$ref": "#/components/schemas/brains.Session"
                 }
               }
             },
