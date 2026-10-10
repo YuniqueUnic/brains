@@ -170,6 +170,14 @@ describe("Markdown metadata and reference previews", () => {
     await expect(page.getByTestId("editor-path")).toHaveText(
       `${dir}/source.md`,
     );
+    const expanded = (await PreviewArea.card(page).boundingBox())!;
+    const corner = (await PreviewArea.resize(page).getAttribute("data-corner"))!;
+    await actor.attemptsTo(ResizePreview(-60, -40));
+    const shrunk = (await PreviewArea.card(page).boundingBox())!;
+    expect(shrunk.width).toBeCloseTo(expanded.width - 60, 0);
+    expect(shrunk.height).toBeCloseTo(expanded.height - 40, 0);
+    expect(corner.endsWith("w") ? shrunk.x + shrunk.width : shrunk.x).toBeCloseTo(corner.endsWith("w") ? expanded.x + expanded.width : expanded.x, 0);
+    expect(corner.startsWith("n") ? shrunk.y + shrunk.height : shrunk.y).toBeCloseTo(corner.startsWith("n") ? expanded.y + expanded.height : expanded.y, 0);
     await PreviewArea.card(page)
       .getByRole("button", { name: "打开", exact: true })
       .click();
@@ -377,10 +385,18 @@ describe("Markdown metadata and reference previews", () => {
         corners[i],
       );
       const before = (await PreviewArea.card(page).boundingBox())!;
-      await actor.attemptsTo(ResizePreview(24, 0));
-      await expect
-        .poll(async () => (await PreviewArea.card(page).boundingBox())!.width)
-        .toBeCloseTo(before.width + 24, 0);
+      for (const [dw, dh] of [[36, 20], [-70, -55], [34, 35]]) {
+        const initial = (await PreviewArea.card(page).boundingBox())!;
+        await actor.attemptsTo(ResizePreview(dw, dh));
+        await expect.poll(async () => (await PreviewArea.card(page).boundingBox())!.width).toBeCloseTo(initial.width + dw, 0);
+        await expect.poll(async () => (await PreviewArea.card(page).boundingBox())!.height).toBeCloseTo(initial.height + dh, 0);
+        const after = (await PreviewArea.card(page).boundingBox())!;
+        expect(corners[i].endsWith("w") ? after.x + after.width : after.x).toBeCloseTo(corners[i].endsWith("w") ? initial.x + initial.width : initial.x, 0);
+        expect(corners[i].startsWith("n") ? after.y + after.height : after.y).toBeCloseTo(corners[i].startsWith("n") ? initial.y + initial.height : initial.y, 0);
+      }
+      const settled = (await PreviewArea.card(page).boundingBox())!;
+      expect(settled.width).toBeCloseTo(before.width, 0);
+      expect(settled.height).toBeCloseTo(before.height, 0);
       await actor.attemptsTo(LeavePreview());
     }
     const preferred = await page.evaluate(() =>
@@ -464,6 +480,14 @@ describe("Markdown metadata and reference previews", () => {
     await page.keyboard.press("Control+Space");
     await expect(PreviewArea.card(page)).toContainText("补全目标");
     await actor.attemptsTo(ResizePreview(60, 20));
+    const expanded = (await PreviewArea.card(page).boundingBox())!;
+    const corner = (await PreviewArea.resize(page).getAttribute("data-corner"))!;
+    await actor.attemptsTo(ResizePreview(-80, -40));
+    const shrunk = (await PreviewArea.card(page).boundingBox())!;
+    expect(shrunk.width).toBeCloseTo(expanded.width - 80, 0);
+    expect(shrunk.height).toBeCloseTo(expanded.height - 40, 0);
+    expect(corner.endsWith("w") ? shrunk.x + shrunk.width : shrunk.x).toBeCloseTo(corner.endsWith("w") ? expanded.x + expanded.width : expanded.x, 0);
+    expect(corner.startsWith("n") ? shrunk.y + shrunk.height : shrunk.y).toBeCloseTo(corner.startsWith("n") ? expanded.y + expanded.height : expanded.y, 0);
     const size = (await PreviewArea.card(page).boundingBox())!;
     await page.keyboard.press("Enter");
     await expect(PreviewArea.editor(page)).toHaveText(`[[${name}]]`);
@@ -512,4 +536,60 @@ describe("Markdown metadata and reference previews", () => {
       )
       .toBe(640);
   });
+});
+
+it("anchors a wrapped source link at the hovered visual line near the editor edge", async ({ actor, page }) => {
+  const dir = `web30-wrap-${Date.now()}`;
+  const label = "跨行链接标题".repeat(24), expression = `[${label}](./target.md)`;
+  actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
+  await page.setViewportSize({ width: 1200, height: 850 });
+  await actor.attemptsTo(SeedNoteViaApi(`${dir}/source.md`, "# 定位\n\n" + "普通正文内容。".repeat(20) + expression), SeedNoteViaApi(`${dir}/target.md`, "# 第二行附近的预览"), SignIn(), OpenNote(`${dir}/source.md`));
+  const characters = await PreviewArea.line(page, expression).evaluate((element) => {
+    const from = element.textContent!.indexOf("["), walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const result: { offset: number; left: number; top: number; bottom: number }[] = [];
+    let index = 0;
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      for (let i = 0; i < node.textContent!.length; i++) {
+        if (index + i < from) continue;
+        const range = document.createRange(); range.setStart(node, i); range.setEnd(node, i + 1);
+        const rect = range.getBoundingClientRect();
+        result.push({ offset: index + i - from, left: rect.left, top: rect.top, bottom: rect.bottom });
+      }
+      index += node.textContent!.length;
+    }
+    return result;
+  });
+  const target = characters.find(r => r.top > characters[0].top + 5 && r.left < 400)!;
+  expect(target).toBeTruthy();
+  await actor.attemptsTo(HoverReference(expression, target.offset));
+  await expect(PreviewArea.card(page)).toContainText("第二行附近的预览");
+  const card = (await PreviewArea.card(page).boundingBox())!;
+  expect(card.x).toBeCloseTo(target.left, 0);
+  expect(card.y).toBeCloseTo(target.bottom, 0);
+  await actor.attemptsTo(ResizePreview(-60, -50));
+  const resized = (await PreviewArea.card(page).boundingBox())!;
+  expect(resized.x).toBeCloseTo(card.x, 0);
+  expect(resized.y).toBeCloseTo(card.y, 0);
+});
+
+it("moves the resize handle when a reading preview flips after a viewport change", async ({ actor, page }) => {
+  const dir = `web30-flip-${Date.now()}`;
+  actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await actor.attemptsTo(SeedNoteViaApi(`${dir}/source.md`, "---\ntitle: 页面\ndescription: |\n" + "  前置说明\n".repeat(8) + "links:\n  翻转链接: ./target.md\n---\n\n正文"), SeedNoteViaApi(`${dir}/target.md`, "# 浮卡避让"), SignIn(), OpenNote(`${dir}/source.md`), ShowDocumentPreview());
+  const link = PreviewArea.document(page).getByRole("link", { name: "翻转链接" });
+  await link.hover();
+  await expect(PreviewArea.card(page)).toContainText("浮卡避让");
+  await expect(page.locator(".preview-popup")).toHaveAttribute("data-side", "bottom");
+  const initial = (await PreviewArea.card(page).boundingBox())!;
+  const anchor = (await link.boundingBox())!;
+  await page.setViewportSize({ width: 1440, height: Math.ceil(anchor.y + 100) });
+  await expect(page.locator(".preview-popup")).toHaveAttribute("data-side", "top");
+  await expect(PreviewArea.resize(page)).toHaveAttribute("data-corner", /^n/);
+  const flipped = (await PreviewArea.card(page).boundingBox())!;
+  expect(flipped.width).toBeCloseTo(initial.width, 0);
+  expect(flipped.height).toBeCloseTo(initial.height, 0);
+  await actor.attemptsTo(ResizePreview(-40, -40));
+  const shrunk = (await PreviewArea.card(page).boundingBox())!;
+  expect(shrunk.y + shrunk.height).toBeCloseTo(flipped.y + flipped.height, 0);
 });

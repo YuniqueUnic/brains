@@ -86,7 +86,7 @@ for query, mode, prefix, expected_hit in [
 ]:
     params = {'q': query, 'mode': mode}
     if prefix: params['prefix'] = prefix
-    result, _ = request('GET', '/search?' + urllib.parse.urlencode(params))
+    result, _ = request('POST', '/search', json.dumps(params).encode(), {'Content-Type': 'application/json'})
     assert result['complete'] and result['index_state'] == 'available', result
     assert (path in [item['path'] for item in result['items']]) == expected_hit, result
     if not expected_hit: assert result['items'] == [], result

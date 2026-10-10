@@ -37,7 +37,7 @@ pub struct ListQuery {
     pub prefix: Option<String>,
     pub limit: usize,
     pub cursor: Option<String>,
-    pub tag: Option<String>,
+    pub tags: Vec<String>,
     pub kind: Option<brains_domain::FileKind>,
     pub sort: ListOrder,
     pub include_deleted: bool,
@@ -49,7 +49,7 @@ impl Default for ListQuery {
             prefix: None,
             limit: brains_domain::Limits::default().list_page_default,
             cursor: None,
-            tag: None,
+            tags: Vec::new(),
             kind: None,
             sort: ListOrder::Path,
             include_deleted: false,
@@ -78,13 +78,14 @@ where
             prefix,
             limit,
             cursor,
-            tag,
+            tags,
             kind,
             sort,
             include_deleted,
         } = query;
         let prefix = brains_domain::path::normalize_prefix(prefix.as_deref()).map(str::to_owned);
-        let tag = tag.filter(|value| !value.is_empty());
+        let mut tags = tags;
+        crate::normalize_tags(&mut tags);
         let cursor = cursor.filter(|value| !value.is_empty());
         if limit == 0 || limit > self.limits.list_page_max {
             return Err(DomainError::InvalidArgument(format!(
@@ -93,9 +94,9 @@ where
             )));
         }
         if source == ListSource::Store {
-            if tag.is_some() || kind.is_some() || sort == ListOrder::UpdatedDesc {
+            if !tags.is_empty() || kind.is_some() || sort == ListOrder::UpdatedDesc {
                 return Err(DomainError::InvalidArgument(
-                    "tag/kind/sort=updated_desc require source=index".into(),
+                    "tags/kind/sort=updated_desc require source=index".into(),
                 ));
             }
             let page = self
@@ -125,7 +126,7 @@ where
         };
         let filter = ListFilter {
             prefix,
-            tag,
+            tags,
             kind,
             include_deleted,
             order: sort,

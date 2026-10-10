@@ -48,7 +48,7 @@ def exercise_repeated_relations(cli, profile):
     """A normal note may repeat a link or tag; updates must still be searchable."""
     path = "relations/source.md"
     for tag, destination in (("first", "before.md"), ("second", "after.md")):
-        body = (f"---\ntags: [{tag}, {tag}]\n---\n# {tag}\n"
+        body = (f"---\ntags: [{tag}, {tag}, shared]\n---\n# {tag}\n"
                 f"[One]({destination})\n[Again](./{destination}#section)\n").encode()
         if tag == "first":
             cli(profile, "put", path, "--create", data=body)
@@ -56,11 +56,11 @@ def exercise_repeated_relations(cli, profile):
             cli.put(profile, path, body)
         revision = cli.stat(profile, path)["revision"]
         indexed = [json.loads(line) for line in
-                   cli(profile, "ls", "relations/", "--source", "index", "--tag", tag, "--json").splitlines()]
+                   cli(profile, "ls", "relations/", "--source", "index", "--tag", tag, "--tag", "shared", "--json").splitlines()]
         assert len(indexed) == 1 and indexed[0]["revision"] == revision
         for mode in ("literal", "fts"):
             hits = [json.loads(line) for line in
-                    cli(profile, "search", tag, "--prefix", "relations/", "--tag", tag,
+                    cli(profile, "search", tag, "--prefix", "relations/", "--tag", tag, "--tag", "shared",
                         "--mode", mode, "--json").splitlines()]
             assert len(hits) == 1 and hits[0]["indexed_revision"] == revision
         links = [json.loads(line) for line in cli(profile, "links", path, "--json").splitlines()]

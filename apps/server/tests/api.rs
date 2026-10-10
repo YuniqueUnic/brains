@@ -181,7 +181,8 @@ async fn search_contract_reports_windows_and_status() {
             .unwrap();
     }
     let page: Value = http
-        .get(format!("{base}/api/v1/search?q=缓存&scan_limit=3"))
+        .post(format!("{base}/api/v1/search"))
+        .json(&serde_json::json!({"q":"缓存","scan_limit":3}))
         .header("Authorization", &auth)
         .send()
         .await
@@ -196,7 +197,8 @@ async fn search_contract_reports_windows_and_status() {
 
     // Bad FTS syntax is 400, not a fake-empty page.
     let bad = http
-        .get(format!("{base}/api/v1/search?q=%22unclosed&mode=fts"))
+        .post(format!("{base}/api/v1/search"))
+        .json(&serde_json::json!({"q":"\"unclosed","mode":"fts"}))
         .header("Authorization", &auth)
         .send()
         .await
@@ -351,7 +353,8 @@ async fn unauthenticated_requests_are_rejected_with_json() {
     let (base, _token) = boot().await;
     let http = client();
     let files = http
-        .get(format!("{base}/api/v1/files"))
+        .post(format!("{base}/api/v1/files/query"))
+        .json(&serde_json::json!({}))
         .send()
         .await
         .unwrap();

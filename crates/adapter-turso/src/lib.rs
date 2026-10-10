@@ -167,7 +167,7 @@ impl IndexStore for TursoIndex {
         after: &str,
         limit: usize,
         text: &str,
-        tag: Option<&str>,
+        tags: &[String],
     ) -> DomainResult<Vec<LiteralRow>> {
         if text.is_empty() {
             return Err(DomainError::InvalidArgument(
@@ -178,7 +178,13 @@ impl IndexStore for TursoIndex {
         query(
             &conn,
             LITERAL_WINDOW_SQL,
-            params![normalize_prefix(prefix), after, limit as i64, text, tag],
+            params![
+                normalize_prefix(prefix),
+                after,
+                limit as i64,
+                text,
+                serde_json::to_string(tags).expect("string array")
+            ],
             |row| {
                 Ok(LiteralRow {
                     path: row.get(0)?,
@@ -195,7 +201,7 @@ impl IndexStore for TursoIndex {
         &self,
         text: &str,
         prefix: Option<&str>,
-        tag: Option<&str>,
+        tags: &[String],
         offset: usize,
         limit: usize,
     ) -> DomainResult<Vec<(String, String, String)>> {
@@ -208,9 +214,9 @@ impl IndexStore for TursoIndex {
         query(&conn, "SELECT path, revision, substr(body, 1, 240) FROM files
             WHERE fts_match(title, body, ?1) AND deleted=0 AND searchable=1
               AND (?2 IS NULL OR path = ?2 OR (path >= ?2 || '/' AND path < ?2 || '0'))
-              AND (?3 IS NULL OR EXISTS (SELECT 1 FROM tags WHERE tags.path=files.path AND tags.tag=?3))
+              AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value))
             ORDER BY fts_score(title, body, ?1) DESC, path LIMIT ?4 OFFSET ?5",
-            params![text, normalize_prefix(prefix), tag, limit as i64, offset as i64],
+            params![text, normalize_prefix(prefix), serde_json::to_string(tags).expect("string array"), limit as i64, offset as i64],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
             .await.map_err(search_err)
     }
@@ -225,7 +231,7 @@ impl IndexStore for TursoIndex {
         let order_desc = filter.order == ListOrder::UpdatedDesc;
         let mut sql = String::from("SELECT path, revision, generation, deleted, kind, title, size, sha256, media_type, updated_at
             FROM files WHERE (?1 = 1 OR deleted = 0) AND (?2 IS NULL OR path = ?2 OR (path >= ?2 || '/' AND path < ?2 || '0'))
-            AND (?3 IS NULL OR EXISTS (SELECT 1 FROM tags WHERE tags.path=files.path AND tags.tag=?3))
+            AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value))
             AND (?4 IS NULL OR kind=?4)");
         if order_desc {
             sql.push_str(" AND (?5 IS NULL OR updated_at < ?5 OR (updated_at = ?5 AND path > ?6)) ORDER BY updated_at DESC, path LIMIT ?7");
@@ -239,7 +245,7 @@ impl IndexStore for TursoIndex {
             params![
                 filter.include_deleted as i64,
                 prefix,
-                filter.tag.as_deref(),
+                serde_json::to_string(&filter.tags).expect("string array"),
                 filter.kind.map(|kind| kind.as_str()),
                 after_updated,
                 after_path,

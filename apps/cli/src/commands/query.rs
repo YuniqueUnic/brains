@@ -31,7 +31,7 @@ pub(crate) fn ls(client: &dyn Library, args: LsArgs) -> ClientResult<i32> {
                 })?,
             prefix: (!prefix.is_empty()).then(|| prefix.clone()),
             cursor: cursor.clone(),
-            tag: tag.clone(),
+            tags: tag.clone(),
             kind: kind.as_deref().and_then(brains_domain::FileKind::parse),
             sort: if sort == "updated_desc" {
                 brains_ports::ListOrder::UpdatedDesc
@@ -72,7 +72,7 @@ pub(crate) fn search(
     query: &str,
     mode: &str,
     prefix: Option<String>,
-    tag: Option<String>,
+    tag: Vec<String>,
     json: bool,
     max_pages: Option<usize>,
 ) -> ClientResult<i32> {
@@ -96,7 +96,7 @@ pub(crate) fn search(
                 }
             },
             prefix: prefix.clone(),
-            tag: tag.clone(),
+            tags: tag.clone(),
             cursor: cursor.clone(),
             scan_limit: brains_domain::Limits::default().scan_window_max,
         };

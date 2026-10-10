@@ -522,6 +522,39 @@
         ],
         "type": "object"
       },
+      "brains.ListFilesQuery": {
+        "properties": {
+          "cursor": {
+            "type": "string"
+          },
+          "include_deleted": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "sort": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
       "brains.MutationResult": {
         "properties": {
           "created": {
@@ -921,6 +954,36 @@
           "complete",
           "scanned",
           "index_state"
+        ],
+        "type": "object"
+      },
+      "brains.SearchQuery": {
+        "properties": {
+          "cursor": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string"
+          },
+          "q": {
+            "type": "string"
+          },
+          "scan_limit": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "q"
         ],
         "type": "object"
       },
@@ -2107,76 +2170,18 @@
         ]
       }
     },
-    "/files": {
-      "get": {
+    "/files/query": {
+      "post": {
         "operationId": "brains.Files.list_files",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "source",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "prefix",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "tag",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "kind",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "sort",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "include_deleted",
-            "required": false,
-            "schema": {
-              "type": "boolean"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/brains.ListFilesQuery"
+              }
             }
           }
-        ],
+        },
         "responses": {
           "200": {
             "content": {
@@ -3400,59 +3405,17 @@
       }
     },
     "/search": {
-      "get": {
+      "post": {
         "operationId": "brains.Files.search",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "q",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "mode",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "prefix",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "tag",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "scan_limit",
-            "required": false,
-            "schema": {
-              "format": "int64",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "cursor",
-            "required": false,
-            "schema": {
-              "type": "string"
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/brains.SearchQuery"
+              }
             }
           }
-        ],
+        },
         "responses": {
           "200": {
             "content": {

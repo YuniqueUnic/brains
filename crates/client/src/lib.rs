@@ -181,7 +181,11 @@ impl Library for BrainClient {
     }
 
     fn list_files(&self, query: &brains_application::listing::ListQuery) -> ClientResult<FilePage> {
-        let response = self.send(self.http.get(self.url("/api/v1/files", "")).query(query))?;
+        let response = self.send(
+            self.http
+                .post(self.url("/api/v1/files/query", ""))
+                .json(query),
+        )?;
         self.expect_json(response)
     }
 
@@ -327,7 +331,7 @@ impl Library for BrainClient {
     }
 
     fn search(&self, query: &brains_application::search::SearchQuery) -> ClientResult<SearchPage> {
-        let response = self.send(self.http.get(self.url("/api/v1/search", "")).query(query))?;
+        let response = self.send(self.http.post(self.url("/api/v1/search", "")).json(query))?;
         self.expect_json(response)
     }
 

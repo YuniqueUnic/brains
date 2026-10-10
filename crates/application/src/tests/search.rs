@@ -11,7 +11,7 @@ fn literal_query(q: &str, cursor: Option<String>, scan_limit: usize) -> SearchQu
         q: q.into(),
         mode: SearchMode::Literal,
         prefix: None,
-        tag: None,
+        tags: vec![],
         cursor,
         scan_limit,
     }
@@ -124,7 +124,7 @@ async fn fts_mode_matches_tokens_and_rejects_bad_syntax() {
                 q: "cache".into(),
                 mode: SearchMode::Fts,
                 prefix: None,
-                tag: None,
+                tags: vec![],
                 cursor: None,
                 scan_limit: 10,
             },
@@ -141,7 +141,7 @@ async fn fts_mode_matches_tokens_and_rejects_bad_syntax() {
                 q: "\"unclosed".into(),
                 mode: SearchMode::Fts,
                 prefix: None,
-                tag: None,
+                tags: vec![],
                 cursor: None,
                 scan_limit: 10,
             },
@@ -178,7 +178,7 @@ async fn tag_filter_narrows_literal_candidates() {
     .unwrap();
 
     let mut query = literal_query("缓存", None, 100);
-    query.tag = Some("缓存专题".into());
+    query.tags = vec!["缓存专题".into()];
     let hits = vault.search(&owner, query).await.unwrap();
     assert_eq!(
         hits.items
@@ -274,7 +274,7 @@ async fn query_subtrees_preserve_scope_unicode_and_pagination() {
                                 q: "needle".into(),
                                 mode,
                                 prefix: Some(requested.clone()),
-                                tag: None,
+                                tags: vec![],
                                 cursor,
                                 scan_limit: 1,
                             },
@@ -333,4 +333,82 @@ async fn query_subtrees_preserve_scope_unicode_and_pagination() {
             Err(DomainError::Forbidden(_))
         ));
     }
+}
+
+#[tokio::test]
+async fn combined_tags_filter_before_paging_and_bind_normalized_cursor() {
+    let TestVault { vault, .. } = open_vault();
+    let owner = owner_principal();
+    for (path, tags) in [
+        ("a.md", "[agent-memory]"),
+        ("b.md", "[agent-memory, 'a,b']"),
+        ("c.md", "['a,b', agent-memory]"),
+    ] {
+        put_text(
+            &vault,
+            &owner,
+            path,
+            &format!("---\ntags: {tags}\n---\nneedle"),
+            Precondition::Create,
+        )
+        .await
+        .unwrap();
+    }
+    for mode in [SearchMode::Literal, SearchMode::Fts] {
+        let mut query = literal_query("needle", None, 1);
+        query.mode = mode;
+        query.tags = vec!["agent-memory".into(), "a,b".into(), "agent-memory".into()];
+        let first = vault.search(&owner, query.clone()).await.unwrap();
+        assert_eq!(first.items.len(), 1);
+        assert_ne!(first.items[0].path, "a.md");
+        query.cursor = first.next_cursor;
+        query.tags = vec!["a,b".into(), "agent-memory".into()];
+        let next = vault.search(&owner, query.clone()).await.unwrap();
+        assert_eq!(next.items.len(), 1);
+        assert_ne!(next.items[0].path, first.items[0].path);
+        query.tags = vec!["agent-memory".into()];
+        assert!(matches!(
+            vault.search(&owner, query).await,
+            Err(brains_domain::DomainError::InvalidArgument(_))
+        ));
+    }
+    let page = vault
+        .list_files(
+            &owner,
+            crate::listing::ListQuery {
+                source: crate::listing::ListSource::Index,
+                tags: vec!["a,b".into(), "agent-memory".into()],
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        page.items
+            .iter()
+            .map(|item| item.path.as_str())
+            .collect::<Vec<_>>(),
+        ["b.md", "c.md"]
+    );
+}
+
+#[tokio::test]
+async fn literal_search_matches_file_paths_with_the_same_tag_intersection() {
+    let TestVault { vault, .. } = open_vault();
+    let owner = owner_principal();
+    put_text(
+        &vault,
+        &owner,
+        "notes/unique-path.md",
+        "---\ntags: [agent-memory, photon]\n---\nbody without the filename",
+        Precondition::Create,
+    )
+    .await
+    .unwrap();
+    let mut query = literal_query("unique-path", None, 100);
+    query.tags = vec!["agent-memory".into(), "photon".into()];
+    assert_eq!(
+        vault.search(&owner, query).await.unwrap().items[0].path,
+        "notes/unique-path.md"
+    );
 }

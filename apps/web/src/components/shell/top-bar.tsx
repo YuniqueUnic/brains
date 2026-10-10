@@ -1,3 +1,4 @@
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { FilePlus, Folder, LogOut, PanelLeft, Search, Settings2, Upload } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
@@ -28,6 +29,7 @@ const REPO_URL = "https://github.com/unic/brains";
 
 export function TopBar({
   session,
+  navigation,
   sidebarCollapsed,
   onToggleSidebar,
   onOpenPalette,
@@ -37,6 +39,7 @@ export function TopBar({
   onLogout,
 }: {
   session: SessionInfo;
+  navigation: { canBack: boolean; canForward: boolean; back: () => void; forward: () => void };
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   onOpenPalette: () => void;
@@ -60,6 +63,15 @@ export function TopBar({
           <PanelLeft />
         </Button>
       </Tooltip>
+
+      <div className="flex items-center" role="group" aria-label={t("fileNavigation")}>
+        <Tooltip content={t("fileBack")}>
+          <Button size="icon" aria-label={t("fileBack")} data-testid="file-back" disabled={!navigation.canBack} onClick={navigation.back}><ArrowLeft /></Button>
+        </Tooltip>
+        <Tooltip content={t("fileForward")}>
+          <Button size="icon" aria-label={t("fileForward")} data-testid="file-forward" disabled={!navigation.canForward} onClick={navigation.forward}><ArrowRight /></Button>
+        </Tooltip>
+      </div>
 
       <span className="hidden items-center gap-1.5 pr-1 text-sm font-semibold tracking-tight min-[440px]:flex">
         <BrandMark className="size-4 text-foreground" />

@@ -8,14 +8,7 @@
     export namespace brains {
 
     export interface FilesListFilesRequest {
-            source?: string;
-                prefix?: string;
-                limit?: number;
-                cursor?: string;
-                tag?: string;
-                kind?: string;
-                sort?: string;
-                include_deleted?: boolean;
+            body: types.brains.ListFilesQuery;
             }
 
 
@@ -134,12 +127,7 @@
 
 
     export interface FilesSearchRequest {
-            q: string;
-                mode?: string;
-                prefix?: string;
-                tag?: string;
-                scan_limit?: number;
-                cursor?: string;
+            body: types.brains.SearchQuery;
             }
 
 

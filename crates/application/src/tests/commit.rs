@@ -245,7 +245,7 @@ async fn index_failure_does_not_lose_the_commit() {
                 q: "committed".into(),
                 mode: crate::search::SearchMode::Literal,
                 prefix: None,
-                tag: None,
+                tags: vec![],
                 cursor: None,
                 scan_limit: 10,
             },

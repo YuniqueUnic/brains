@@ -26,7 +26,7 @@ pub(crate) struct LsArgs {
     #[arg(long, default_value = "store")]
     pub(crate) source: String,
     #[arg(long)]
-    pub(crate) tag: Option<String>,
+    pub(crate) tag: Vec<String>,
     /// note | text | script | binary (source=index only)
     #[arg(long)]
     pub(crate) kind: Option<String>,
@@ -128,7 +128,7 @@ enum Command {
         #[arg(long)]
         prefix: Option<String>,
         #[arg(long)]
-        tag: Option<String>,
+        tag: Vec<String>,
         #[arg(long)]
         json: bool,
         /// Stop after this many pages even if incomplete (exit code 7).

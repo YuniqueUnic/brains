@@ -409,6 +409,26 @@ union RevisionPayload switch (ContentType) {
     case OctetStream: sequence<octet> raw;
 };
 
+// Query filters are JSON values: tags are exact strings and combine with AND.
+struct ListFilesQuery {
+    @optional string source;
+    @optional string prefix;
+    @optional int64 limit;
+    @optional string cursor;
+    @optional sequence<string> tags;
+    @optional string kind;
+    @optional string sort;
+    @optional boolean include_deleted;
+};
+struct SearchQuery {
+    string q;
+    @optional string mode;
+    @optional string prefix;
+    @optional sequence<string> tags;
+    @optional int64 scan_limit;
+    @optional string cursor;
+};
+
 // Request bodies are inline (the JSON document is the value itself, no
 // envelope), so every struct body is declared `@flatten`.
 // Shared mutation headers. `If-Match`/`If-None-Match` carry STRONG revision
@@ -426,17 +446,8 @@ interface Files {
     // Listing. source=store is the authoritative HEAD scan; source=index adds
     // tag/kind filters and updated_desc order. Cursors are opaque + signed:
     // echo them back unchanged or the server answers 400.
-    @get(path = "/files")
-    FilePage list_files(
-        @query @rename("source") @optional string source,
-        @query @optional string prefix,
-        @query @optional int64 limit,
-        @query @optional string cursor,
-        @query @optional string tag,
-        @query @optional string kind,
-        @query @optional string sort,
-        @query @rename("include_deleted") @optional boolean include_deleted
-    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
+    @post(path = "/files/query")
+    FilePage list_files(@flatten in ListFilesQuery body) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
 
     // Create or conditionally replace one file's exact bytes (design §8.2).
     // Raw body = application/octet-stream; text media types are declared via
@@ -536,15 +547,8 @@ interface Files {
     ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
 
     // Literal (case-sensitive UTF-8 substring) or FTS (tokenized) search.
-    @get(path = "/search")
-    SearchPage search(
-        @query string q,
-        @query @rename("mode") @optional string mode,
-        @query @optional string prefix,
-        @query @optional string tag,
-        @query @rename("scan_limit") @optional int64 scan_limit,
-        @query @optional string cursor
-    ) raises(BadRequest, Forbidden, NotImplemented, ServiceUnavailable, Internal);
+    @post(path = "/search")
+    SearchPage search(@flatten in SearchQuery body) raises(BadRequest, Forbidden, NotImplemented, ServiceUnavailable, Internal);
 
     // Wiki-link graph induced by [[links]] in stored text. Pages are fixed
     // at 50 rows; `cursor` walks the rest.

@@ -42,91 +42,130 @@ export function previewCorner(
   return `${(card.top + card.bottom) / 2 < y ? "n" : "s"}${(card.left + card.right) / 2 < x ? "w" : "e"}`;
 }
 
-/** Placement stays with the caller. Only dimensions and the drag lifecycle live here. */
+/** Native hosts own automatic placement; this frame owns manual geometry. */
+export interface PreviewFrame {
+  element: HTMLElement;
+  // Completion rewrites its info element's entire inline style, so its stable
+  // parent owns the variables. Other hosts use the frame itself.
+  styleOwner: HTMLElement;
+}
+
 export function attachPreviewResize(
   surface: HTMLElement,
   handle: HTMLButtonElement,
   anchor: () =>
     { left: number; right: number; top: number; bottom: number } | undefined,
+  frame: () => PreviewFrame,
   onResize?: () => void,
 ) {
   let preferred = preferredPreviewSize();
+  let manual: PreviewFrame | null = null;
   let dragging: {
     x: number;
     y: number;
-    width: number;
-    height: number;
+    rect: DOMRect;
     corner: PreviewCorner;
     scale: number;
   } | null = null;
-  const apply = (size: PreviewSize) => {
-    surface.style.width = `${size.width}px`;
-    surface.style.height = `${size.height}px`;
-    onResize?.();
+  const applySize = () => {
+    surface.style.width = `${preferred.width}px`;
+    surface.style.height = `${preferred.height}px`;
+  };
+  const save = () => {
+    try {
+      localStorage.setItem(SIZE_KEY, JSON.stringify(preferred));
+    } catch {
+      /* Optional preference. */
+    }
   };
   const updateCorner = () => {
-    if (!dragging)
+    if (!manual)
       handle.dataset.corner = previewCorner(
         surface.getBoundingClientRect(),
         anchor(),
       );
   };
-  apply(preferred);
-  const observer = new ResizeObserver(updateCorner);
-  observer.observe(surface);
-  window.addEventListener("resize", updateCorner);
-  window.addEventListener("scroll", updateCorner, true);
+  const finish = () => {
+    if (!dragging) return;
+    dragging = null;
+    delete surface.dataset.resizing;
+    save();
+  };
+  let cornerFrame = 0;
+  const reset = () => {
+    finish();
+    cancelAnimationFrame(cornerFrame);
+    cornerFrame = requestAnimationFrame(updateCorner);
+    if (!manual) return;
+    delete manual.element.dataset.previewPlacement;
+    manual.styleOwner.style.removeProperty("--preview-left");
+    manual.styleOwner.style.removeProperty("--preview-top");
+    manual = null;
+    onResize?.();
+  };
+  const resize = (
+    rect: DOMRect,
+    corner: PreviewCorner,
+    scale: number,
+    dx: number,
+    dy: number,
+  ) => {
+    const west = corner.endsWith("w"),
+      north = corner.startsWith("n");
+    const maxWidth = Math.max(
+      1,
+      west ? rect.right - 12 : innerWidth - 12 - rect.left,
+    );
+    const maxHeight = Math.max(
+      1,
+      north ? rect.bottom - 12 : innerHeight - 12 - rect.top,
+    );
+    const width = Math.min(
+      maxWidth,
+      Math.max(
+        Math.min(220 * scale, maxWidth),
+        rect.width + dx * (west ? -1 : 1),
+      ),
+    );
+    const height = Math.min(
+      maxHeight,
+      Math.max(
+        Math.min(160 * scale, maxHeight),
+        rect.height + dy * (north ? -1 : 1),
+      ),
+    );
+    manual ??= frame();
+    manual.styleOwner.style.setProperty(
+      "--preview-left",
+      `${west ? rect.right - width : rect.left}px`,
+    );
+    manual.styleOwner.style.setProperty(
+      "--preview-top",
+      `${north ? rect.bottom - height : rect.top}px`,
+    );
+    manual.element.dataset.previewPlacement = "manual";
+    preferred = { width: width / scale, height: height / scale };
+    applySize();
+  };
   const down = (event: PointerEvent) => {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
-    updateCorner();
     const rect = surface.getBoundingClientRect();
-    const scale = rect.width / surface.offsetWidth || 1;
     dragging = {
       x: event.clientX,
       y: event.clientY,
-      width: rect.width / scale,
-      height: rect.height / scale,
+      rect,
       corner: handle.dataset.corner as PreviewCorner,
-      scale,
+      scale: rect.width / surface.offsetWidth || 1,
     };
     handle.setPointerCapture(event.pointerId);
     surface.dataset.resizing = "true";
   };
   const move = (event: PointerEvent) => {
     if (!dragging) return;
-    const { x, y, width, height, corner, scale } = dragging;
-    preferred = {
-      width: Math.max(
-        220,
-        Math.min(
-          (window.innerWidth - 24) / scale,
-          width +
-            ((event.clientX - x) / scale) * (corner.endsWith("w") ? -1 : 1),
-        ),
-      ),
-      height: Math.max(
-        160,
-        Math.min(
-          (window.innerHeight - 24) / scale,
-          height +
-            ((event.clientY - y) / scale) * (corner.startsWith("n") ? -1 : 1),
-        ),
-      ),
-    };
-    apply(preferred);
-  };
-  const finish = () => {
-    if (!dragging) return;
-    dragging = null;
-    delete surface.dataset.resizing;
-    try {
-      localStorage.setItem(SIZE_KEY, JSON.stringify(preferred));
-    } catch {
-      /* Optional preference. */
-    }
-    updateCorner();
+    const { rect, corner, scale, x, y } = dragging;
+    resize(rect, corner, scale, event.clientX - x, event.clientY - y);
   };
   const keydown = (event: KeyboardEvent) => {
     if (
@@ -135,61 +174,49 @@ export function attachPreviewResize(
       return;
     event.preventDefault();
     event.stopPropagation();
-    const step = event.shiftKey ? 40 : 16;
     updateCorner();
-    const rect = surface.getBoundingClientRect();
-    const scale = rect.width / surface.offsetWidth || 1;
-    const corner = handle.dataset.corner!;
-    preferred = {
-      width: Math.max(
-        220,
-        Math.min(
-          (window.innerWidth - 24) / scale,
-          rect.width / scale +
-            (event.key === "ArrowRight"
-              ? step
-              : event.key === "ArrowLeft"
-                ? -step
-                : 0) *
-              (corner.endsWith("w") ? -1 : 1),
-        ),
-      ),
-      height: Math.max(
-        160,
-        Math.min(
-          (window.innerHeight - 24) / scale,
-          rect.height / scale +
-            (event.key === "ArrowDown"
-              ? step
-              : event.key === "ArrowUp"
-                ? -step
-                : 0) *
-              (corner.startsWith("n") ? -1 : 1),
-        ),
-      ),
-    };
-    apply(preferred);
-    try {
-      localStorage.setItem(SIZE_KEY, JSON.stringify(preferred));
-    } catch {
-      /* Optional preference. */
-    }
+    const rect = surface.getBoundingClientRect(),
+      scale = rect.width / surface.offsetWidth || 1;
+    const step = (event.shiftKey ? 40 : 16) * scale;
+    resize(
+      rect,
+      handle.dataset.corner as PreviewCorner,
+      scale,
+      event.key === "ArrowRight" ? step : event.key === "ArrowLeft" ? -step : 0,
+      event.key === "ArrowDown" ? step : event.key === "ArrowUp" ? -step : 0,
+    );
+    save();
   };
+  const scroll = (event: Event) => {
+    if (event.target instanceof Node && surface.contains(event.target)) return;
+    reset();
+  };
+  applySize();
+  onResize?.();
+  const observer = new ResizeObserver(updateCorner);
+  observer.observe(surface);
+  window.addEventListener("resize", reset);
+  window.addEventListener("scroll", scroll, true);
+  surface.addEventListener("preview-reset-placement", reset);
   handle.addEventListener("pointerdown", down);
   handle.addEventListener("pointermove", move);
   handle.addEventListener("pointerup", finish);
+  handle.addEventListener("pointercancel", finish);
   handle.addEventListener("lostpointercapture", finish);
   handle.addEventListener("keydown", keydown);
   updateCorner();
   return {
-    update: updateCorner,
     destroy() {
+      reset();
+      cancelAnimationFrame(cornerFrame);
       observer.disconnect();
-      window.removeEventListener("resize", updateCorner);
-      window.removeEventListener("scroll", updateCorner, true);
+      window.removeEventListener("resize", reset);
+      window.removeEventListener("scroll", scroll, true);
+      surface.removeEventListener("preview-reset-placement", reset);
       handle.removeEventListener("pointerdown", down);
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", finish);
+      handle.removeEventListener("pointercancel", finish);
       handle.removeEventListener("lostpointercapture", finish);
       handle.removeEventListener("keydown", keydown);
     },

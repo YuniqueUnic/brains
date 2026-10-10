@@ -61,7 +61,7 @@ export function referenceHover(context: MarkdownContext): Extension {
         context.path,
       );
       if (resolved.kind === "anchor") return null;
-      let anchor = view.coordsAtPos(from);
+      let anchor = view.coordsAtPos(pos, side);
       return {
         pos: from,
         end: to,
@@ -72,8 +72,8 @@ export function referenceHover(context: MarkdownContext): Extension {
             anchor: () => anchor,
             onResize: () => repositionTooltips(view),
           }),
-          getCoords(pos) {
-            anchor = view.coordsAtPos(pos);
+          getCoords(mappedFrom) {
+            anchor = view.coordsAtPos(mappedFrom + pos - from, side);
             return anchor ?? { left: 0, right: 0, top: -1e6, bottom: -1e6 };
           },
         }),

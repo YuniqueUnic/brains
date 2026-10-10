@@ -516,6 +516,7 @@ dependencies = [
  "brains-domain",
  "brains-ports",
  "futures",
+ "serde_json",
  "tokio",
  "turso",
 ]

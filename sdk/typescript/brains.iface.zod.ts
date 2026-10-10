@@ -10,14 +10,7 @@ import { xjson } from "xidl-typescript-codec";
 
     export namespace brains {
     export const FilesListFilesRequestSchema = z.object({
-            source: z.coerce.string().optional(),
-            prefix: z.coerce.string().optional(),
-            limit: z.coerce.number().int().optional(),
-            cursor: z.coerce.string().optional(),
-            tag: z.coerce.string().optional(),
-            kind: z.coerce.string().optional(),
-            sort: z.coerce.string().optional(),
-            include_deleted: z.coerce.boolean().optional(),
+            body: models.brains.ListFilesQuerySchema,
         });
     export type FilesListFilesRequest = z.infer<typeof FilesListFilesRequestSchema>;
 
@@ -136,12 +129,7 @@ import { xjson } from "xidl-typescript-codec";
     export type FilesRestoreResponse = z.infer<typeof FilesRestoreResponseSchema>;
 
     export const FilesSearchRequestSchema = z.object({
-            q: z.coerce.string(),
-            mode: z.coerce.string().optional(),
-            prefix: z.coerce.string().optional(),
-            tag: z.coerce.string().optional(),
-            scan_limit: z.coerce.number().int().optional(),
-            cursor: z.coerce.string().optional(),
+            body: models.brains.SearchQuerySchema,
         });
     export type FilesSearchRequest = z.infer<typeof FilesSearchRequestSchema>;
 

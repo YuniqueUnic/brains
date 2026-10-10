@@ -78,7 +78,7 @@ pub enum ListOrder {
 #[derive(Clone, Debug, Default)]
 pub struct ListFilter {
     pub prefix: Option<String>,
-    pub tag: Option<String>,
+    pub tags: Vec<String>,
     pub kind: Option<FileKind>,
     pub include_deleted: bool,
     pub order: ListOrder,
@@ -105,18 +105,18 @@ pub trait IndexStore {
         after: &str,
         limit: usize,
         query: &str,
-        tag: Option<&str>,
+        tags: &[String],
     ) -> impl Future<Output = DomainResult<Vec<LiteralRow>>> + Send;
 
     /// Explicit engine-native full-text search. Invalid syntax is an error, not a fallback.
     /// `prefix` selects the exact path and its descendants (`None` = whole
-    /// vault) and `tag` requires the tag row — filters are never silently
+    /// vault) and `tags` requires every requested tag row — filters are never silently
     /// ignored (design §11.1).
     fn search_fts(
         &self,
         query: &str,
         prefix: Option<&str>,
-        tag: Option<&str>,
+        tags: &[String],
         offset: usize,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<(String, String, String)>>> + Send; // path, revision, snippet

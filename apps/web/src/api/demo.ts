@@ -210,7 +210,7 @@ export const demoApi = {
     limit?: number;
     include_deleted?: boolean;
     source?: "store" | "index";
-    tag?: string;
+    tags?: string[];
     sort?: string;
   }): Promise<FilePage> {
     await latency();
@@ -218,7 +218,7 @@ export const demoApi = {
     for (const [path, file] of store) {
       const trashed = head(file).action === "trash";
       if (trashed && !query.include_deleted) continue;
-      if (query.tag && !parseMarkdownDocument(head(file).content?.text ?? "").metadata?.tags.includes(query.tag)) continue;
+      if (!query.tags?.every(tag => parseMarkdownDocument(head(file).content?.text ?? "").metadata?.tags.includes(tag)) && query.tags?.length) continue;
       items.push(headEntry(path, file));
     }
     items.sort((a, b) => a.path.localeCompare(b.path));
@@ -361,6 +361,7 @@ export const demoApi = {
 
   async search(query: {
     q: string;
+    tags?: string[];
     mode: "literal" | "fts";
     prefix?: string;
     cursor?: string | null;
@@ -371,6 +372,7 @@ export const demoApi = {
     for (const [path, file] of store) {
       if (head(file).action === "trash") continue;
       const text = head(file).content?.text ?? "";
+      if (query.tags?.some(tag => !parseMarkdownDocument(text).metadata?.tags.includes(tag))) continue;
       const hit =
         query.mode === "literal"
           ? text.includes(q)

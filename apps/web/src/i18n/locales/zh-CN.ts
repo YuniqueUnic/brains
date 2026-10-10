@@ -26,6 +26,10 @@ const zhCN = {
     connecting: "连接中…",
   },
   workspace: {
+    fileNavigation: "文件浏览记录",
+    fileBack: "返回上一文件",
+    fileForward: "前进到下一文件",
+
     clearTag: "取消标签筛选：{{tag}}",
     mobileTabs: "工作区面板",
     mobileTabFiles: "文件",

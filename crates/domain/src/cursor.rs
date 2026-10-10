@@ -14,7 +14,7 @@ use crate::error::{DomainError, DomainResult};
 
 type HmacSha256 = Hmac<Sha256>;
 
-const ENDPOINT_FILES: &str = "/files";
+const ENDPOINT_FILES: &str = "/files/query";
 const ENDPOINT_SEARCH: &str = "/search";
 const ENDPOINT_REVISIONS: &str = "/revisions";
 const ENDPOINT_LINKS: &str = "/links";

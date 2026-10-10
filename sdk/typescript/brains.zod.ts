@@ -554,4 +554,40 @@ import { xjson } from "xidl-typescript-codec";
         export const FilePayloadSchema = z.union([z.object({ meta: EntrySchema }), z.object({ raw: z.array(z.coerce.number().int().nonnegative()) })]);
 
         export const RevisionPayloadSchema = z.union([z.object({ meta: RevisionSchema }), z.object({ raw: z.array(z.coerce.number().int().nonnegative()) })]);
+
+        export const ListFilesQuerySchema = z.object({
+
+                source: z.coerce.string().optional(),
+
+                prefix: z.coerce.string().optional(),
+
+                limit: z.coerce.number().int().optional(),
+
+                cursor: z.coerce.string().optional(),
+
+                tags: z.array(z.coerce.string()).optional(),
+
+                kind: z.coerce.string().optional(),
+
+                sort: z.coerce.string().optional(),
+
+                include_deleted: z.coerce.boolean().optional()
+
+        });
+
+        export const SearchQuerySchema = z.object({
+
+                q: z.coerce.string(),
+
+                mode: z.coerce.string().optional(),
+
+                prefix: z.coerce.string().optional(),
+
+                tags: z.array(z.coerce.string()).optional(),
+
+                scan_limit: z.coerce.number().int().optional(),
+
+                cursor: z.coerce.string().optional()
+
+        });
 }

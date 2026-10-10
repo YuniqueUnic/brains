@@ -134,8 +134,8 @@ def main():
                 # Only this loopback probe accepts Wrangler's self-signed certificate.
                 context = ssl._create_unverified_context() if args.protocol == "https" else None
 
-                def get(route):
-                    request = urllib.request.Request(base + "/api/v1" + route, headers={"Authorization": "Bearer " + token})
+                def request(route, body=None):
+                    request = urllib.request.Request(base + "/api/v1" + route, data=json.dumps(body).encode() if body is not None else None, headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"})
                     with urllib.request.urlopen(request, timeout=2, context=context) as response:
                         return json.load(response)
 
@@ -145,11 +145,11 @@ def main():
                     if server.poll() is not None:
                         raise RuntimeError("workerd exited before readiness")
                     try:
-                        caps = get("/capabilities")
+                        caps = request("/capabilities")
                         if caps["runtime"] != "cloudflare-rust" or caps["vault"] != config["vars"]["VAULT_ID"]:
                             raise RuntimeError("unexpected instance capabilities")
-                        get("/session")
-                        get("/files?source=index&limit=1")
+                        request("/session")
+                        request("/files/query", {"source": "index", "limit": 1})
                         break
                     except (OSError, urllib.error.URLError):
                         if time.monotonic() >= deadline:

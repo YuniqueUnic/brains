@@ -11,6 +11,7 @@ export function buildRefPreviewDom(
   context: MarkdownContext,
   options: {
     image?: boolean;
+    completion?: boolean;
     anchor?: () => {
       left: number;
       right: number;
@@ -24,6 +25,12 @@ export function buildRefPreviewDom(
   dom.className = "brains-ref-hover";
   dom.dataset.resolved = reference.kind === "vault" ? reference.path : "";
   const root = createRoot(dom);
+  const anchor = () =>
+    options.completion
+      ? dom.parentElement?.parentElement
+          ?.querySelector('[aria-selected="true"]')
+          ?.getBoundingClientRect()
+      : options.anchor?.();
   const load = () =>
     reference.kind === "vault"
       ? previewFor(reference.path)
@@ -37,6 +44,12 @@ export function buildRefPreviewDom(
         );
   root.render(
     <PreviewSurface
+      frame={() => ({
+        element: dom.parentElement!,
+        styleOwner: options.completion
+          ? dom.parentElement!.parentElement!
+          : dom.parentElement!,
+      })}
       load={load}
       context={{
         ...context,
@@ -56,19 +69,28 @@ export function buildRefPreviewDom(
           ? () => context.onOpen!(reference.path)
           : undefined
       }
-      anchor={() => options.anchor?.() ?? undefined}
+      anchor={() => anchor() ?? undefined}
       onResize={options.onResize}
     />,
   );
   return {
     dom,
+    update() {
+      dom
+        .querySelector(".preview-surface")
+        ?.dispatchEvent(new Event("preview-reset-placement"));
+    },
     positioned() {
       const surface = dom.querySelector<HTMLElement>(".preview-surface");
       const handle = dom.querySelector<HTMLElement>(".preview-resize");
-      if (surface && handle && !surface.dataset.resizing)
+      if (
+        surface &&
+        handle &&
+        dom.parentElement?.dataset.previewPlacement !== "manual"
+      )
         handle.dataset.corner = previewCorner(
           surface.getBoundingClientRect(),
-          options.anchor?.() ?? undefined,
+          anchor() ?? undefined,
         );
     },
     destroy() {

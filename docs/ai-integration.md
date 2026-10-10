@@ -31,7 +31,7 @@ browser flows). Agents can simply use the bearer token on every call.
 | Method + path | Purpose | Preconditions / notes |
 |---|---|---|
 | `GET /capabilities` | feature flags, limits, vault name | no auth needed? — auth required |
-| `GET /files?source=store\|index&prefix=&limit=&cursor=` | list; `store` = authoritative, `index` = tag/kind/sort filters | cursor is **opaque and signed**; echo it back unchanged, changing filters invalidates it (400) |
+| `POST /files/query` + JSON `{source, prefix, limit, cursor, tags}` | list; `store` = authoritative, `index` = tag/kind/sort filters | cursor is **opaque and signed**; echo it back unchanged, changing filters invalidates it (400) |
 | `GET /file?path=P` | raw bytes; `ETag` header = current revision | `If-None-Match` supported (weak compare, 304) |
 | `HEAD /file?path=P` | 只查元数据，成功 200；ETag、X-Brain-Generation、X-Brain-State | 不读取 blob；失败通过 X-Brain-Error-Code 返回错误码，无正文 |
 | `GET /file?path=P&format=meta` | JSON metadata (revision, generation, state, sha256, media_type) | 410 Gone once trashed |
@@ -40,7 +40,7 @@ browser flows). Agents can simply use the bearer token on every call.
 | `DELETE /trash?path=P` | 永久删除已在回收站的路径，返回 PurgeResult | `If-Match` 必填；live 为 409，过期版本为 412 |
 | `POST /restore` | restore a prior revision as a NEW revision | body `{path, revision}`, `If-Match` on the current head |
 | `GET /revisions?path=P` | reachable history, newest first | signed cursor pagination |
-| `GET /search?q=&mode=literal\|fts&prefix=` | literal = case-sensitive UTF-8 substring (complete or honestly incomplete); FTS = tokenized, needs index | `423`/`building` while index is behind — retry or use literal |
+| `POST /search` + JSON `{q, mode, prefix, tags, cursor}` | literal = case-sensitive UTF-8 substring (complete or honestly incomplete); FTS = tokenized, needs index | `423`/`building` while index is behind — retry or use literal |
 | `GET /links?path=P&direction=outbound\|backlinks` | wiki-link graph | |
 | `POST /maintenance/reindex` | rebuild index projection | safe anytime |
 | `POST /copy`, `POST /move` | transfer between paths | move is CAS on the source |
@@ -51,7 +51,7 @@ browser flows). Agents can simply use the bearer token on every call.
 ## Write etiquette for agents
 
 1. **Search before you write** — avoid duplicate topics:
-   `GET /search?q=<keyword>&mode=fts`.
+   `POST /search` with JSON `{"q":"<keyword>","mode":"fts"}`.
 2. **One topic per file**; the filename is the address of the idea. Split long
    notes and cross-link with `[[wiki-link]]` (backlinks are served).
 3. **Conditional writes only.** Create with `If-None-Match: *`; update with
@@ -122,3 +122,5 @@ rules without leaving the store.
 `bsx seed` creates missing template paths and skips existing paths; it does not
 overwrite a user's edited guides. To adopt updated text in an existing vault,
 read and compare that note, then explicitly update it with its current revision.
+
+查询参数使用 JSON 正文；例如 `{"source":"index","tags":["agent-memory","photon"]}` 同时匹配两个完整标签。包含逗号的标签保持一个数组元素。`literal` 搜索同时检查路径、标题和正文；分页时原样传回 cursor，保持条件不变。Cookie 请求包括查询 POST 也要带 Origin 和 CSRF，Bearer 请求无需 CSRF。

@@ -72,18 +72,10 @@ import {
             return await decodeResponseBody<types.brains.Capabilities>(resp, "application/json", this.codecs);
         }
 
-                async list_files(source: string | undefined, prefix: string | undefined, limit: number | undefined, cursor: string | undefined, tag: string | undefined, kind: string | undefined, sort: string | undefined, include_deleted: boolean | undefined): Promise<types.brains.FilePage> {
-                    const parsed = ifaceSchemas.brains.FilesListFilesRequestSchema.parse({ "source": source, "prefix": prefix, "limit": limit, "cursor": cursor, "tag": tag, "kind": kind, "sort": sort, "include_deleted": include_deleted });
-                    let xidlPath = "/files";
+                async list_files(body: types.brains.ListFilesQuery): Promise<types.brains.FilePage> {
+                    const parsed = ifaceSchemas.brains.FilesListFilesRequestSchema.parse({ "body": body });
+                    let xidlPath = "/files/query";
                     const query = new URLSearchParams();
-                    appendParam(query, "source", source, true, false);
-                    appendParam(query, "prefix", prefix, true, false);
-                    appendParam(query, "limit", limit, true, false);
-                    appendParam(query, "cursor", cursor, true, false);
-                    appendParam(query, "tag", tag, true, false);
-                    appendParam(query, "kind", kind, true, false);
-                    appendParam(query, "sort", sort, true, false);
-                    appendParam(query, "include_deleted", include_deleted, true, false);
                     const headers = new Headers(this.defaultHeaders);
                     const cookies: string[] = [];
                     applyCookies(headers, cookies);
@@ -93,8 +85,11 @@ import {
                         xidlPath = `${xidlPath}?${queryString}`;
                     }
                     const url = joinUrl(this.baseUrl, xidlPath);
-                    headers.set("Accept", "application/json");
-            const resp = await this.fetchImpl(url, { method: "GET", headers });
+                    const xidlBody = parsed["body"];
+            headers.set("Content-Type", "application/json");
+
+            headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.ListFilesQuerySchema) });
             if (!resp.ok) {
                 await this.throwListFilesError(resp);
 
@@ -371,16 +366,10 @@ import {
             return ifaceSchemas.brains.FilesRestoreResponseSchema.parse(deserialize(responsePayload, ifaceSchemas.brains.FilesRestoreResponseSchema)) as ifaceTypes.brains.FilesRestoreResponse;
         }
 
-                async search(q: string, mode: string | undefined, prefix: string | undefined, tag: string | undefined, scan_limit: number | undefined, cursor: string | undefined): Promise<types.brains.SearchPage> {
-                    const parsed = ifaceSchemas.brains.FilesSearchRequestSchema.parse({ "q": q, "mode": mode, "prefix": prefix, "tag": tag, "scan_limit": scan_limit, "cursor": cursor });
+                async search(body: types.brains.SearchQuery): Promise<types.brains.SearchPage> {
+                    const parsed = ifaceSchemas.brains.FilesSearchRequestSchema.parse({ "body": body });
                     let xidlPath = "/search";
                     const query = new URLSearchParams();
-                    appendParam(query, "q", q, false, false);
-                    appendParam(query, "mode", mode, true, false);
-                    appendParam(query, "prefix", prefix, true, false);
-                    appendParam(query, "tag", tag, true, false);
-                    appendParam(query, "scan_limit", scan_limit, true, false);
-                    appendParam(query, "cursor", cursor, true, false);
                     const headers = new Headers(this.defaultHeaders);
                     const cookies: string[] = [];
                     applyCookies(headers, cookies);
@@ -390,8 +379,11 @@ import {
                         xidlPath = `${xidlPath}?${queryString}`;
                     }
                     const url = joinUrl(this.baseUrl, xidlPath);
-                    headers.set("Accept", "application/json");
-            const resp = await this.fetchImpl(url, { method: "GET", headers });
+                    const xidlBody = parsed["body"];
+            headers.set("Content-Type", "application/json");
+
+            headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.SearchQuerySchema) });
             if (!resp.ok) {
                 await this.throwSearchError(resp);
 

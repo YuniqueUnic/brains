@@ -100,7 +100,7 @@ impl IndexStore for FlakyIndex {
         _after: &str,
         _limit: usize,
         _query: &str,
-        _tag: Option<&str>,
+        _tags: &[String],
     ) -> brains_domain::DomainResult<Vec<LiteralRow>> {
         Err(brains_domain::DomainError::IndexUnavailable(
             "index unavailable".into(),
@@ -111,7 +111,7 @@ impl IndexStore for FlakyIndex {
         &self,
         _query: &str,
         _prefix: Option<&str>,
-        _tag: Option<&str>,
+        _tags: &[String],
         _offset: usize,
         _limit: usize,
     ) -> brains_domain::DomainResult<Vec<(String, String, String)>> {

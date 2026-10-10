@@ -5,7 +5,7 @@ import {
   type MarkdownContext,
 } from "../markdown/markdown-content";
 import type { PreviewResult } from "../properties/preview";
-import { attachPreviewResize } from "./preview-resize";
+import { attachPreviewResize, type PreviewFrame } from "./preview-resize";
 
 type LoadState =
   | { kind: "loading" }
@@ -18,6 +18,7 @@ export function PreviewSurface({
   onOpen,
   anchor,
   onResize,
+  frame,
   title,
 }: {
   load: () => Promise<PreviewResult>;
@@ -26,14 +27,15 @@ export function PreviewSurface({
   anchor?: () =>
     { left: number; right: number; top: number; bottom: number } | undefined;
   onResize?: () => void;
+  frame: () => PreviewFrame;
   title?: string;
 }) {
   const { t } = useTranslation("info");
   const [state, setState] = useState<LoadState>({ kind: "loading" });
   const surface = useRef<HTMLDivElement>(null);
   const handle = useRef<HTMLButtonElement>(null);
-  const callbacks = useRef({ anchor, onResize });
-  callbacks.current = { anchor, onResize };
+  const callbacks = useRef({ anchor, onResize, frame });
+  callbacks.current = { anchor, onResize, frame };
   useEffect(() => {
     let active = true;
     setState({ kind: "loading" });
@@ -54,6 +56,7 @@ export function PreviewSurface({
       surface.current!,
       handle.current!,
       () => callbacks.current.anchor?.(),
+      () => callbacks.current.frame(),
       () => callbacks.current.onResize?.(),
     );
     return resize.destroy;

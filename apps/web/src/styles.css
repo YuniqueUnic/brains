@@ -667,7 +667,8 @@
   zoom: var(--ui-zoom, 1);
 }
 .cm-tooltip-autocomplete > ul { border-radius: 8px; }
-.cm-tooltip.cm-completionInfo { padding: 0; border: 0; background: transparent; overflow: visible; }
+/* Match the scoped CodeMirror theme: the surface owns padding and border. */
+.cm-tooltip.cm-tooltip.cm-completionInfo { padding: 0; border: 0; background: transparent; overflow: visible; }
 
 /* Document properties are part of the document, not a second editor. */
 .document-metadata {
@@ -878,4 +879,19 @@ button.document-tag:hover {
 }
 .cm-tooltip-hover > .brains-ref-hover > .preview-surface {
   flex-shrink: 1;
+}
+
+/* During a manual resize, the shared rectangle owns effective frame geometry.
+   Native hosts keep lifecycle ownership and resume placement on external scroll,
+   viewport resize or editor update. Completion's stable parent owns the variables. */
+[data-preview-placement="manual"] {
+  height: auto !important;
+  position: fixed !important;
+  left: var(--preview-left) !important;
+  top: var(--preview-top) !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  max-width: none !important;
+  max-height: none !important;
 }

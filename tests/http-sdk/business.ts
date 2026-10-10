@@ -171,7 +171,7 @@ const purged = await files.purge_file(path, trashed.etag, undefined);
 assert.equal(purged.purged, true);
 assert.equal(purged.path, path);
 await assert.rejects(files.get_file(path, undefined, undefined), NotFound);
-const afterPurge = await files.list_files('store', path, 100, undefined, undefined, undefined, undefined, true);
+const afterPurge = await files.list_files({ source: 'store', prefix: path, limit: 100, include_deleted: true });
 assert(!afterPurge.items.some(item => item.path === path));
 
 // Replay an archive into the now-empty path: blobs precede HEAD; skipped
@@ -205,10 +205,10 @@ assert.equal((await archives.archive_revision(executablePath, cleared.return.rev
 for (const pipePath of ['ts-sdk/pipe/a|b.md', 'ts-sdk/pipe/c.md']) {
   await files.put_file(pipePath, undefined, '*', undefined, undefined, undefined, 'text/markdown', original);
 }
-const pipePage = await files.list_files('index', 'ts-sdk/pipe/', 1, undefined, undefined, undefined, 'path', false);
+const pipePage = await files.list_files({ source: 'index', prefix: 'ts-sdk/pipe/', limit: 1, sort: 'path' });
 assert.equal(pipePage.items[0].path, 'ts-sdk/pipe/a|b.md');
 assert(pipePage.next_cursor);
-const pipeNext = await files.list_files('index', 'ts-sdk/pipe/', 1, pipePage.next_cursor, undefined, undefined, 'path', false);
+const pipeNext = await files.list_files({ source: 'index', prefix: 'ts-sdk/pipe/', limit: 1, cursor: pipePage.next_cursor, sort: 'path' });
 assert.equal(pipeNext.items[0].path, 'ts-sdk/pipe/c.md');
 
 // A cookie-authenticated mutation requires Origin and the session's CSRF token.

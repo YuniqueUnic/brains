@@ -35,7 +35,7 @@ export function fileCompletions(
           detail: file.path,
           type: "file",
           info: () => buildRefPreviewDom({ kind: "vault", path: file.path, fragment: "" }, preview, {
-            anchor: () => context.view?.coordsAtPos(context.pos) as DOMRect | null,
+            completion: true,
             onResize: () => context.view && repositionTooltips(context.view),
           }),
           apply(view, _completion, from, to) {

@@ -560,15 +560,18 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
 
     async fn list_files(
         &self,
-        source: Option<String>,
-        prefix: Option<String>,
-        limit: Option<i64>,
-        cursor: Option<String>,
-        tag: Option<String>,
-        kind: Option<String>,
-        sort: Option<String>,
-        include_deleted: Option<bool>,
+        body: contract::ListFilesQuery,
     ) -> Result<contract::FilePage, contract::FilesListFilesError> {
+        let contract::ListFilesQuery {
+            source,
+            prefix,
+            limit,
+            cursor,
+            tags,
+            kind,
+            sort,
+            include_deleted,
+        } = body;
         let ctx = current();
         let rid = ctx.request_id.as_str();
         let query = brains_application::listing::ListQuery {
@@ -585,7 +588,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             )
             .map_err(|e| list_files_error(e, rid))?,
             cursor,
-            tag,
+            tags: tags.unwrap_or_default(),
             kind: kind.as_deref().and_then(brains_domain::FileKind::parse),
             sort: if sort.as_deref() == Some("updated_desc") {
                 brains_ports::ListOrder::UpdatedDesc
@@ -990,13 +993,16 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
 
     async fn search(
         &self,
-        q: String,
-        mode: Option<String>,
-        prefix: Option<String>,
-        tag: Option<String>,
-        scan_limit: Option<i64>,
-        cursor: Option<String>,
+        body: contract::SearchQuery,
     ) -> Result<contract::SearchPage, contract::FilesSearchError> {
+        let contract::SearchQuery {
+            q,
+            mode,
+            prefix,
+            tags,
+            scan_limit,
+            cursor,
+        } = body;
         let ctx = current();
         let rid = ctx.request_id.as_str();
         let mode = match mode.as_deref().unwrap_or("literal") {
@@ -1024,7 +1030,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             q: q.clone(),
             mode,
             prefix,
-            tag,
+            tags: tags.unwrap_or_default(),
             cursor,
             scan_limit,
         };

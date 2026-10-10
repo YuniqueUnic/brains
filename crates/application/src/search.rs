@@ -20,7 +20,7 @@ pub struct SearchQuery {
     pub q: String,
     pub mode: SearchMode,
     pub prefix: Option<String>,
-    pub tag: Option<String>,
+    pub tags: Vec<String>,
     pub cursor: Option<String>,
     pub scan_limit: usize,
 }
@@ -39,24 +39,11 @@ pub struct SearchResult {
     pub building: bool,
 }
 
-fn literal_filter(query: &SearchQuery) -> String {
-    format!(
-        "literal:q={}:prefix={}:tag={}",
-        query.q,
-        query.prefix.as_deref().unwrap_or(""),
-        query.tag.as_deref().unwrap_or("")
-    )
-}
-
-/// FTS cursors bind the same conditions literal ones do: reusing a cursor
-/// under a different q/prefix/tag must fail instead of mixing pages.
-fn fts_filter(query: &SearchQuery) -> String {
-    format!(
-        "fts:q={}:prefix={}:tag={}",
-        query.q,
-        query.prefix.as_deref().unwrap_or(""),
-        query.tag.as_deref().unwrap_or("")
-    )
+// Structural serialization prevents delimiters inside q/prefix/tags from
+// colliding, and binds the complete normalized tag set to each cursor.
+fn search_filter(query: &SearchQuery) -> String {
+    serde_json::to_string(&(query.mode, &query.q, &query.prefix, &query.tags))
+        .expect("query filters contain only serializable strings")
 }
 
 impl<H, R, B, I> Vault<H, R, B, I>
@@ -72,7 +59,7 @@ where
         mut query: SearchQuery,
     ) -> DomainResult<SearchResult> {
         query.prefix = normalize_prefix(query.prefix.as_deref()).map(str::to_owned);
-        query.tag = query.tag.filter(|value| !value.is_empty());
+        crate::normalize_tags(&mut query.tags);
         query.cursor = query.cursor.filter(|value| !value.is_empty());
         if query.q.is_empty() || query.q.len() > 512 {
             return Err(DomainError::InvalidArgument(
@@ -109,7 +96,7 @@ where
         query: SearchQuery,
         building: bool,
     ) -> DomainResult<SearchResult> {
-        let filter = literal_filter(&query);
+        let filter = search_filter(&query);
         let after = match &query.cursor {
             None => String::new(),
             Some(cursor) => self.cursors.verify(Endpoint::Search, &filter, cursor)?,
@@ -121,7 +108,7 @@ where
                 &after,
                 query.scan_limit,
                 &query.q,
-                query.tag.as_deref(),
+                &query.tags,
             )
             .await?;
         let scanned = rows.len();
@@ -149,7 +136,7 @@ where
     }
 
     async fn search_fts(&self, query: SearchQuery, building: bool) -> DomainResult<SearchResult> {
-        let filter = fts_filter(&query);
+        let filter = search_filter(&query);
         let offset = match &query.cursor {
             None => 0usize,
             Some(cursor) => self
@@ -163,7 +150,7 @@ where
             .search_fts(
                 &query.q,
                 query.prefix.as_deref(),
-                query.tag.as_deref(),
+                &query.tags,
                 offset,
                 query.scan_limit,
             )

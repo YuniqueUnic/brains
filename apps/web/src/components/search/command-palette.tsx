@@ -5,12 +5,14 @@ import {
   LoaderCircle,
   Search,
   Upload,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type Entry, type SearchHit } from "../../api/client";
 import { cn } from "../../lib/utils";
 import { Dialog, DialogContent } from "../ui/dialog";
+import { extractTagQuery } from "./tag-query";
 import type { UploadIntent } from "../shell/top-bar";
 
 /*
@@ -41,11 +43,11 @@ export function CommandPalette({
   onOpenFile,
   onNewDocument,
   onUpload,
-  tag,
-  onClearTag,
+  tags,
+  onTagsChange,
 }: {
-  tag?: string | null;
-  onClearTag?: () => void;
+  tags: string[];
+  onTagsChange: (tags: string[]) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   files: Entry[];
@@ -59,6 +61,19 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [fullText, setFullText] = useState<FullTextState>({ kind: "idle" });
   const runIdRef = useRef(0);
+  const composing = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const commitInput = (value: string, finish = false) => {
+    const parsed = extractTagQuery(value, finish);
+    if (parsed.tags.length)
+      onTagsChange([...new Set([...tags, ...parsed.tags])]);
+    setQuery(parsed.query);
+    return parsed.tags.length > 0;
+  };
+  const removeTag = (tag: string) => {
+    onTagsChange(tags.filter((value) => value !== tag));
+    inputRef.current?.focus();
+  };
 
   const localMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -66,7 +81,8 @@ export function CommandPalette({
     return files
       .filter(
         (file) =>
-          file.path.toLowerCase().includes(q) || (file.title ?? "").toLowerCase().includes(q),
+          file.path.toLowerCase().includes(q) ||
+          (file.title ?? "").toLowerCase().includes(q),
       )
       .slice(0, 8);
   }, [files, query]);
@@ -75,41 +91,49 @@ export function CommandPalette({
     const q = raw.trim();
     const runId = runIdRef.current + 1;
     runIdRef.current = runId;
-    if (!q && !tag) {
+    if (!q && !tags.length) {
       setFullText({ kind: "idle" });
       return;
     }
     setFullText({ kind: "running" });
     try {
-      if (tag) {
+      if (!q && tags.length) {
         let cursor: string | null = null;
         const items: SearchHit[] = [];
         let pages = 0;
         do {
-          const page = await api.listFiles({ source: "index", tag, cursor });
-          items.push(...page.items
-            .filter(file => `${file.path} ${file.title ?? ""}`.toLowerCase().includes(q.toLowerCase()))
-            .map(file => ({
+          const page = await api.listFiles({ source: "index", tags, cursor });
+          items.push(
+            ...page.items.map((file) => ({
               path: file.path,
               indexed_revision: file.revision,
               snippet: file.title ?? "",
-            })));
+            })),
+          );
           cursor = page.next_cursor;
           pages += 1;
         } while (cursor && pages < 20 && runIdRef.current === runId);
         if (runIdRef.current === runId) {
-          setFullText({ kind: "done", query: `#${tag}`, items, incomplete: !!cursor, building: false });
+          setFullText({
+            kind: "done",
+            query: tags.map((tag) => `#${tag}`).join(" "),
+            items,
+            incomplete: !!cursor,
+            building: false,
+          });
         }
         return;
       }
-      const page = await api.search({ q, mode: searchMode });
+      const page = await api.search({ q, tags, mode: searchMode });
       let items = page.items;
       let cursor = page.next_cursor;
       let guard = 0;
-      while (cursor && guard < 20) {
-        const next = await api.search({ q, mode: searchMode, cursor });
+      let complete = page.complete;
+      while (cursor && guard < 20 && runIdRef.current === runId) {
+        const next = await api.search({ q, tags, mode: searchMode, cursor });
         items = items.concat(next.items);
         cursor = next.next_cursor;
+        complete = next.complete;
         guard += 1;
       }
       if (runIdRef.current !== runId) return;
@@ -117,7 +141,7 @@ export function CommandPalette({
         kind: "done",
         query: q,
         items,
-        incomplete: Boolean(cursor) || !page.complete,
+        incomplete: Boolean(cursor) || !complete,
         building: page.index_state === "building",
       });
     } catch {
@@ -137,17 +161,18 @@ export function CommandPalette({
   useEffect(() => {
     if (!open) return;
     const q = query.trim();
-    if (q.length < 2 && !tag) {
+    if (q.length < 2 && !tags.length) {
       setFullText({ kind: "idle" });
       return;
     }
+    setFullText({ kind: "running" });
     const timer = window.setTimeout(() => void runFullText(q), 300);
     return () => {
       window.clearTimeout(timer);
       runIdRef.current += 1;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, searchMode, open, tag]);
+  }, [query, searchMode, open, tags]);
 
   const showFullText = fullText.kind === "running" || fullText.kind === "done";
 
@@ -157,22 +182,59 @@ export function CommandPalette({
         aria-label={t("paletteOpen")}
         className="top-[18%] w-[min(640px,94vw)] translate-y-0 overflow-hidden p-0"
       >
-        <Command shouldFilter={false} label={t("paletteOpen")} className="flex flex-col">
-          <div className="flex items-center gap-2 border-b px-4">
+        <Command
+          shouldFilter={false}
+          label={t("paletteOpen")}
+          className="flex flex-col"
+        >
+          <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
             <Search className="size-4 shrink-0 stroke-[1.5] text-faint" />
-            {tag && <button type="button" className="document-tag" onClick={onClearTag} aria-label={t("clearTag", { tag })}>#{tag} ×</button>}
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className="document-tag max-w-full"
+                data-testid="search-tag"
+                onClick={() => removeTag(tag)}
+                aria-label={t("clearTag", { tag })}
+              >
+                <span className="truncate">#{tag}</span>
+                <X className="size-3 shrink-0" aria-hidden />
+              </button>
+            ))}
             <Command.Input
+              ref={inputRef}
               data-testid="search-box"
               value={query}
-              onValueChange={setQuery}
+              onValueChange={(value) => {
+                if (composing.current) setQuery(value);
+                else commitInput(value);
+              }}
+              onCompositionStart={() => {
+                composing.current = true;
+              }}
+              onCompositionEnd={(event) => {
+                composing.current = false;
+                commitInput(event.currentTarget.value);
+              }}
               onKeyDown={(event) => {
-                if (event.key === "Enter") {
+                if (event.nativeEvent.isComposing || composing.current) return;
+                if (event.key === "Backspace" && !query && tags.length) {
                   event.preventDefault();
-                  void runFullText(query);
+                  event.stopPropagation();
+                  onTagsChange(tags.slice(0, -1));
+                } else if (event.key === "Enter" || event.key === "Tab") {
+                  if (commitInput(query, true)) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  } else if (event.key === "Enter") {
+                    event.preventDefault();
+                    void runFullText(query);
+                  }
                 }
               }}
               placeholder={t("palettePlaceholder")}
-              className="h-12 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
+              className="h-8 min-w-[120px] flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
               autoFocus
             />
             {fullText.kind === "running" && (
@@ -188,7 +250,10 @@ export function CommandPalette({
               </Command.Empty>
             )}
             {fullText.kind === "error" && (
-              <div className="px-3 py-6 text-center text-xs text-muted-foreground" role="status">
+              <div
+                className="px-3 py-6 text-center text-xs text-muted-foreground"
+                role="status"
+              >
                 {t("paletteSearchFailed")}
               </div>
             )}
@@ -237,7 +302,7 @@ export function CommandPalette({
               </PaletteGroup>
             )}
 
-            {!tag && !showFullText && localMatches.length > 0 && (
+            {!tags.length && !showFullText && localMatches.length > 0 && (
               <PaletteGroup label={t("paletteDocuments")}>
                 {localMatches.map((file) => (
                   <Command.Item
@@ -273,7 +338,7 @@ export function CommandPalette({
               </PaletteGroup>
             )}
 
-            {!tag && query.trim() === "" && (
+            {!tags.length && query.trim() === "" && (
               <PaletteGroup label={t("paletteActions")}>
                 <Command.Item
                   value="action new document"
@@ -328,7 +393,7 @@ export function CommandPalette({
           </Command.List>
 
           <div className="flex items-center gap-2 border-t px-3 py-2 text-meta text-faint">
-            {!tag && <><ModeChip
+            <ModeChip
               active={searchMode === "literal"}
               testid="mode-literal"
               onClick={() => onSearchModeChange("literal")}
@@ -341,7 +406,7 @@ export function CommandPalette({
               onClick={() => onSearchModeChange("fts")}
             >
               {t("modeFts")}
-            </ModeChip></>}
+            </ModeChip>
             <span className="ml-auto flex items-center gap-2">
               <span>↑↓ {t("paletteNavigate")}</span>
               <span>↵ {t("paletteOpen")}</span>

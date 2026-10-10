@@ -9,6 +9,7 @@ default = ["fts"]
 fts = ["turso/fts"]
 
 [dependencies]
+serde_json.workspace = true
 brains-domain.workspace = true
 brains-ports.workspace = true
 turso.workspace = true

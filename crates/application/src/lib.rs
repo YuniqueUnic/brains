@@ -201,3 +201,10 @@ pub(crate) fn conflict(path: &VaultPath, current_revision: Option<&str>) -> Doma
 
 #[cfg(test)]
 mod tests;
+
+/// Normalize exact tag sets once before pagination signatures and index queries.
+fn normalize_tags(tags: &mut Vec<String>) {
+    tags.retain(|tag| !tag.is_empty());
+    tags.sort();
+    tags.dedup();
+}

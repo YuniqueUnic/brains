@@ -26,6 +26,10 @@ const en = {
     connecting: "Connecting…",
   },
   workspace: {
+    fileNavigation: "File history",
+    fileBack: "Previous file",
+    fileForward: "Next file",
+
     clearTag: "Clear tag filter: {{tag}}",
     mobileTabs: "Workspace panes",
     mobileTabFiles: "Files",

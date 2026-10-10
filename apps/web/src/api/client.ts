@@ -246,18 +246,12 @@ const httpApi = {
     limit?: number;
     include_deleted?: boolean;
     source?: "store" | "index";
-    tag?: string;
+    tags?: string[];
     sort?: string;
   }): Promise<FilePage> {
-    const params = new URLSearchParams();
-    if (query.prefix) params.set("prefix", query.prefix);
-    if (query.cursor) params.set("cursor", query.cursor);
-    if (query.limit) params.set("limit", String(query.limit));
-    if (query.include_deleted) params.set("include_deleted", "true");
-    if (query.source) params.set("source", query.source);
-    if (query.tag) params.set("tag", query.tag);
-    if (query.sort) params.set("sort", query.sort);
-    return request<FilePage>(`/files?${params}`, {});
+    return request<FilePage>("/files/query", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(query),
+    });
   },
 
   async readRaw(path: string): Promise<{ bytes: Uint8Array; etag: string }> {
@@ -389,14 +383,14 @@ const httpApi = {
 
   async search(query: {
     q: string;
+    tags?: string[];
     mode: "literal" | "fts";
     prefix?: string;
     cursor?: string | null;
   }): Promise<SearchPage> {
-    const params = new URLSearchParams({ q: query.q, mode: query.mode });
-    if (query.prefix) params.set("prefix", query.prefix);
-    if (query.cursor) params.set("cursor", query.cursor);
-    return request<SearchPage>(`/search?${params}`, {});
+    return request<SearchPage>("/search", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(query),
+    });
   },
 
   async links(path: string, direction: "outbound" | "backlinks"): Promise<{ items: LinkItem[] }> {

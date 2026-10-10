@@ -21,6 +21,7 @@ export function HoverPreview({
   context?: MarkdownContext;
 }) {
   const triggerRef = useRef<HTMLElement>(null);
+  const positionerRef = useRef<HTMLDivElement>(null);
   return (
     <Popover.Root>
       <Popover.Trigger
@@ -34,6 +35,8 @@ export function HoverPreview({
       />
       <Popover.Portal>
         <Popover.Positioner
+          ref={positionerRef}
+          positionMethod="fixed"
           side={side}
           sideOffset={10}
           align="start"
@@ -46,6 +49,10 @@ export function HoverPreview({
             finalFocus={false}
           >
             <PreviewSurface
+              frame={() => ({
+                element: positionerRef.current!,
+                styleOwner: positionerRef.current!,
+              })}
               load={load}
               onOpen={onOpen}
               context={context}

@@ -438,6 +438,30 @@
 
 
     export type RevisionPayload = { meta: Revision } | { raw: Array<number> };
+
+
+    export interface ListFilesQuery {
+
+                source?: string;
+                    prefix?: string;
+                    limit?: number;
+                    cursor?: string;
+                    tags?: Array<string>;
+                    kind?: string;
+                    sort?: string;
+                    include_deleted?: boolean;
+                }
+
+
+    export interface SearchQuery {
+
+                q: string;
+                    mode?: string;
+                    prefix?: string;
+                    tags?: Array<string>;
+                    scan_limit?: number;
+                    cursor?: string;
+                }
 }
 
 export {};

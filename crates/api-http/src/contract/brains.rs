@@ -456,6 +456,41 @@ pub mod brains {
         Json(Revision),
         OctetStream(Vec<u8>),
     }
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ListFilesQuery {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub source: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub prefix: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub limit: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub cursor: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub tags: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub kind: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub sort: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub include_deleted: Option<bool>,
+    }
+    impl ListFilesQuery {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct SearchQuery {
+        pub q: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub mode: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub prefix: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub tags: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub scan_limit: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub cursor: Option<String>,
+    }
+    impl SearchQuery {}
     #[allow(
         non_snake_case,
         unused_attributes,
@@ -469,14 +504,7 @@ pub mod brains {
         async fn capabilities(&self) -> ::xidl_rust_axum::Result<Capabilities>;
         async fn list_files(
             &self,
-            source: Option<String>,
-            prefix: Option<String>,
-            limit: Option<i64>,
-            cursor: Option<String>,
-            tag: Option<String>,
-            kind: Option<String>,
-            sort: Option<String>,
-            include_deleted: Option<bool>,
+            body: ListFilesQuery,
         ) -> ::std::result::Result<FilePage, FilesListFilesError>;
         async fn put_file(
             &self,
@@ -538,12 +566,7 @@ pub mod brains {
         ) -> ::std::result::Result<FilesRestoreResponse, FilesRestoreError>;
         async fn search(
             &self,
-            q: String,
-            mode: Option<String>,
-            prefix: Option<String>,
-            tag: Option<String>,
-            scan_limit: Option<i64>,
-            cursor: Option<String>,
+            body: SearchQuery,
         ) -> ::std::result::Result<SearchPage, FilesSearchError>;
         async fn links(
             &self,
@@ -4391,6 +4414,55 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ListFilesQuery {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub prefix: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub limit: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub cursor: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub tags: Option<Vec<String>>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub kind: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub sort: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub include_deleted: Option<bool>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ListFilesQuery> for brains_ListFilesQuery {
+            fn from(value: super::ListFilesQuery) -> Self {
+                Self {
+                    source: value.source,
+                    prefix: value.prefix,
+                    limit: value.limit,
+                    cursor: value.cursor,
+                    tags: value.tags.map(|value| value.into_iter().collect()),
+                    kind: value.kind,
+                    sort: value.sort,
+                    include_deleted: value.include_deleted,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ListFilesQuery> for super::ListFilesQuery {
+            fn from(value: brains_ListFilesQuery) -> Self {
+                Self {
+                    source: value.source,
+                    prefix: value.prefix,
+                    limit: value.limit,
+                    cursor: value.cursor,
+                    tags: value.tags.map(|value| value.into_iter().collect()),
+                    kind: value.kind,
+                    sort: value.sort,
+                    include_deleted: value.include_deleted,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_MutationResult {
             pub path: String,
             pub revision: String,
@@ -4806,6 +4878,46 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SearchQuery {
+            pub q: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub mode: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub prefix: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub tags: Option<Vec<String>>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub scan_limit: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub cursor: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SearchQuery> for brains_SearchQuery {
+            fn from(value: super::SearchQuery) -> Self {
+                Self {
+                    q: value.q,
+                    mode: value.mode,
+                    prefix: value.prefix,
+                    tags: value.tags.map(|value| value.into_iter().collect()),
+                    scan_limit: value.scan_limit,
+                    cursor: value.cursor,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SearchQuery> for super::SearchQuery {
+            fn from(value: brains_SearchQuery) -> Self {
+                Self {
+                    q: value.q,
+                    mode: value.mode,
+                    prefix: value.prefix,
+                    tags: value.tags.map(|value| value.into_iter().collect()),
+                    scan_limit: value.scan_limit,
+                    cursor: value.cursor,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_TransferBody {
             pub source: String,
             pub target: String,
@@ -5206,6 +5318,55 @@ pub mod brains {
                 Self {
                     items: value.items.into_iter().map(|value| value.into()).collect(),
                     next_cursor: value.next_cursor,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ListFilesQuery {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub prefix: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub limit: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub cursor: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub tags: Option<Vec<String>>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub kind: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub sort: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub include_deleted: Option<bool>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ListFilesQuery> for brains_ListFilesQuery {
+            fn from(value: super::ListFilesQuery) -> Self {
+                Self {
+                    source: value.source,
+                    prefix: value.prefix,
+                    limit: value.limit,
+                    cursor: value.cursor,
+                    tags: value.tags.map(|value| value.into_iter().collect()),
+                    kind: value.kind,
+                    sort: value.sort,
+                    include_deleted: value.include_deleted,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ListFilesQuery> for super::ListFilesQuery {
+            fn from(value: brains_ListFilesQuery) -> Self {
+                Self {
+                    source: value.source,
+                    prefix: value.prefix,
+                    limit: value.limit,
+                    cursor: value.cursor,
+                    tags: value.tags.map(|value| value.into_iter().collect()),
+                    kind: value.kind,
+                    sort: value.sort,
+                    include_deleted: value.include_deleted,
                 }
             }
         }
@@ -5625,6 +5786,46 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SearchQuery {
+            pub q: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub mode: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub prefix: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub tags: Option<Vec<String>>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub scan_limit: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub cursor: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SearchQuery> for brains_SearchQuery {
+            fn from(value: super::SearchQuery) -> Self {
+                Self {
+                    q: value.q,
+                    mode: value.mode,
+                    prefix: value.prefix,
+                    tags: value.tags.map(|value| value.into_iter().collect()),
+                    scan_limit: value.scan_limit,
+                    cursor: value.cursor,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SearchQuery> for super::SearchQuery {
+            fn from(value: brains_SearchQuery) -> Self {
+                Self {
+                    q: value.q,
+                    mode: value.mode,
+                    prefix: value.prefix,
+                    tags: value.tags.map(|value| value.into_iter().collect()),
+                    scan_limit: value.scan_limit,
+                    cursor: value.cursor,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_TransferBody {
             pub source: String,
             pub target: String,
@@ -5695,35 +5896,10 @@ pub mod brains {
             }
         }
     }
-    #[derive(::serde::Deserialize, ::core::default::Default)]
-    struct FilesListFilesRequestInQuery {
-        #[serde(default)]
-        source: Option<String>,
-        #[serde(default)]
-        prefix: Option<String>,
-        #[serde(default)]
-        limit: Option<i64>,
-        #[serde(default)]
-        cursor: Option<String>,
-        #[serde(default)]
-        tag: Option<String>,
-        #[serde(default)]
-        kind: Option<String>,
-        #[serde(default)]
-        sort: Option<String>,
-        #[serde(default)]
-        include_deleted: Option<bool>,
-    }
+    pub type FilesListFilesRequestInBody = __xidl_in_Files::brains_ListFilesQuery;
     #[derive(::serde::Deserialize)]
     struct FilesListFilesRequest {
-        source: Option<String>,
-        prefix: Option<String>,
-        limit: Option<i64>,
-        cursor: Option<String>,
-        tag: Option<String>,
-        kind: Option<String>,
-        sort: Option<String>,
-        include_deleted: Option<bool>,
+        body: __xidl_in_Files::brains_ListFilesQuery,
     }
     #[allow(clippy::manual_async_fn, unused_mut)]
     impl<S> ::xidl_rust_axum::axum::extract::FromRequest<S> for FilesListFilesRequest
@@ -5739,35 +5915,30 @@ pub mod brains {
                 let (mut parts, body) = req.into_parts();
                 let _ = &body;
                 let _ = state;
-                let ::xidl_rust_axum::axum::extract::Query(xidl_query) = <::xidl_rust_axum::axum::extract::Query<
-                    FilesListFilesRequestInQuery,
-                > as ::xidl_rust_axum::axum::extract::FromRequestParts<
-                    S,
-                >>::from_request_parts(&mut parts, state)
-                    .await
-                    .map_err(|err| ::xidl_rust_axum::Error::new(400, err.to_string()))?;
-                let FilesListFilesRequestInQuery {
-                    source,
-                    prefix,
-                    limit,
-                    cursor,
-                    tag,
-                    kind,
-                    sort,
-                    include_deleted,
-                } = xidl_query;
                 let xidl_headers = &parts.headers;
                 let _ = xidl_headers;
-                Ok(Self {
-                    source,
-                    prefix,
-                    limit,
-                    cursor,
-                    tag,
-                    kind,
-                    sort,
-                    include_deleted,
-                })
+                if !::xidl_rust_axum::http::content_type_matches(xidl_headers, "application/json") {
+                    return Err(::xidl_rust_axum::Error::unsupported_media_type());
+                }
+                let xidl_body_bytes = <::xidl_rust_axum::axum::body::Bytes as ::xidl_rust_axum::axum::extract::FromRequest<
+                    S,
+                >>::from_request(
+                        ::xidl_rust_axum::axum::extract::Request::from_parts(
+                            parts,
+                            body,
+                        ),
+                        state,
+                    )
+                    .await
+                    .map_err(|err| ::xidl_rust_axum::Error::new(
+                        err.status().as_u16(),
+                        err.body_text(),
+                    ))?;
+                let xidl_body: FilesListFilesRequestInBody =
+                    ::xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&xidl_body_bytes)?;
+                let body = xidl_body;
+                Ok(Self { body })
             }
         }
     }
@@ -6441,29 +6612,10 @@ pub mod brains {
             value.r#return.into()
         }
     }
-    #[derive(::serde::Deserialize, ::core::default::Default)]
-    struct FilesSearchRequestInQuery {
-        #[serde(default)]
-        q: String,
-        #[serde(default)]
-        mode: Option<String>,
-        #[serde(default)]
-        prefix: Option<String>,
-        #[serde(default)]
-        tag: Option<String>,
-        #[serde(default)]
-        scan_limit: Option<i64>,
-        #[serde(default)]
-        cursor: Option<String>,
-    }
+    pub type FilesSearchRequestInBody = __xidl_in_Files::brains_SearchQuery;
     #[derive(::serde::Deserialize)]
     struct FilesSearchRequest {
-        q: String,
-        mode: Option<String>,
-        prefix: Option<String>,
-        tag: Option<String>,
-        scan_limit: Option<i64>,
-        cursor: Option<String>,
+        body: __xidl_in_Files::brains_SearchQuery,
     }
     #[allow(clippy::manual_async_fn, unused_mut)]
     impl<S> ::xidl_rust_axum::axum::extract::FromRequest<S> for FilesSearchRequest
@@ -6479,31 +6631,30 @@ pub mod brains {
                 let (mut parts, body) = req.into_parts();
                 let _ = &body;
                 let _ = state;
-                let ::xidl_rust_axum::axum::extract::Query(xidl_query) = <::xidl_rust_axum::axum::extract::Query<
-                    FilesSearchRequestInQuery,
-                > as ::xidl_rust_axum::axum::extract::FromRequestParts<
-                    S,
-                >>::from_request_parts(&mut parts, state)
-                    .await
-                    .map_err(|err| ::xidl_rust_axum::Error::new(400, err.to_string()))?;
-                let FilesSearchRequestInQuery {
-                    q,
-                    mode,
-                    prefix,
-                    tag,
-                    scan_limit,
-                    cursor,
-                } = xidl_query;
                 let xidl_headers = &parts.headers;
                 let _ = xidl_headers;
-                Ok(Self {
-                    q,
-                    mode,
-                    prefix,
-                    tag,
-                    scan_limit,
-                    cursor,
-                })
+                if !::xidl_rust_axum::http::content_type_matches(xidl_headers, "application/json") {
+                    return Err(::xidl_rust_axum::Error::unsupported_media_type());
+                }
+                let xidl_body_bytes = <::xidl_rust_axum::axum::body::Bytes as ::xidl_rust_axum::axum::extract::FromRequest<
+                    S,
+                >>::from_request(
+                        ::xidl_rust_axum::axum::extract::Request::from_parts(
+                            parts,
+                            body,
+                        ),
+                        state,
+                    )
+                    .await
+                    .map_err(|err| ::xidl_rust_axum::Error::new(
+                        err.status().as_u16(),
+                        err.body_text(),
+                    ))?;
+                let xidl_body: FilesSearchRequestInBody =
+                    ::xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&xidl_body_bytes)?;
+                let body = xidl_body;
+                Ok(Self { body })
             }
         }
     }
@@ -6763,8 +6914,8 @@ pub mod brains {
                     xidl_rust_axum::axum::routing::get(Self::capabilities),
                 )
                 .route(
-                    "/files",
-                    xidl_rust_axum::axum::routing::get(Self::list_files),
+                    "/files/query",
+                    xidl_rust_axum::axum::routing::post(Self::list_files),
                 )
                 .route("/file", xidl_rust_axum::axum::routing::put(Self::put_file))
                 .route("/file", xidl_rust_axum::axum::routing::get(Self::get_file))
@@ -6796,7 +6947,7 @@ pub mod brains {
                     "/restore",
                     xidl_rust_axum::axum::routing::post(Self::restore),
                 )
-                .route("/search", xidl_rust_axum::axum::routing::get(Self::search))
+                .route("/search", xidl_rust_axum::axum::routing::post(Self::search))
                 .route("/links", xidl_rust_axum::axum::routing::get(Self::links))
                 .route("/copy", xidl_rust_axum::axum::routing::post(Self::copy))
                 .route("/move", xidl_rust_axum::axum::routing::post(Self::r#move))
@@ -6876,37 +7027,9 @@ pub mod brains {
             if !xidl_rust_axum::http::accepts_media_type(&headers, "application/json") {
                 return Err(xidl_rust_axum::Error::not_acceptable());
             }
-            let FilesListFilesRequest {
-                source,
-                prefix,
-                limit,
-                cursor,
-                tag,
-                kind,
-                sort,
-                include_deleted,
-            } = request;
-            let source: Option<String> = source;
-            let prefix: Option<String> = prefix;
-            let limit: Option<i64> = limit;
-            let cursor: Option<String> = cursor;
-            let tag: Option<String> = tag;
-            let kind: Option<String> = kind;
-            let sort: Option<String> = sort;
-            let include_deleted: Option<bool> = include_deleted;
-            let mut resp = match svc
-                .list_files(
-                    source,
-                    prefix,
-                    limit,
-                    cursor,
-                    tag,
-                    kind,
-                    sort,
-                    include_deleted,
-                )
-                .await
-            {
+            let FilesListFilesRequest { body } = request;
+            let body: ListFilesQuery = body.into();
+            let mut resp = match svc.list_files(body).await {
                 Ok(resp_value) => {
                     let mut resp = {
                         let body_value: __xidl_out_Files::brains_FilePage = resp_value.into();
@@ -7689,21 +7812,9 @@ pub mod brains {
             if !xidl_rust_axum::http::accepts_media_type(&headers, "application/json") {
                 return Err(xidl_rust_axum::Error::not_acceptable());
             }
-            let FilesSearchRequest {
-                q,
-                mode,
-                prefix,
-                tag,
-                scan_limit,
-                cursor,
-            } = request;
-            let q: String = q;
-            let mode: Option<String> = mode;
-            let prefix: Option<String> = prefix;
-            let tag: Option<String> = tag;
-            let scan_limit: Option<i64> = scan_limit;
-            let cursor: Option<String> = cursor;
-            let mut resp = match svc.search(q, mode, prefix, tag, scan_limit, cursor).await {
+            let FilesSearchRequest { body } = request;
+            let body: SearchQuery = body.into();
+            let mut resp = match svc.search(body).await {
                 Ok(resp_value) => {
                     let mut resp = {
                         let body_value: __xidl_out_Files::brains_SearchPage = resp_value.into();

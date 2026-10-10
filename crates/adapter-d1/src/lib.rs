@@ -226,13 +226,13 @@ impl IndexStore for D1Index {
         after: &str,
         limit: usize,
         query: &str,
-        tag: Option<&str>,
+        tags: &[String],
     ) -> impl Future<Output = DomainResult<Vec<LiteralRow>>> + Send {
         let db = &self.db;
         let prefix = normalize_prefix(prefix).map(str::to_owned);
         let after = after.to_owned();
         let query = query.to_owned();
-        let tag = tag.map(str::to_owned);
+        let tags = serde_json::to_string(tags).expect("string array");
         SendFuture::new(async move {
             if query.is_empty() {
                 return Err(DomainError::InvalidArgument(
@@ -248,7 +248,7 @@ impl IndexStore for D1Index {
                     js_str(&after),
                     js_num(limit as i64),
                     js_str(&query),
-                    js_opt(tag.as_deref()),
+                    js_str(&tags),
                 ],
             )
             .await?;
@@ -268,14 +268,14 @@ impl IndexStore for D1Index {
         &self,
         query: &str,
         prefix: Option<&str>,
-        tag: Option<&str>,
+        tags: &[String],
         offset: usize,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<(String, String, String)>>> + Send {
         let db = &self.db;
         let query = query.to_owned();
         let prefix = normalize_prefix(prefix).map(str::to_owned);
-        let tag = tag.map(str::to_owned);
+        let tags = serde_json::to_string(tags).expect("string array");
         SendFuture::new(async move {
             // Path and tag bounds are explicit
             // SQL branches, and a bad MATCH is a 400 — never a fake-empty
@@ -287,13 +287,7 @@ impl IndexStore for D1Index {
                  WHERE files_fts MATCH ?1 AND files.deleted = 0
                  AND (?2 IS NULL OR files.path = ?2 OR (files.path >= ?2 || '/' AND files.path < ?2 || '0'))",
             );
-            if tag.is_some() {
-                sql.push_str(
-                    " AND EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = ?3)",
-                );
-            } else {
-                sql.push_str(" AND ?3 IS NULL");
-            }
+            sql.push_str(" AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value))");
             sql.push_str(" ORDER BY rank LIMIT ?4 OFFSET ?5");
             let rows = query_rows::<FtsRow>(
                 db,
@@ -302,7 +296,7 @@ impl IndexStore for D1Index {
                 &[
                     js_str(&query),
                     js_opt(prefix.as_deref()),
-                    js_opt(tag.as_deref()),
+                    js_str(&tags),
                     js_num(limit as i64),
                     js_num(offset as i64),
                 ],
@@ -331,7 +325,7 @@ impl IndexStore for D1Index {
         let db = &self.db;
         let filter = ListFilter {
             prefix: filter.prefix.clone(),
-            tag: filter.tag.clone(),
+            tags: filter.tags.clone(),
             kind: filter.kind,
             include_deleted: filter.include_deleted,
             order: filter.order,
@@ -347,13 +341,7 @@ impl IndexStore for D1Index {
                  FROM files WHERE (?1 = 1 OR deleted = 0) \
                  AND (?2 IS NULL OR path = ?2 OR (path >= ?2 || '/' AND path < ?2 || '0'))",
             );
-            if filter.tag.is_some() {
-                sql.push_str(
-                    " AND EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = ?3)",
-                );
-            } else {
-                sql.push_str(" AND ?3 IS NULL");
-            }
+            sql.push_str(" AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value))");
             if filter.kind.is_some() {
                 sql.push_str(" AND kind = ?4");
             } else {
@@ -379,7 +367,7 @@ impl IndexStore for D1Index {
                 &[
                     js_num(filter.include_deleted as i64),
                     js_opt(prefix),
-                    js_opt(filter.tag.as_deref()),
+                    js_str(&serde_json::to_string(&filter.tags).expect("string array")),
                     js_opt(filter.kind.map(|k| k.as_str())),
                     js_opt(after_updated.as_deref()),
                     js_opt(after_path.as_deref()),

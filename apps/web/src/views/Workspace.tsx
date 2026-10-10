@@ -36,6 +36,7 @@ import { useExternalDrag } from "./use-external-drag";
 import { useMoveBatch } from "./use-move-batch";
 import { WorkspaceDialogs, type DialogState } from "./workspace-dialogs";
 import { MobileLayout } from "./mobile-layout";
+import { useFileNavigation } from "./use-file-navigation";
 import { useMobileTabSync } from "./use-mobile-tab-sync";
 
 /*
@@ -87,9 +88,9 @@ export default function Workspace({
     });
   }, []);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [paletteTag, setPaletteTag] = useState<string | null>(null);
+  const [paletteTags, setPaletteTags] = useState<string[]>([]);
   const openTag = useCallback((tag: string) => {
-    setPaletteTag(tag);
+    setPaletteTags([tag]);
     setPaletteOpen(true);
   }, []);
   const [searchMode, setSearchMode] = useState<"literal" | "fts">("literal");
@@ -241,22 +242,22 @@ export default function Workspace({
     }
   }, [t, fail]);
 
-  const requestOpen = useCallback(
-    (path: string) => {
-    const current = editorRef.current;
-    // `saving` counts too: keystrokes typed during the flight have not been
-    // sent yet and would be dropped without a word.
-    if (
-      current.kind === "dirty" ||
-      current.kind === "conflict" ||
-      current.kind === "error" ||
-      current.kind === "saving"
-    ) {
-      setDialog({ type: "discard-open", path });
-      return;
-    }
-    void openFile(path);
-  }, [openFile]);
+  const navigation = useFileNavigation({
+    open: (path) => {
+      setMode("workspace");
+      if (path) void openFile(path);
+      else {
+        openRunRef.current += 1;
+        changeEditor({ kind: "empty" });
+        setSelected(new Set());
+      }
+    },
+    isDirty: () => ["dirty", "conflict", "error", "saving"].includes(editorRef.current.kind),
+    onBlocked: (path) => setDialog({ type: "discard-open", path: path ?? "" }),
+  });
+  const navigationRef = useRef(navigation);
+  navigationRef.current = navigation;
+  const requestOpen = useCallback((path: string) => navigationRef.current.navigate(path), []);
 
   // ---- Tree actions ------------------------------------------------------
 
@@ -416,7 +417,7 @@ export default function Workspace({
       const result = await api.saveText(path, "", { mode: "create" });
       setDialog(null);
       await refreshFiles();
-      changeEditor({ kind: "clean", path: result.path, text: "", baseText: "", baseRevision: result.revision });
+      requestOpen(result.path);
     } catch (error) {
       fail(error);
     }
@@ -702,6 +703,7 @@ export default function Workspace({
     <div className="flex h-full min-h-0 flex-col bg-background" {...overlayHandlers}>
       <TopBar
         session={session}
+        navigation={navigation}
         sidebarCollapsed={sidebarCollapsed}
         onToggleSidebar={toggleSidebar}
         onOpenPalette={() => setPaletteOpen(true)}
@@ -769,11 +771,11 @@ export default function Workspace({
 
       <CommandPalette
         open={paletteOpen}
-        tag={paletteTag}
-        onClearTag={() => setPaletteTag(null)}
+        tags={paletteTags}
+        onTagsChange={setPaletteTags}
         onOpenChange={(open) => {
           setPaletteOpen(open);
-          if (!open) setPaletteTag(null);
+          if (!open) setPaletteTags([]);
         }}
         files={liveFiles}
         searchMode={searchMode}
@@ -806,7 +808,7 @@ export default function Workspace({
 
       <WorkspaceDialogs
         dialog={dialog}
-        onClose={() => setDialog(null)}
+        onClose={() => { navigation.cancel(); setDialog(null); }}
         folders={folders}
         batchRunning={batchRunning}
         purging={trashFlow.purging}
@@ -814,9 +816,11 @@ export default function Workspace({
         onConfirmNewFolder={(path) => createFolder(path)}
         onConfirmTrash={(paths) => void trashFlow.trashPaths(paths)}
         onConfirmPurge={(paths) => void trashFlow.purgePaths(paths)}
-        onConfirmDiscardOpen={(path) => {
+        onConfirmDiscardOpen={() => {
+          const current = editorRef.current;
+          if (current.kind !== "empty") clearDraft(current.path);
           setDialog(null);
-          void openFile(path);
+          navigation.confirm();
         }}
         onConfirmMove={confirmMove}
       />
