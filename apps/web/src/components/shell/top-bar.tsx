@@ -2,7 +2,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { FilePlus, Folder, LogOut, PanelLeft, Search, Settings2, Upload, UserRound } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
-import type { SessionInfo } from "../../api/client";
+import { IS_DEMO, type SessionInfo } from "../../api/client";
 import { Button } from "../ui/button";
 import { HoverMenu } from "../ui/hover-menu";
 import { menuItemClass, MenuShortcut } from "../ui/menu";
@@ -25,7 +25,7 @@ export type UploadIntent = "files" | "folder" | "clipboard";
  * the account chip sits at the far right with logout one hover away. Search
  * lives next to the wordmark as the ⌘K palette trigger.
  */
-const REPO_URL = "https://github.com/unic/brains";
+const REPO_URL = "https://github.com/YuniqueUnic/brains";
 
 export function TopBar({
   session,
@@ -55,7 +55,7 @@ export function TopBar({
     : session.scopes.some((scope) => /^(write|admin):/.test(scope))
       ? t("accessWrite")
       : t("accessRead");
-  const accountLabel = session.actor.startsWith("token:") ? permission : session.actor;
+  const accountLabel = IS_DEMO ? t("demoAccount") : session.actor.startsWith("token:") ? permission : session.actor;
 
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-1.5 border-b bg-background px-2 sm:gap-2 sm:px-3">
@@ -197,7 +197,7 @@ export function TopBar({
           </div>
           <Menu.Item
             className={menuItemClass({ danger: true })}
-            onClick={onLogout}
+            onClick={() => onLogout()}
             data-testid="logout"
           >
             <LogOut className="size-4 stroke-[1.5]" />

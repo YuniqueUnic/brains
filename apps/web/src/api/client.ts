@@ -220,6 +220,11 @@ export function isTextMedia(mediaType?: string): boolean {
 }
 
 const httpApi = {
+  fileUrl(path: string): string {
+    const url = new URL("/api/v1/file", window.location.origin);
+    url.searchParams.set("path", path);
+    return url.href;
+  },
   async createSession(token: string): Promise<SessionInfo> {
     const session = await request<SessionInfo>("/session", {
       method: "POST",
@@ -451,14 +456,11 @@ async function errorFrom(response: Response): Promise<ApiError> {
 
 /**
  * The app talks to this one object. When built for the GitHub Pages demo
- * (VITE_DEMO_MODE=1) it is the in-memory backend with identical wire
- * semantics; otherwise it is the real HTTP client.
+ * (VITE_DEMO_MODE=1) it uses page-local files; otherwise it uses HTTP.
  */
-const DEMO =
-  (import.meta.env?.VITE_DEMO_MODE as string | undefined) === "1" ||
-  window.location.hostname.endsWith(".github.io");
+export const IS_DEMO = import.meta.env.VITE_DEMO_MODE === "1";
 
-export const api: typeof httpApi = DEMO ? (demoApi as typeof httpApi) : httpApi;
+export const api: typeof httpApi = IS_DEMO ? demoApi : httpApi;
 
 async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", buffer);

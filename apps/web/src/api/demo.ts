@@ -1,10 +1,13 @@
 import { parseMarkdownDocument } from "../lib/document-metadata";
+import { createMarkdownParser } from "../lib/markdown-parser";
+import { resolveReference } from "../components/markdown/references";
 import {
   ApiError,
   isTextMedia,
   type Entry,
   type FilePage,
   type HistoryPage,
+  type LinkItem,
   type MutationResult,
   type Precondition,
   type SearchPage,
@@ -12,18 +15,11 @@ import {
   type TransferResult,
 } from "./client";
 
-/*
- * In-memory demo backend for the GitHub Pages demo (no server): same wire
- * semantics as the real HTTP client — conditional writes with 412 on stale
- * bases, tombstone trash, restore-as-new-revision, literal/FTS search and
- * [[link]] resolution — so the demo exercises the real UI logic.
- */
-
+/** Page-local demo storage. Raw bytes are authoritative; refresh resets the files. */
 interface DemoContent {
-  size: number;
+  bytes: Uint8Array<ArrayBuffer>;
   sha256: string;
   media_type: string;
-  text?: string;
 }
 
 interface DemoRevision {
@@ -62,30 +58,30 @@ const SEEDS: { path: string; mediaType: string; text: string }[] = [
   },
 ];
 
+
 const store = new Map<string, DemoFile>();
 let revisionCounter = 0;
-let generationCounter = 0;
-
-function sleep(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-function latency() {
-  return sleep(60 + Math.random() * 120);
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 function nextRevision(): string {
-  revisionCounter += 1;
-  return revisionCounter.toString(16).padStart(8, "0") + "demo";
+  return (++revisionCounter).toString(16).padStart(8, "0") + "demo";
 }
 
 function head(file: DemoFile): DemoRevision {
   return file.revisions[0];
+}
+
+function textOf(content?: DemoContent): string {
+  return content && isTextMedia(content.media_type) ? new TextDecoder().decode(content.bytes) : "";
+}
+
+async function contentOf(body: string | ArrayBuffer, mediaType: string): Promise<DemoContent> {
+  const bytes = typeof body === "string" ? new TextEncoder().encode(body) : new Uint8Array(body).slice();
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return {
+    bytes,
+    sha256: Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join(""),
+    media_type: mediaType,
+  };
 }
 
 function headEntry(path: string, file: DemoFile): Entry {
@@ -96,388 +92,247 @@ function headEntry(path: string, file: DemoFile): Entry {
     generation: top.generation,
     state: top.action === "trash" ? "trashed" : "live",
     updated_at: top.created_at,
-    size: top.content?.size,
+    size: top.content?.bytes.byteLength,
     sha256: top.content?.sha256,
     media_type: top.content?.media_type,
     kind: top.content && isTextMedia(top.content.media_type) ? "note" : "binary",
-    title: undefined,
+    title: parseMarkdownDocument(textOf(top.content)).metadata?.title,
   };
 }
 
-function mutation(path: string, file: DemoFile): MutationResult {
-  const entry = headEntry(path, file);
-  return { ...entry, index_state: "ready", operation_id: nextRevision() };
-}
-
-function requireLive(path: string): DemoFile {
-  const file = store.get(path);
-  if (!file || head(file).action === "trash") {
-    throw new ApiError(410, "GONE", `${path} 不存在（或已在回收站）`);
-  }
-  return file;
-}
-
-async function putContent(
-  path: string,
-  body: string | ArrayBuffer,
-  precondition: Precondition,
-  mediaType: string,
-): Promise<MutationResult> {
-  await latency();
-  const existing = store.get(path);
-  const live = existing && head(existing).action !== "trash" ? existing : undefined;
-  const text = typeof body === "string" ? body : new TextDecoder().decode(body);
-  const content: DemoContent = {
-    size: text.length,
-    sha256: await sha256Hex(text),
-    media_type: mediaType,
-    text,
-  };
-  if (precondition.mode === "create") {
-    if (live) {
-      throw new ApiError(412, "ALREADY_EXISTS", `${path} 已存在`, head(live).revision);
-    }
-  } else {
-    if (!live) {
-      throw new ApiError(404, "NOT_FOUND", `${path} 不存在`);
-    }
-    if (head(live).revision !== precondition.baseRevision) {
-      throw new ApiError(
-        412,
-        "REVISION_CONFLICT",
-        "基线已过期：远端已有更新版本",
-        head(live).revision,
-      );
-    }
-  }
+/** Call only after async work and preconditions: publishing a revision is synchronous. */
+function commit(path: string, action: DemoRevision["action"], content?: DemoContent): MutationResult {
+  const previous = store.get(path);
   const revision: DemoRevision = {
     revision: nextRevision(),
-    generation: live ? head(live).generation + 1 : ++generationCounter,
-    parent: live ? head(live).revision : null,
-    action: "put",
+    generation: previous ? head(previous).generation + 1 : 1,
+    parent: previous ? head(previous).revision : null,
+    action,
     created_at: new Date().toISOString(),
     content,
   };
-  const file: DemoFile = { revisions: [revision, ...(live?.revisions ?? [])] };
+  const file = { revisions: [revision, ...(previous?.revisions ?? [])] };
   store.set(path, file);
-  return mutation(path, file);
+  return { ...headEntry(path, file), index_state: "ready", operation_id: nextRevision() };
 }
 
-function seed() {
-  for (const item of SEEDS) {
-    const text = item.text;
-    const revision: DemoRevision = {
-      revision: nextRevision(),
-      generation: ++generationCounter,
-      parent: null,
-      action: "put",
-      created_at: new Date().toISOString(),
-      content: {
-        size: text.length,
-        sha256: "",
-        media_type: item.mediaType,
-        text,
-      },
-    };
-    store.set(item.path, { revisions: [revision] });
+let ready: Promise<void[]> | undefined;
+
+function initialize(): Promise<void[]> {
+  return ready ??= Promise.all(SEEDS.map(async (item) => {
+    const content = await contentOf(item.text, item.mediaType);
+    commit(item.path, "put", content);
+  }));
+}
+
+async function latency(): Promise<void> {
+  await initialize();
+  await new Promise((resolve) => window.setTimeout(resolve, 80));
+}
+
+function requireFile(path: string): DemoFile {
+  const file = store.get(path);
+  if (!file) throw new ApiError(404, "NOT_FOUND", `${path} 不存在`);
+  return file;
+}
+
+function requireLive(path: string): DemoFile {
+  const file = requireFile(path);
+  if (head(file).action === "trash") throw new ApiError(410, "GONE", `${path} 已在回收站`);
+  return file;
+}
+
+function checkRevision(file: DemoFile, expected: string): void {
+  if (head(file).revision !== expected) {
+    throw new ApiError(412, "REVISION_CONFLICT", "基线已过期", head(file).revision);
   }
 }
-seed();
 
-const session: SessionInfo = {
-  actor: "demo",
-  scopes: ["read:/", "write:/", "admin:/"],
-  expires_at: undefined,
-  csrf_token: undefined,
-};
+async function putContent(path: string, body: string | ArrayBuffer, precondition: Precondition, mediaType: string): Promise<MutationResult> {
+  await latency();
+  const content = await contentOf(body, mediaType);
+  // Hashing may yield: inspect the current HEAD only after it completes.
+  const existing = store.get(path);
+  if (precondition.mode === "create") {
+    if (existing) throw new ApiError(412, "ALREADY_EXISTS", `${path} 已存在`, head(existing).revision);
+  } else {
+    checkRevision(requireFile(path), precondition.baseRevision);
+  }
+  return commit(path, "put", content);
+}
 
-/** Same surface as the HTTP api object; swapped in when running as a demo. */
+async function transfer(source: string, target: string, expected: string, action: "copy" | "move"): Promise<TransferResult> {
+  await latency();
+  const file = requireLive(source);
+  checkRevision(file, expected);
+  const operationId = nextRevision();
+  const existing = store.get(target);
+  if (existing) {
+    throw new ApiError(412, "REVISION_CONFLICT", `${target} 已存在`, head(existing).revision);
+  }
+  const copied = commit(target, "copy", head(file).content);
+  const trashed = action === "move" ? commit(source, "trash") : undefined;
+  return {
+    copied: true, source_trashed: !!trashed, partial: false, operation_id: operationId,
+    target_revision: copied.revision, source_revision: trashed?.revision ?? expected,
+  };
+}
+
+const session: SessionInfo = { actor: "demo", scopes: ["read:/", "write:/", "admin:/"] };
+
 export const demoApi = {
+  fileUrl(path: string): string {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("file", path);
+    return url.href;
+  },
   async createSession(_token: string): Promise<SessionInfo> {
     await latency();
     return session;
   },
   async getSession(): Promise<SessionInfo> {
+    await initialize();
     return session;
   },
   async deleteSession(): Promise<void> {
     await latency();
   },
-
   async listFiles(query: {
-    prefix?: string;
-    cursor?: string | null;
-    limit?: number;
-    include_deleted?: boolean;
-    source?: "store" | "index";
-    tags?: string[];
-    sort?: string;
+    prefix?: string; cursor?: string | null; limit?: number; include_deleted?: boolean;
+    source?: "store" | "index"; tags?: string[]; sort?: string;
   }): Promise<FilePage> {
     await latency();
-    const items: Entry[] = [];
-    for (const [path, file] of store) {
-      const trashed = head(file).action === "trash";
-      if (trashed && !query.include_deleted) continue;
-      if (!query.tags?.every(tag => parseMarkdownDocument(head(file).content?.text ?? "").metadata?.tags.includes(tag)) && query.tags?.length) continue;
-      items.push(headEntry(path, file));
-    }
+    const items = [...store].filter(([path, file]) => {
+      if (head(file).action === "trash" && !query.include_deleted) return false;
+      if (!path.startsWith(query.prefix ?? "")) return false;
+      const tags = parseMarkdownDocument(textOf(head(file).content)).metadata?.tags ?? [];
+      return query.tags?.every(tag => tags.includes(tag)) ?? true;
+    }).map(([path, file]) => headEntry(path, file));
     items.sort((a, b) => a.path.localeCompare(b.path));
-    return { items, next_cursor: null, source: query.source ?? "store", consistency: "per_file" };
+    const start = query.cursor ? items.findIndex(item => item.path === query.cursor) + 1 : 0;
+    const page = items.slice(start, start + (query.limit ?? 500));
+    return {
+      items: page, next_cursor: start + page.length < items.length ? page.at(-1)?.path ?? null : null,
+      source: query.source ?? "store", consistency: "per_file",
+    };
   },
-
   async readRaw(path: string): Promise<{ bytes: Uint8Array; etag: string }> {
     await latency();
-    const file = requireLive(path);
-    const text = head(file).content?.text ?? "";
-    return { bytes: new TextEncoder().encode(text), etag: head(file).revision };
+    const top = head(requireLive(path));
+    return { bytes: top.content!.bytes.slice(), etag: top.revision };
   },
-
   async readText(path: string): Promise<{ text: string; etag: string }> {
     const { bytes, etag } = await this.readRaw(path);
     return { text: new TextDecoder().decode(bytes), etag };
   },
-
   async readMeta(path: string): Promise<Entry> {
     await latency();
-    const file = requireLive(path);
-    return headEntry(path, file);
+    return headEntry(path, requireLive(path));
   },
-
-  async saveText(
-    path: string,
-    body: string,
-    precondition: Precondition,
-    _operationId?: string,
-  ): Promise<MutationResult> {
+  async saveText(path: string, body: string, precondition: Precondition, _operationId?: string): Promise<MutationResult> {
     return putContent(path, body, precondition, "text/markdown; charset=utf-8");
   },
-
-  async saveBinary(
-    path: string,
-    body: ArrayBuffer,
-    precondition: Precondition,
-    mediaType: string,
-  ): Promise<MutationResult> {
+  async saveBinary(path: string, body: ArrayBuffer, precondition: Precondition, mediaType: string): Promise<MutationResult> {
     return putContent(path, body, precondition, mediaType);
   },
-
   async trash(path: string, baseRevision: string): Promise<MutationResult> {
     await latency();
-    const file = requireLive(path);
-    if (head(file).revision !== baseRevision) {
-      throw new ApiError(412, "REVISION_CONFLICT", "基线已过期", head(file).revision);
-    }
-    const revision: DemoRevision = {
-      revision: nextRevision(),
-      generation: head(file).generation + 1,
-      parent: head(file).revision,
-      action: "trash",
-      created_at: new Date().toISOString(),
-    };
-    file.revisions = [revision, ...file.revisions];
-    return mutation(path, file);
+    checkRevision(requireLive(path), baseRevision);
+    return commit(path, "trash");
   },
-
   async purge(path: string, baseRevision: string): Promise<{ path: string; purged: boolean; index_state: string; operation_id: string }> {
     await latency();
-    const file = store.get(path);
-    if (!file) throw new ApiError(404, "NOT_FOUND", `${path} 不存在`);
-    const top = head(file);
-    if (top.action !== "trash") {
-      throw new ApiError(409, "PURGE_REQUIRES_TRASHED", `${path} 仍是 live 状态,先移入回收站`);
-    }
-    if (top.revision !== baseRevision) {
-      throw new ApiError(412, "REVISION_CONFLICT", "基线已过期", top.revision);
-    }
+    const file = requireFile(path);
+    if (head(file).action !== "trash") throw new ApiError(409, "PURGE_REQUIRES_TRASHED", `${path} 仍是 live 状态,先移入回收站`);
+    checkRevision(file, baseRevision);
     store.delete(path);
     return { path, purged: true, index_state: "ready", operation_id: nextRevision() };
   },
-
   async history(path: string, _cursor?: string | null): Promise<HistoryPage> {
     await latency();
-    const file = store.get(path);
-    if (!file) throw new ApiError(404, "NOT_FOUND", `${path} 不存在`);
+    const file = requireFile(path);
     return {
       items: file.revisions.map((rev) => ({
-        revision: rev.revision,
-        path,
-        generation: rev.generation,
-        parent: rev.parent,
-        action: rev.action,
-        actor: "demo",
-        operation_id: undefined,
-        created_at: rev.created_at,
-        content: rev.content
-          ? {
-              size: rev.content.size,
-              sha256: rev.content.sha256,
-              media_type: rev.content.media_type,
-              executable: false,
-            }
-          : undefined,
+        revision: rev.revision, path, generation: rev.generation, parent: rev.parent,
+        action: rev.action, actor: "demo", created_at: rev.created_at,
+        content: rev.content ? {
+          size: rev.content.bytes.byteLength, sha256: rev.content.sha256,
+          media_type: rev.content.media_type, executable: false,
+        } : undefined,
         commit_state: "reachable" as const,
       })),
-      anchor_revision: head(file).revision,
-      next_cursor: null,
+      anchor_revision: head(file).revision, next_cursor: null,
     };
   },
-
   async readRevisionText(path: string, revision: string): Promise<string> {
-    await latency();
-    const file = store.get(path);
-    const found = file?.revisions.find((rev) => rev.revision === revision);
-    return found?.content?.text ?? "";
+    return new TextDecoder().decode(await this.readRevisionRaw(path, revision));
   },
-
   async readRevisionRaw(path: string, revision: string): Promise<Uint8Array> {
-    const text = await this.readRevisionText(path, revision);
-    return new TextEncoder().encode(text);
-  },
-
-  async restore(
-    path: string,
-    revision: string,
-    baseRevision: string,
-  ): Promise<MutationResult> {
     await latency();
-    const file = store.get(path);
-    if (!file) throw new ApiError(404, "NOT_FOUND", `${path} 不存在`);
-    if (head(file).revision !== baseRevision) {
-      throw new ApiError(412, "REVISION_CONFLICT", "基线已过期", head(file).revision);
-    }
-    const source = file.revisions.find((rev) => rev.revision === revision);
-    if (!source?.content) throw new ApiError(400, "INVALID_ARGUMENT", "该版本没有内容");
-    const restored: DemoRevision = {
-      revision: nextRevision(),
-      generation: head(file).generation + 1,
-      parent: head(file).revision,
-      action: "restore",
-      created_at: new Date().toISOString(),
-      content: source.content,
-    };
-    file.revisions = [restored, ...file.revisions];
-    return mutation(path, file);
+    const found = requireFile(path).revisions.find(rev => rev.revision === revision);
+    if (!found) throw new ApiError(404, "NOT_FOUND", "版本不存在");
+    if (!found.content) throw new ApiError(410, "GONE", "该版本没有内容");
+    return found.content.bytes.slice();
   },
-
-  async search(query: {
-    q: string;
-    tags?: string[];
-    mode: "literal" | "fts";
-    prefix?: string;
-    cursor?: string | null;
-  }): Promise<SearchPage> {
+  async restore(path: string, revision: string, baseRevision: string): Promise<MutationResult> {
+    await latency();
+    const file = requireFile(path);
+    checkRevision(file, baseRevision);
+    const source = file.revisions.find(rev => rev.revision === revision);
+    if (!source?.content) throw new ApiError(400, "INVALID_ARGUMENT", "该版本没有内容");
+    return commit(path, "restore", source.content);
+  },
+  async search(query: { q: string; tags?: string[]; mode: "literal" | "fts"; prefix?: string; cursor?: string | null }): Promise<SearchPage> {
     await latency();
     const q = query.q.trim();
-    const items: import("./client").SearchHit[] = [];
+    const items: SearchPage["items"] = [];
     for (const [path, file] of store) {
-      if (head(file).action === "trash") continue;
-      const text = head(file).content?.text ?? "";
-      if (query.tags?.some(tag => !parseMarkdownDocument(text).metadata?.tags.includes(tag))) continue;
-      const hit =
-        query.mode === "literal"
-          ? text.includes(q)
-          : q
-              .split(/\s+/)
-              .filter(Boolean)
-              .every((token) => text.toLowerCase().includes(token.toLowerCase()));
+      if (head(file).action === "trash" || !path.startsWith(query.prefix ?? "")) continue;
+      const text = textOf(head(file).content);
+      const metadata = parseMarkdownDocument(text).metadata;
+      if (query.tags?.some(tag => !metadata?.tags.includes(tag))) continue;
+      const haystack = `${path}\n${metadata?.title ?? ""}\n${text}`;
+      const hit = query.mode === "literal" ? haystack.includes(q)
+        : q.split(/\s+/).filter(Boolean).every(token => haystack.toLowerCase().includes(token.toLowerCase()));
       if (q && hit) {
-        const index = text.indexOf(q);
+        const index = Math.max(0, text.toLowerCase().indexOf(q.toLowerCase()));
         const start = Math.max(0, index - 30);
-        items.push({
-          path,
-          indexed_revision: head(file).revision,
-          snippet: `${start > 0 ? "…" : ""}${text.slice(start, index + q.length + 60)}`,
-        });
+        items.push({ path, indexed_revision: head(file).revision,
+          snippet: `${start > 0 ? "…" : ""}${text.slice(start, index + q.length + 60)}` });
       }
     }
     return { items, next_cursor: null, complete: true, scanned: store.size, index_state: "available" };
   },
-
-  async links(
-    path: string,
-    direction: "outbound" | "backlinks",
-  ): Promise<{ items: { source: string; target: string; kind: string }[] }> {
+  async links(path: string, direction: "outbound" | "backlinks"): Promise<{ items: LinkItem[] }> {
     await latency();
-    const items: { source: string; target: string; kind: string }[] = [];
-    const wikiLinks = (text: string) =>
-      [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((match) => match[1]);
-    const resolve = (name: string) =>
-      [...store.keys()].find((key) => key.endsWith(`/${name}`) || key === name || key.endsWith(name));
-    if (direction === "outbound") {
-      const file = store.get(path);
-      const text = file?.revisions.find((rev) => rev.content)?.content?.text ?? "";
-      for (const name of wikiLinks(text)) {
-        const target = resolve(name);
-        if (target) items.push({ source: path, target, kind: "wiki" });
-      }
-    } else {
-      const stem = path.split("/").pop() ?? path;
-      for (const [candidate, file] of store) {
-        if (candidate === path) continue;
-        const text = file.revisions.find((rev) => rev.content)?.content?.text ?? "";
-        if (wikiLinks(text).some((name) => name === stem || stem.endsWith(name))) {
-          items.push({ source: candidate, target: path, kind: "wiki" });
+    const live = [...store].filter(([, file]) => head(file).action !== "trash");
+    const files = live.map(([path]) => ({ path }));
+    const items: LinkItem[] = [];
+    for (const [source, file] of live) {
+      const doc = parseMarkdownDocument(textOf(head(file).content));
+      const parser = createMarkdownParser();
+      const targets = new Set(doc.metadata?.links.map(link => link.target) ?? []);
+      parser.walkTokens(parser.lexer(doc.body), (token) => {
+        if (token.type === "link" || token.type === "image") targets.add(token.href);
+      });
+      const resolved = new Set<string>();
+      for (const target of targets) {
+        const ref = resolveReference(target, files, source);
+        if (ref.kind !== "vault" || resolved.has(ref.path)) continue;
+        resolved.add(ref.path);
+        if ((direction === "outbound" && source === path) || (direction === "backlinks" && ref.path === path)) {
+          items.push({ source, target: ref.path, kind: "wiki", source_revision: head(file).revision });
         }
       }
     }
     return { items };
   },
-
-  async copy(
-    source: string,
-    target: string,
-    expectedSourceRevision: string,
-  ): Promise<TransferResult> {
-    await latency();
-    const file = requireLive(source);
-    if (head(file).revision !== expectedSourceRevision) {
-      throw new ApiError(412, "REVISION_CONFLICT", "基线已过期", head(file).revision);
-    }
-    const content = head(file).content;
-    const operationId = nextRevision();
-    if (store.has(target) && head(store.get(target)!).action !== "trash") {
-      return {
-        copied: false,
-        source_trashed: false,
-        partial: false,
-        operation_id: operationId,
-        error: { code: "ALREADY_EXISTS", message: `${target} 已存在` },
-      };
-    }
-    await putContent(target, content?.text ?? "", { mode: "create" }, content?.media_type ?? "text/markdown");
-    return { copied: true, source_trashed: false, partial: false, operation_id: operationId, target_revision: head(store.get(target)!).revision };
+  async copy(source: string, target: string, expectedSourceRevision: string): Promise<TransferResult> {
+    return transfer(source, target, expectedSourceRevision, "copy");
   },
-
-  async move(
-    source: string,
-    target: string,
-    expectedSourceRevision: string,
-  ): Promise<TransferResult> {
-    await latency();
-    const file = requireLive(source);
-    if (head(file).revision !== expectedSourceRevision) {
-      throw new ApiError(412, "REVISION_CONFLICT", "基线已过期", head(file).revision);
-    }
-    const operationId = nextRevision();
-    if (store.has(target) && head(store.get(target)!).action !== "trash") {
-      return {
-        copied: false,
-        source_trashed: false,
-        partial: false,
-        operation_id: operationId,
-        error: { code: "ALREADY_EXISTS", message: `${target} 已存在` },
-      };
-    }
-    const content = head(file).content;
-    const result = await putContent(target, content?.text ?? "", { mode: "create" }, content?.media_type ?? "text/markdown");
-    await this.trash(source, head(file).revision);
-    return {
-      copied: true,
-      source_trashed: true,
-      partial: false,
-      operation_id: operationId,
-      target_revision: result.revision,
-      source_revision: head(file).revision,
-    };
+  async move(source: string, target: string, expectedSourceRevision: string): Promise<TransferResult> {
+    return transfer(source, target, expectedSourceRevision, "move");
   },
 };

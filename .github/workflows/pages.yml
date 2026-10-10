@@ -1,8 +1,8 @@
 name: Pages demo
 
 # Frontend-only demo for GitHub Pages: the web app runs against an in-memory
-# backend with the same wire semantics (conditional writes, tombstones,
-# restore), so visitors can try the full workspace without a server.
+# backend supporting conditional writes, tombstones and restore. Search is
+# simplified and all files reset on refresh; no server or credentials needed.
 # One-time repo setup: Settings → Pages → Source: GitHub Actions.
 on:
   push:
@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -35,6 +36,10 @@ jobs:
         env:
           VITE_DEMO_MODE: "1"
           VITE_BASE: /${{ github.event.repository.name }}/
+      - name: Install demo test browser
+        run: pnpm --dir tests/e2e exec playwright install --with-deps chromium
+      - name: Exercise the built demo
+        run: pnpm --dir tests/e2e test:demo
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/web/dist

@@ -2,7 +2,7 @@ import { KeyRound, LoaderCircle } from "lucide-react";
 import { BrandMark } from "../components/brand";
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
-import { api, ApiError, type SessionInfo } from "../api/client";
+import { api, ApiError, IS_DEMO, type SessionInfo } from "../api/client";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
@@ -20,7 +20,7 @@ export default function Login({
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!token.trim() || busy) return;
+    if ((!IS_DEMO && !token.trim()) || busy) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -48,9 +48,9 @@ export default function Login({
             <BrandMark className="size-6" />
           </span>
           <h1 className="text-[15px] font-semibold tracking-tight text-foreground">Brains</h1>
-          <p className="text-xs text-muted-foreground">{t("subtitle")}</p>
+          <p className="text-xs text-muted-foreground">{t(IS_DEMO ? "demoSubtitle" : "subtitle")}</p>
         </div>
-        <div className="relative">
+        {!IS_DEMO && <div className="relative">
           <KeyRound className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 stroke-[1.5] -translate-y-1/2 text-muted-foreground" />
           <Input
             data-testid="token-input"
@@ -63,16 +63,16 @@ export default function Login({
             aria-describedby={message !== null ? "login-error" : undefined}
             autoFocus
           />
-        </div>
+        </div>}
         <Button
           data-testid="login-button"
           type="submit"
           variant="default"
           className="mt-3 h-9 w-full text-sm"
-          disabled={busy || !token.trim()}
+          disabled={busy || (!IS_DEMO && !token.trim())}
         >
           {busy && <LoaderCircle className="size-3.5 animate-spin" />}
-          {busy ? t("submitting") : t("submit")}
+          {busy ? t("submitting") : t(IS_DEMO ? "demoSubmit" : "submit")}
         </Button>
         {message && (
           <p

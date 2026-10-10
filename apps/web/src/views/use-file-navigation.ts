@@ -13,15 +13,17 @@ const limitKey = (entry: Entry) => `brains.navigation.${entry.session}`;
 /** Browser history is the file history; only its forward bound is stored per tab. */
 export function useFileNavigation({
   open,
+  isOpen,
   isDirty,
   onBlocked,
 }: {
   open: (path: string | null) => void;
+  isOpen: (path: string) => boolean;
   isDirty: () => boolean;
   onBlocked: (path: string | null) => void;
 }) {
-  const callbacks = useRef({ open, isDirty, onBlocked });
-  callbacks.current = { open, isDirty, onBlocked };
+  const callbacks = useRef({ open, isOpen, isDirty, onBlocked });
+  callbacks.current = { open, isOpen, isDirty, onBlocked };
   const [entry, setEntry] = useState<Entry>(() => {
     const saved = history.state?.brainsNavigation as Entry | undefined;
     return saved ?? { session: crypto.randomUUID(), index: 0 };
@@ -31,6 +33,8 @@ export function useFileNavigation({
   const [lastIndex, setLastIndex] = useState(() =>
     Number(sessionStorage.getItem(limitKey(entry)) ?? entry.index),
   );
+  const needsConfirmation = (path: string | null) =>
+    callbacks.current.isDirty() && (path === null || !callbacks.current.isOpen(path));
 
   const accept = (next: Entry, path: string | null) => {
     current.current = next;
@@ -39,6 +43,12 @@ export function useFileNavigation({
     callbacks.current.open(path);
   };
   const push = (path: string) => {
+    // A URL survives a failed load or deletion. Retrying that document
+    // reopens the existing entry instead of adding duplicate history.
+    if (path === currentPath()) {
+      accept(current.current, path);
+      return;
+    }
     const next = { ...current.current, index: current.current.index + 1 };
     const url = new URL(location.href);
     url.searchParams.set("file", path);
@@ -75,7 +85,7 @@ export function useFileNavigation({
         accept(next, transition.path);
       } else if (next.index === current.current.index) {
         pending.current = null;
-      } else if (callbacks.current.isDirty()) {
+      } else if (needsConfirmation(currentPath())) {
         // popstate arrives after the URL moved. Restore it before prompting so
         // cancelling or refreshing keeps the document the user is still editing.
         pending.current = { kind: "restore", entry: next, path: currentPath() };
@@ -100,8 +110,8 @@ export function useFileNavigation({
       history.forward();
     },
     navigate(path: string) {
-      if (path === currentPath() || pending.current) return;
-      if (callbacks.current.isDirty()) {
+      if (pending.current) return;
+      if (needsConfirmation(path)) {
         pending.current = { kind: "push", path };
         callbacks.current.onBlocked(path);
       } else push(path);

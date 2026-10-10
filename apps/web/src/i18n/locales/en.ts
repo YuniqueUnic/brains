@@ -17,6 +17,8 @@ const en = {
     themeCycle: "Click to cycle",
   },
   login: {
+    demoSubtitle: "Try Brains in your browser. No account or token needed.",
+    demoSubmit: "Enter demo",
     subtitle: "Sign in to this vault with the access token",
     placeholder: "Access token",
     submit: "Sign in",
@@ -26,6 +28,8 @@ const en = {
     connecting: "Connecting…",
   },
   workspace: {
+    demoAccount: "Demo visitor",
+    demoNotice: "Live demo: files stay in this page and reset on refresh.",
     fileNavigation: "File history",
     fileBack: "Previous file",
     fileForward: "Next file",
@@ -80,6 +84,7 @@ const en = {
     copyPathDone: "Path copied.",
     menuCopyNetPath: "Copy network path",
     copyNetPathDone: "Network path copied (direct content link, token auth).",
+    demoLinkCopied: "Demo link copied. Files you create are not shared with the link.",
     moveTitle: "Move to…",
     moveDescription: "Move {{count}} item(s) into the destination folder.",
     movePlaceholder: "Destination folder inside the vault, e.g. archive",

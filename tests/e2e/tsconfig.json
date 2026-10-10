@@ -11,5 +11,11 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["specs", "screenplay", "playwright.config.ts"]
+  "include": [
+    "specs",
+    "screenplay",
+    "playwright.config.ts",
+    "demo",
+    "playwright.demo.config.ts"
+  ]
 }

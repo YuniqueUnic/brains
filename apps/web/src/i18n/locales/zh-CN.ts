@@ -17,6 +17,8 @@ const zhCN = {
     themeCycle: "点击切换",
   },
   login: {
+    demoSubtitle: "无需账号或令牌，在浏览器中体验 Brains",
+    demoSubmit: "进入演示",
     subtitle: "使用访问令牌登录本机知识库",
     placeholder: "访问令牌",
     submit: "登录",
@@ -26,6 +28,8 @@ const zhCN = {
     connecting: "连接中…",
   },
   workspace: {
+    demoAccount: "演示访客",
+    demoNotice: "在线演示：文件仅保存在当前页面，刷新后重置。",
     fileNavigation: "文件浏览记录",
     fileBack: "返回上一文件",
     fileForward: "前进到下一文件",
@@ -80,6 +84,7 @@ const zhCN = {
     copyPathDone: "路径已复制。",
     menuCopyNetPath: "复制网络路径",
     copyNetPathDone: "网络路径已复制（直链内容，需鉴权）。",
+    demoLinkCopied: "演示链接已复制；新建文件不会随链接共享。",
     moveTitle: "移动到…",
     moveDescription: "将 {{count}} 项移动到目标文件夹。",
     movePlaceholder: "vault 内目标文件夹，例如 archive",

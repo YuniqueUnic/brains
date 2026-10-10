@@ -5,6 +5,7 @@ import { Group, Panel, Separator, type PanelImperativeHandle } from "react-resiz
 import {
   api,
   ApiError,
+  IS_DEMO,
   isTextMedia,
   mediaTypeForPath,
   type Entry,
@@ -242,16 +243,19 @@ export default function Workspace({
     }
   }, [t, fail]);
 
+  const isFileOpen = (path: string) => editorRef.current.kind !== "empty" && editorRef.current.path === path;
   const navigation = useFileNavigation({
     open: (path) => {
       setMode("workspace");
-      if (path) void openFile(path);
-      else {
+      if (path) {
+        if (!isFileOpen(path)) void openFile(path);
+      } else {
         openRunRef.current += 1;
         changeEditor({ kind: "empty" });
         setSelected(new Set());
       }
     },
+    isOpen: isFileOpen,
     isDirty: () => ["dirty", "conflict", "error", "saving"].includes(editorRef.current.kind),
     onBlocked: (path) => setDialog({ type: "discard-open", path: path ?? "" }),
   });
@@ -337,7 +341,7 @@ export default function Workspace({
         const dot = name.lastIndexOf(".");
         const stem = dot > 0 ? name.slice(0, dot) : name;
         const ext = dot > 0 ? name.slice(dot) : "";
-        const taken = new Set(liveFiles.map((entry) => entry.path));
+        const taken = new Set([...liveFiles, ...trashedFiles].map((entry) => entry.path));
         let target = `${dir}${stem}-copy${ext}`;
         for (let i = 1; taken.has(target); i += 1) {
           target = `${dir}${stem}-copy-${i}${ext}`;
@@ -355,8 +359,8 @@ export default function Workspace({
       void navigator.clipboard.writeText(path).then(() => toast.success(t("copyPathDone")));
     },
     onCopyNetPath: (path) => {
-      const url = `${window.location.origin}/api/v1/file?path=${encodeURIComponent(path)}`;
-      void navigator.clipboard.writeText(url).then(() => toast.success(t("copyNetPathDone")));
+      const url = api.fileUrl(path);
+      void navigator.clipboard.writeText(url).then(() => toast.success(t(IS_DEMO ? "demoLinkCopied" : "copyNetPathDone")));
     },
     onNewDocumentIn: (folder) => setDialog({ type: "new-document", folder }),
     onCreateFolderIn: (folder) => setDialog({ type: "new-folder", folder }),
@@ -712,6 +716,12 @@ export default function Workspace({
         onOpenSettings={() => setSettingsOpen(true)}
         onLogout={onLogout}
       />
+
+      {IS_DEMO && (
+        <p className="shrink-0 border-b bg-muted px-3 py-1.5 text-center text-xs text-muted-foreground" data-testid="demo-notice">
+          {t("demoNotice")}
+        </p>
+      )}
 
       {isMobile ? (
         <div className="min-h-0 flex-1">

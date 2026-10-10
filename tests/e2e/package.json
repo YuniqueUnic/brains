@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
-    "report": "playwright show-report"
+    "report": "playwright show-report",
+    "test:demo": "playwright test --config playwright.demo.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.52.0",
