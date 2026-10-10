@@ -10,7 +10,7 @@ import { Duration } from "@serenity-js/core";
 import { By, Click, PageElement, Press, Text } from "@serenity-js/web";
 
 import { CreateNote, RewriteNote, SignIn } from "../screenplay/tasks/Authoring";
-import { OpenNote, ToggleTrash } from "../screenplay/tasks/Navigation";
+import { ToggleTrash } from "../screenplay/tasks/Navigation";
 import { Workbench } from "../screenplay/screens/Workbench";
 import { EditorArea } from "../screenplay/screens/EditorArea";
 import { EditorStatus, ListedFiles, ToastText } from "../screenplay/questions/Views";

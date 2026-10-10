@@ -1,4 +1,4 @@
-import { By, PageElement, PageElements } from "@serenity-js/web";
+import { By, PageElement } from "@serenity-js/web";
 
 /** Login screen: token exchange (design §15.1). */
 export const LoginScreen = {

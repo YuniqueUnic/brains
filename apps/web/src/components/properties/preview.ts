@@ -51,7 +51,7 @@ const revisionCache = new Map<string, Promise<FilePreview>>();
  * stale the moment new bytes land. */
 export function invalidatePreview(path: string) {
   previewCache.delete(path);
-  for (const key of [...revisionCache.keys()]) {
+  for (const key of revisionCache.keys()) {
     if (key.startsWith(`${path}@`)) revisionCache.delete(key);
   }
 }
