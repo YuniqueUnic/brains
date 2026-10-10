@@ -1,4 +1,4 @@
-import { Click, Enter, Press, Select } from "@serenity-js/web";
+import { Click, Enter, Press } from "@serenity-js/web";
 import { Interaction, Task } from "@serenity-js/core";
 
 import { CallBrainsApi } from "../abilities/CallBrainsApi";

@@ -17,7 +17,7 @@ export function fileCompletions(
   return (context) => {
     const line = context.state.doc.lineAt(context.pos);
     const before = line.text.slice(0, context.pos - line.from);
-    const wiki = /\[\[([^\[\]]*)$/.exec(before);
+    const wiki = /\[\[([^[\]]*)$/.exec(before);
     const link = /(!?\[[^\]]*\]\()([^)]*)$/.exec(before);
     if (!wiki && !link) return null;
     const close = wiki ? "]]" : ")";
@@ -50,7 +50,7 @@ export function fileCompletions(
           },
         };
       }),
-      validFor: wiki ? /^[^\[\]]*$/ : /^[^)]*$/,
+      validFor: wiki ? /^[^[\]]*$/ : /^[^)]*$/,
     };
   };
 }

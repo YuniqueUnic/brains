@@ -1,7 +1,7 @@
 import { describe, it } from "@serenity-js/playwright-test";
-import { Ensure, EnsureEventually, includes, equals } from "@serenity-js/assertions";
+import { Ensure, includes, equals } from "@serenity-js/assertions";
 import { Duration } from "@serenity-js/core";
-import { Click, Text } from "@serenity-js/web";
+import { Click } from "@serenity-js/web";
 
 import { SignIn } from "../screenplay/tasks/Authoring";
 import {
@@ -11,7 +11,7 @@ import {
 } from "../screenplay/tasks/Navigation";
 import { KeepLocalVersion } from "../screenplay/tasks/ConflictResolution";
 import { Navigate } from "@serenity-js/web";
-import { Enter, Press } from "@serenity-js/web";
+import { Enter } from "@serenity-js/web";
 import { EditorArea } from "../screenplay/screens/EditorArea";
 import { ConflictViewText, EditorStatus } from "../screenplay/questions/Views";
 import { CallBrainsApi } from "../screenplay/abilities/CallBrainsApi";
