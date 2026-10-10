@@ -1,11 +1,16 @@
 #!/bin/bash
 # Regenerate every committed API artifact from api/brains.idl.
-# Build xidlc from the same revision as the workspace xidl-rust-axum dependency,
-# then pass XIDLC=/path/to/xidl/target/debug/xidlc (see the HTTP handoff).
+# Use the same release as the workspace runtime; XIDLC can select a local binary.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-: "${XIDLC:?set XIDLC to the compiler built from the pinned xidl revision}"
+XIDLC=${XIDLC:-xidlc}
 command -v "$XIDLC" >/dev/null
+expected=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["dependencies"]["xidl-rust-axum"]["version"].removeprefix("="))')
+actual=$("$XIDLC" --version)
+if [[ "$actual" != "xidlc $expected" ]]; then
+  echo "expected xidlc $expected, got $actual" >&2
+  exit 1
+fi
 generated_tmp=$(mktemp)
 trap 'rm -f "$generated_tmp"' EXIT
 
@@ -33,4 +38,12 @@ printf '%s\n\n' "$header" | cat - crates/api-http/src/contract/brains.rs > "$gen
 cat "$generated_tmp" > crates/api-http/src/contract/brains.rs
 rustfmt --edition 2024 sdk/rust/src/brains_generated.rs crates/api-http/src/contract/brains.rs
 
-echo "sdk/ regenerated from api/brains.idl"
+# Format only: upstream templates can emit whitespace-only lines. No wire
+# semantics or generated identifiers are rewritten here.
+python3 - <<'PYFORMAT'
+from pathlib import Path
+for path in Path("sdk/typescript").glob("*.ts"):
+    path.write_text("\n".join(line.rstrip() for line in path.read_text().splitlines()) + "\n")
+PYFORMAT
+
+echo "sdk/ regenerated from api/brains.idl with $actual"

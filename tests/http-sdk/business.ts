@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { brains as sdk } from './sdk/brains.client.ts';
-import { Forbidden, Gone, NotFound, NotModified, PreconditionFailed, UnprocessableEntity } from './sdk/brains.errors.ts';
+import { Conflict, Forbidden, Gone, NotFound, NotModified, PreconditionFailed, UnprocessableEntity } from './sdk/brains.errors.ts';
 
 const origin = process.env.BRAINS_TEST_ORIGIN!;
 const token = process.env.BRAINS_TEST_TOKEN!;
@@ -16,7 +16,7 @@ const original = bytes('# hello');
 
 // Given an external client, byte uploads keep their media type and digest.
 const created = await files.put_file(path, undefined, '*', undefined,
-  digest(original), undefined, 'text/markdown', original);
+  digest(original), true, 'text/markdown', original);
 assert.equal(created.return.created, true);
 const revision1 = created.return.revision;
 const etag1 = created.etag;
@@ -123,8 +123,75 @@ assert.equal(trashed.etag, `"${trashed.return.revision}"`);
 await assert.rejects(files.get_file(path, undefined, undefined),
   error => error instanceof Gone && error.error.code === 'TRASHED' && error.etag === trashed.etag);
 
+// Archive HTTP optionals must parse without turning missing values into null
+// or strings. Storage/portable archives keep the domain record's own encoding.
+const archives = new sdk.ArchivesClient(api, { headers: { Authorization: authorization } });
+const firstRecord = await archives.archive_revision(path, revision1);
+assert.equal(firstRecord.parent, undefined);
+assert.equal(firstRecord.content?.executable, true);
+const secondRecord = await archives.archive_revision(path, revision2);
+assert.equal(secondRecord.content?.executable, true, 'PATCH preserves executable');
+const tombstone = await archives.archive_revision(path, trashed.return.revision);
+assert.equal(tombstone.content, undefined);
+assert.equal(tombstone.parent, restored.return.revision);
+const archiveWire = await fetch(`${api}/maintenance/archive/revision?path=${encodeURIComponent(path)}&revision=${revision1}`,
+  { headers: { Authorization: authorization } }).then(response => response.json());
+assert(!Object.hasOwn(archiveWire, 'parent'));
+assert.equal((await archives.import_archive_revision(firstRecord)).revision, revision1);
+
+// Permanent removal has its own contract; soft deletion keeps its MutationResult.
+await assert.rejects(files.purge_file('ts-sdk/moved.md', movedRaw.etag, undefined),
+  error => error instanceof Conflict && error.error.code === 'PURGE_REQUIRES_TRASHED');
+await assert.rejects(files.purge_file(path, etag1, undefined),
+  error => error instanceof PreconditionFailed && error.etag === trashed.etag);
+const purged = await files.purge_file(path, trashed.etag, undefined);
+assert.equal(purged.purged, true);
+assert.equal(purged.path, path);
+await assert.rejects(files.get_file(path, undefined, undefined), NotFound);
+const afterPurge = await files.list_files('store', path, 100, undefined, undefined, undefined, undefined, true);
+assert(!afterPurge.items.some(item => item.path === path));
+
+// Replay an archive into the now-empty path: blobs precede HEAD; skipped
+// generations fail, and retrying the exact same record/blob/head is harmless.
+await assert.rejects(archives.import_archive_head(path, revision2), PreconditionFailed);
+assert.equal((await archives.import_archive_blob(path, revision1, original)).stored, true);
+const published = await archives.import_archive_head(path, revision1);
+assert.equal(published.head.generation, 1);
+assert.equal(published.index_state, 'pending');
+assert.equal((await archives.import_archive_head(path, revision1)).head.revision, revision1);
+assert.equal((await archives.import_archive_revision(secondRecord)).revision, revision2);
+await assert.rejects(archives.import_archive_blob(path, revision2, bytes('wrong')), UnprocessableEntity);
+await archives.import_archive_blob(path, revision2, bytes('# hello v2'));
+assert.equal((await archives.import_archive_head(path, revision2)).head.generation, 2);
+const replayed = await files.get_file(path, undefined, undefined);
+assert(replayed.kind === 'OctetStream');
+assert.deepEqual(replayed.value, bytes('# hello v2'));
+
+// Explicit executable=false clears the flag; omitted writes preserve it.
+const executablePath = 'ts-sdk/executable.md';
+const executable = await files.put_file(executablePath, undefined, '*', undefined,
+  undefined, true, 'text/markdown', original);
+const preserved = await files.put_file(executablePath, executable.etag, undefined, undefined,
+  undefined, undefined, 'text/markdown', original);
+assert.equal((await archives.archive_revision(executablePath, preserved.return.revision)).content?.executable, true);
+const cleared = await files.put_file(executablePath, preserved.etag, undefined, undefined,
+  undefined, false, 'text/markdown', original);
+assert.equal((await archives.archive_revision(executablePath, cleared.return.revision)).content?.executable, false);
+
+// Path-ordered cursors treat a literal | as part of the path, not a timestamp.
+for (const pipePath of ['ts-sdk/pipe/a|b.md', 'ts-sdk/pipe/c.md']) {
+  await files.put_file(pipePath, undefined, '*', undefined, undefined, undefined, 'text/markdown', original);
+}
+const pipePage = await files.list_files('index', 'ts-sdk/pipe/', 1, undefined, undefined, undefined, 'path', false);
+assert.equal(pipePage.items[0].path, 'ts-sdk/pipe/a|b.md');
+assert(pipePage.next_cursor);
+const pipeNext = await files.list_files('index', 'ts-sdk/pipe/', 1, pipePage.next_cursor, undefined, undefined, 'path', false);
+assert.equal(pipeNext.items[0].path, 'ts-sdk/pipe/c.md');
+
 // A cookie-authenticated mutation requires Origin and the session's CSRF token.
-const login = await new sdk.SessionsClient(api).login(authorization);
+const login = await new sdk.SessionsClient(api, { headers: { Origin: origin } }).login(authorization);
+const caps = await files.capabilities();
+assert.equal(login.set_cookie?.includes('; Secure'), caps.runtime !== 'local-rust');
 const cookie = login.set_cookie?.split(';')[0];
 const csrf = login.return.csrf_token;
 assert(cookie);
@@ -147,4 +214,4 @@ assert.equal(cookieCreated.return.created, true);
 const logout = await new sdk.SessionsClient(api, { headers: cookieHeaders }).logout();
 assert.equal(logout.return.ok, true);
 assert(logout.set_cookie?.includes('Max-Age=0'));
-console.log('PASS generated TypeScript SDK: upload/read/preview/commit/history/copy/move/422-without-mutation/restore/trash/session/CSRF');
+console.log('PASS generated TypeScript SDK: upload/read/preview/commit/history/copy/move/422-without-mutation/restore/trash/purge/archive-replay/executable/pipe-cursor/session/CSRF');

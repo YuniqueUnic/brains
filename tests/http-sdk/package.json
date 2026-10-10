@@ -2,6 +2,14 @@
   "name": "brains-http-sdk-business",
   "private": true,
   "type": "module",
-  "dependencies": { "zod": "^4.4.3" },
-  "devDependencies": { "@types/node": "^26.6.4", "tsx": "^4.0.0", "typescript": "~6.0.3" }
+  "dependencies": {
+    "zod": "^4.4.3",
+    "xidl-typescript-client": "0.98.0",
+    "xidl-typescript-codec": "0.98.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "tsx": "^4.0.0",
+    "typescript": "~6.0.3"
+  }
 }

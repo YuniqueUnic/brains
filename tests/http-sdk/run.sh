@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Real HTTP acceptance against disposable brains data and the selected xidl runtime.
+# Real HTTP acceptance using released runtimes and disposable brains data.
+# BRAINS_BASE_URL + BRAINS_E2E_TOKEN select a caller-owned server (e.g. workerd).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-: "${XIDL_SOURCE:?set XIDL_SOURCE to the tested xidl checkout}"
-XIDL_SOURCE=$(cd "$XIDL_SOURCE" && pwd)
 repo_dir=$PWD
 probe_dir=$(mktemp -d)
 server_pid=''
@@ -12,30 +11,31 @@ cleanup() {
   rm -rf "$probe_dir"
 }
 trap cleanup EXIT
-cp tests/http-sdk/{business.ts,package.json,tsconfig.json} "$probe_dir/"
+cp tests/http-sdk/{business.ts,package.json,package-lock.json,tsconfig.json} "$probe_dir/"
 cp -R sdk/typescript "$probe_dir/sdk"
-for runtime in xidl-typescript-codec xidl-typescript-client; do
-  pnpm --dir "$XIDL_SOURCE/typescript/$runtime" install --frozen-lockfile --ignore-scripts
-  pnpm --dir "$XIDL_SOURCE/typescript/$runtime" build
-done
-cargo build -p brains-server
-export BRAINS_TEST_TOKEN
-BRAINS_TEST_TOKEN=$(node -p "require('node:crypto').randomBytes(24).toString('hex')")
-export BRAINS_TEST_ORIGIN="http://127.0.0.1:${BRAINS_SDK_TEST_PORT:-45962}"
-"$repo_dir/target/debug/brains-server" --data-dir "$probe_dir/data" --bind 127.0.0.1 \
-  --port "${BRAINS_SDK_TEST_PORT:-45962}" --token "$BRAINS_TEST_TOKEN" \
-  --origin "$BRAINS_TEST_ORIGIN" > "$probe_dir/server.log" 2>&1 &
-server_pid=$!
-ready=false
-for attempt in {1..100}; do
-  if ! kill -0 "$server_pid" 2>/dev/null; then cat "$probe_dir/server.log"; exit 1; fi
-  if curl --silent --fail --header "Authorization: Bearer $BRAINS_TEST_TOKEN" \
-    "$BRAINS_TEST_ORIGIN/api/v1/session" >/dev/null; then ready=true; break; fi
-  sleep 0.1
-done
-if [[ "$ready" != true ]]; then cat "$probe_dir/server.log"; exit 1; fi
+export BRAINS_TEST_TOKEN BRAINS_TEST_ORIGIN
+if [[ -n "${BRAINS_BASE_URL:-}" ]]; then
+  BRAINS_TEST_ORIGIN=$BRAINS_BASE_URL
+  BRAINS_TEST_TOKEN=${BRAINS_E2E_TOKEN:?set BRAINS_E2E_TOKEN for the selected server}
+else
+  "${CARGO:-cargo}" build -p brains-server
+  BRAINS_TEST_TOKEN=$(node -p "require('node:crypto').randomBytes(24).toString('hex')")
+  port=${BRAINS_SDK_TEST_PORT:-$(node -e 'const s=require("node:net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')}
+  BRAINS_TEST_ORIGIN="http://127.0.0.1:$port"
+  "$repo_dir/target/debug/brains-server" --data-dir "$probe_dir/data" --bind 127.0.0.1 \
+    --port "$port" --token "$BRAINS_TEST_TOKEN" \
+    --origin "$BRAINS_TEST_ORIGIN" > "$probe_dir/server.log" 2>&1 &
+  server_pid=$!
+  ready=false
+  for attempt in {1..100}; do
+    if ! kill -0 "$server_pid" 2>/dev/null; then cat "$probe_dir/server.log"; exit 1; fi
+    if curl --silent --fail --header "Authorization: Bearer $BRAINS_TEST_TOKEN" \
+      "$BRAINS_TEST_ORIGIN/api/v1/session" >/dev/null; then ready=true; break; fi
+    sleep 0.1
+  done
+  if [[ "$ready" != true ]]; then cat "$probe_dir/server.log"; exit 1; fi
+fi
 cd "$probe_dir"
-npm install --ignore-scripts --no-audit --no-fund \
-  "$XIDL_SOURCE/typescript/xidl-typescript-client" "$XIDL_SOURCE/typescript/xidl-typescript-codec"
-npx tsc --noEmit -p .
-npx tsx business.ts || { cat "$probe_dir/server.log"; exit 1; }
+npm ci --ignore-scripts --no-audit --no-fund
+npx --no-install tsc --noEmit -p .
+npx --no-install tsx business.ts || { if [[ -f server.log ]]; then cat server.log; fi; exit 1; }

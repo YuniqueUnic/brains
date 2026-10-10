@@ -9,15 +9,15 @@ import type * as types from "./brains";
         readonly status = 400;
         readonly kind = "BadRequest" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("BadRequest");
         this.name = "BadRequest";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -26,15 +26,15 @@ import type * as types from "./brains";
         readonly status = 403;
         readonly kind = "Forbidden" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("Forbidden");
         this.name = "Forbidden";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -43,15 +43,15 @@ import type * as types from "./brains";
         readonly status = 404;
         readonly kind = "NotFound" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("NotFound");
         this.name = "NotFound";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -60,15 +60,15 @@ import type * as types from "./brains";
         readonly status = 409;
         readonly kind = "Conflict" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("Conflict");
         this.name = "Conflict";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -78,17 +78,17 @@ import type * as types from "./brains";
         readonly kind = "Gone" as const;
         readonly etag?: string;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "etag"?: string;
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("Gone");
         this.name = "Gone";
         this.etag = fields["etag"];
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -98,17 +98,17 @@ import type * as types from "./brains";
         readonly kind = "PreconditionFailed" as const;
         readonly etag?: string;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "etag"?: string;
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("PreconditionFailed");
         this.name = "PreconditionFailed";
         this.etag = fields["etag"];
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -117,15 +117,15 @@ import type * as types from "./brains";
         readonly status = 413;
         readonly kind = "PayloadTooLarge" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("PayloadTooLarge");
         this.name = "PayloadTooLarge";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -134,15 +134,15 @@ import type * as types from "./brains";
         readonly status = 422;
         readonly kind = "UnprocessableEntity" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("UnprocessableEntity");
         this.name = "UnprocessableEntity";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -151,15 +151,15 @@ import type * as types from "./brains";
         readonly status = 428;
         readonly kind = "PreconditionRequired" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("PreconditionRequired");
         this.name = "PreconditionRequired";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -168,15 +168,15 @@ import type * as types from "./brains";
         readonly status = 500;
         readonly kind = "Internal" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("Internal");
         this.name = "Internal";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -185,15 +185,15 @@ import type * as types from "./brains";
         readonly status = 501;
         readonly kind = "NotImplemented" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("NotImplemented");
         this.name = "NotImplemented";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -202,15 +202,15 @@ import type * as types from "./brains";
         readonly status = 503;
         readonly kind = "ServiceUnavailable" as const;
         readonly error: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "error": types.brains.ErrorDetail;
-        
+
     }) {
         super("ServiceUnavailable");
         this.name = "ServiceUnavailable";
         this.error = fields["error"];
-        
+
     }
 }
 
@@ -219,15 +219,15 @@ import type * as types from "./brains";
         readonly status = 304;
         readonly kind = "NotModified" as const;
         readonly etag: string;
-        
+
     constructor(fields: {
         "etag": string;
-        
+
     }) {
         super("NotModified");
         this.name = "NotModified";
         this.etag = fields["etag"];
-        
+
     }
 }
 
@@ -242,7 +242,7 @@ import type * as types from "./brains";
     readonly target_revision?: string;
     readonly source_revision?: string;
     readonly error?: types.brains.ErrorDetail;
-    
+
     constructor(fields: {
         "copied": boolean;
         "source_trashed": boolean;
@@ -251,7 +251,7 @@ import type * as types from "./brains";
         "target_revision"?: string;
         "source_revision"?: string;
         "error"?: types.brains.ErrorDetail;
-        
+
     }) {
         super("TransferConflict");
         this.name = "TransferConflict";
@@ -262,6 +262,6 @@ import type * as types from "./brains";
         this.target_revision = fields["target_revision"];
         this.source_revision = fields["source_revision"];
         this.error = fields["error"];
-        
+
     }
 }

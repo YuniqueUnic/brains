@@ -7,510 +7,510 @@ import { xjson } from "xidl-typescript-codec";
     export namespace brains {
 
         export const CapabilityLimitsSchema = z.object({
-            
+
                 max_text_bytes: z.coerce.number().int().nonnegative(),
-            
+
                 max_attachment_bytes: z.coerce.number().int().nonnegative()
-            
+
         });
     export const RuntimeSchema = z.enum(["local-rust", "cloudflare-rust", "cloudflare-typescript"]);
 
         export const CapabilitiesSchema = z.object({
-            
+
                 api_version: z.coerce.string(),
-            
+
                 store_format: z.coerce.number().int().nonnegative(),
-            
+
                 runtime: RuntimeSchema,
-            
+
                 limits: CapabilityLimitsSchema,
-            
+
                 features: z.record(z.string(), z.coerce.boolean()),
-            
+
                 vault: z.coerce.string().optional()
-            
+
         });
 
         export const EntrySchema = z.object({
-            
+
                 path: z.coerce.string(),
-            
+
                 revision: z.coerce.string(),
-            
+
                 generation: z.coerce.number().int(),
-            
+
                 state: z.coerce.string(),
-            
+
                 updated_at: z.coerce.string().optional(),
-            
+
                 size: z.coerce.number().int().optional(),
-            
+
                 sha256: z.coerce.string().optional(),
-            
+
                 media_type: z.coerce.string().optional(),
-            
+
                 kind: z.coerce.string().optional(),
-            
+
                 title: z.coerce.string().optional()
-            
+
         });
 
         export const PurgeResultSchema = z.object({
-            
+
                 path: z.coerce.string(),
-            
+
                 purged: z.coerce.boolean(),
-            
+
                 index_state: z.coerce.string(),
-            
+
                 operation_id: z.coerce.string()
-            
+
         });
 
         export const MutationResultSchema = z.object({
-            
+
                 path: z.coerce.string(),
-            
+
                 revision: z.coerce.string(),
-            
+
                 generation: z.coerce.number().int(),
-            
+
                 state: z.coerce.string(),
-            
+
                 updated_at: z.coerce.string().optional(),
-            
+
                 size: z.coerce.number().int().optional(),
-            
+
                 sha256: z.coerce.string().optional(),
-            
+
                 media_type: z.coerce.string().optional(),
-            
+
                 kind: z.coerce.string().optional(),
-            
+
                 title: z.coerce.string().optional(),
-            
+
                 index_state: z.coerce.string(),
-            
+
                 operation_id: z.coerce.string(),
-            
+
                 created: z.coerce.boolean().optional()
-            
+
         });
 
         export const FilePageSchema = z.object({
-            
+
                 items: z.array(EntrySchema),
-            
+
                 next_cursor: z.coerce.string().optional(),
-            
+
                 source: z.coerce.string(),
-            
+
                 consistency: z.coerce.string()
-            
+
         });
 
         export const ContentRefSchema = z.object({
-            
+
                 size: z.coerce.number().int(),
-            
+
                 sha256: z.coerce.string(),
-            
+
                 media_type: z.coerce.string(),
-            
+
                 executable: z.coerce.boolean()
-            
+
         });
 
         export const CopiedFromSchema = z.object({
-            
+
                 path: z.coerce.string(),
-            
+
                 revision: z.coerce.string()
-            
+
         });
 
         export const RevisionSchema = z.object({
-            
+
                 revision: z.coerce.string(),
-            
+
                 path: z.coerce.string(),
-            
+
                 generation: z.coerce.number().int(),
-            
+
                 parent: z.coerce.string().optional(),
-            
+
                 action: z.coerce.string(),
-            
+
                 actor: z.coerce.string().optional(),
-            
+
                 operation_id: z.coerce.string().optional(),
-            
+
                 created_at: z.coerce.string(),
-            
+
                 restores_revision: z.coerce.string().optional(),
-            
+
                 copied_from: CopiedFromSchema.optional(),
-            
+
                 commit_state: z.coerce.string().optional(),
-            
+
                 content: ContentRefSchema.optional()
-            
+
         });
 
         export const ArchiveContentSchema = z.object({
-            
+
                 key: z.coerce.string(),
-            
+
                 sha256: z.coerce.string(),
-            
+
                 size: z.coerce.number().int(),
-            
+
                 media_type: z.coerce.string(),
-            
+
                 executable: z.coerce.boolean()
-            
+
         });
 
         export const ArchiveRevisionSchema = z.object({
-            
+
                 schema_version: z.coerce.number().int().nonnegative(),
-            
+
                 revision: z.coerce.string(),
-            
+
                 path: z.coerce.string(),
-            
+
                 generation: z.coerce.number().int(),
-            
+
                 parent: z.coerce.string().optional(),
-            
+
                 action: z.coerce.string(),
-            
+
                 actor: z.coerce.string(),
-            
+
                 operation_id: z.coerce.string(),
-            
+
                 created_at: z.coerce.string(),
-            
+
                 restores_revision: z.coerce.string().optional(),
-            
+
                 copied_from: CopiedFromSchema.optional(),
-            
+
                 content: ArchiveContentSchema.optional()
-            
+
         });
 
         export const ArchiveHeadSchema = z.object({
-            
+
                 schema_version: z.coerce.number().int().nonnegative(),
-            
+
                 path: z.coerce.string(),
-            
+
                 revision: z.coerce.string(),
-            
+
                 generation: z.coerce.number().int(),
-            
+
                 state: z.coerce.string(),
-            
+
                 updated_at: z.coerce.string()
-            
+
         });
 
         export const ArchivePublishedSchema = z.object({
-            
+
                 head: ArchiveHeadSchema,
-            
+
                 index_state: z.coerce.string()
-            
+
         });
 
         export const ArchiveBlobStoredSchema = z.object({
-            
+
                 stored: z.coerce.boolean()
-            
+
         });
 
         export const HistoryPageSchema = z.object({
-            
+
                 items: z.array(RevisionSchema),
-            
+
                 anchor_revision: z.coerce.string(),
-            
+
                 next_cursor: z.coerce.string().optional()
-            
+
         });
 
         export const SearchHitSchema = z.object({
-            
+
                 path: z.coerce.string(),
-            
+
                 indexed_revision: z.coerce.string(),
-            
+
                 snippet: z.coerce.string()
-            
+
         });
 
         export const SearchPageSchema = z.object({
-            
+
                 items: z.array(SearchHitSchema),
-            
+
                 next_cursor: z.coerce.string().optional(),
-            
+
                 complete: z.coerce.boolean(),
-            
+
                 scanned: z.coerce.number().int(),
-            
+
                 index_state: z.coerce.string()
-            
+
         });
 
         export const LinkItemSchema = z.object({
-            
+
                 source: z.coerce.string(),
-            
+
                 target: z.coerce.string(),
-            
+
                 kind: z.coerce.string(),
-            
+
                 source_revision: z.coerce.string().optional()
-            
+
         });
 
         export const LinkPageSchema = z.object({
-            
+
                 items: z.array(LinkItemSchema),
-            
+
                 next_cursor: z.coerce.string().optional()
-            
+
         });
 
         export const ReindexRequestSchema = z.object({
-            
+
                 cursor: z.coerce.string().optional(),
-            
+
                 limit: z.coerce.number().int().optional()
-            
+
         });
 
         export const ReindexFailureSchema = z.object({
-            
+
                 path: z.coerce.string(),
-            
+
                 code: z.coerce.string()
-            
+
         });
 
         export const ReindexPageSchema = z.object({
-            
+
                 processed: z.coerce.number().int(),
-            
+
                 failed: z.array(ReindexFailureSchema),
-            
+
                 next_cursor: z.coerce.string().optional()
-            
+
         });
 
         export const SessionSchema = z.object({
-            
+
                 actor: z.coerce.string(),
-            
+
                 scopes: z.array(z.coerce.string()),
-            
+
                 expires_at: z.coerce.string().optional(),
-            
+
                 csrf_token: z.coerce.string().optional()
-            
+
         });
 
         export const OkResultSchema = z.object({
-            
+
                 ok: z.coerce.boolean()
-            
+
         });
 
         export const PatchEditSchema = z.object({
-            
+
                 old_text: z.coerce.string(),
-            
+
                 new_text: z.coerce.string(),
-            
+
                 expected_matches: z.coerce.number().int()
-            
+
         });
 
         export const PatchBodySchema = z.object({
-            
+
                 edits: z.array(PatchEditSchema),
-            
+
                 dry_run: z.coerce.boolean().optional()
-            
+
         });
 
         export const RestoreBodySchema = z.object({
-            
+
                 path: z.coerce.string(),
-            
+
                 revision: z.coerce.string()
-            
+
         });
 
         export const TransferBodySchema = z.object({
-            
+
                 source: z.coerce.string(),
-            
+
                 target: z.coerce.string(),
-            
+
                 expected_source_revision: z.coerce.string(),
-            
+
                 operation_id: z.coerce.string()
-            
+
         });
 
         export const ErrorDetailSchema = z.object({
-            
+
                 code: z.coerce.string(),
-            
+
                 message: z.coerce.string(),
-            
+
                 request_id: z.coerce.string(),
-            
+
                 path: z.coerce.string().optional(),
-            
+
                 current_revision: z.coerce.string().optional()
-            
+
         });
 
         export const TransferResultSchema = z.object({
-            
+
                 copied: z.coerce.boolean(),
-            
+
                 source_trashed: z.coerce.boolean(),
-            
+
                 partial: z.coerce.boolean(),
-            
+
                 operation_id: z.coerce.string(),
-            
+
                 target_revision: z.coerce.string().optional(),
-            
+
                 source_revision: z.coerce.string().optional(),
-            
+
                 error: ErrorDetailSchema.optional()
-            
+
         });
 
         export const DiffResultSchema = z.object({
-            
+
                 diff: z.coerce.string()
-            
+
         });
 
         export const PatchResultSchema = z.object({
-            
+
                 diff: z.coerce.string(),
-            
+
                 base_revision: z.coerce.string(),
-            
+
                 committed: MutationResultSchema.optional()
-            
+
         });
 
         export const BadRequestSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const ForbiddenSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const NotFoundSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const ConflictSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const GoneSchema = z.object({
-            
+
                 error: ErrorDetailSchema,
-            
+
                 etag: xjson(z.coerce.string().optional(), {"name":"ETag"})
-            
+
         });
 
         export const PreconditionFailedSchema = z.object({
-            
+
                 error: ErrorDetailSchema,
-            
+
                 etag: xjson(z.coerce.string().optional(), {"name":"ETag"})
-            
+
         });
 
         export const PayloadTooLargeSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const UnprocessableEntitySchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const PreconditionRequiredSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const InternalSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const NotImplementedSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const ServiceUnavailableSchema = z.object({
-            
+
                 error: ErrorDetailSchema
-            
+
         });
 
         export const NotModifiedSchema = z.object({
-            
+
                 etag: xjson(z.coerce.string(), {"name":"ETag"})
-            
+
         });
 
         export const TransferConflictSchema = z.object({
-            
+
                 copied: z.coerce.boolean(),
-            
+
                 source_trashed: z.coerce.boolean(),
-            
+
                 partial: z.coerce.boolean(),
-            
+
                 operation_id: z.coerce.string(),
-            
+
                 target_revision: z.coerce.string().optional(),
-            
+
                 source_revision: z.coerce.string().optional(),
-            
+
                 error: ErrorDetailSchema.optional()
-            
+
         });
 
         export const FilePayloadSchema = z.union([z.object({ meta: EntrySchema }), z.object({ raw: z.array(z.coerce.number().int().nonnegative()) })]);

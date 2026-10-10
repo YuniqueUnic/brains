@@ -48,29 +48,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Resolve the workspace xidl revision
+      - name: Resolve the workspace xidl version
         id: xidl
         run: |
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          python3 - <<'PYVERSION' >> "$GITHUB_OUTPUT"
           import tomllib
           with open("Cargo.toml", "rb") as manifest:
               dependency = tomllib.load(manifest)["workspace"]["dependencies"]["xidl-rust-axum"]
-          print(f"rev={dependency['rev']}")
-          PY
-      - uses: actions/checkout@v4
-        with:
-          repository: YuniqueUnic/xidl
-          ref: ${{ steps.xidl.outputs.rev }}
-          path: .tools/xidl
-      - name: Build the matching IDL compiler
-        working-directory: .tools/xidl
+          print(f"version={dependency['version'].removeprefix('=')}")
+          PYVERSION
+      - name: Install the matching released IDL compiler
         env:
-          XIDLC_GIT_HASH: ${{ steps.xidl.outputs.rev }}
-        run: cargo build --locked -p xidlc --features cli,fmt
+          GH_TOKEN: ${{ github.token }}
+          XIDL_VERSION: ${{ steps.xidl.outputs.version }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/xidlc"
+          gh release download "v$XIDL_VERSION" --repo xidl/xidl \
+            --pattern xidlc-x86_64-unknown-linux-musl.tar.gz --dir "$RUNNER_TEMP/xidlc"
+          tar -xzf "$RUNNER_TEMP/xidlc/xidlc-x86_64-unknown-linux-musl.tar.gz" -C "$RUNNER_TEMP/xidlc"
+          echo "$RUNNER_TEMP/xidlc" >> "$GITHUB_PATH"
       - name: Regenerate committed SDK artifacts
         run: bash scripts/gen-api.sh
-        env:
-          XIDLC: ${{ github.workspace }}/.tools/xidl/target/debug/xidlc
       - name: Fail on any drift
         run: |
           git diff --exit-code -- sdk crates/api-http/src/contract
@@ -81,8 +79,6 @@ jobs:
           fi
       - name: Generated TypeScript SDK business acceptance
         run: bash tests/http-sdk/run.sh
-        env:
-          XIDL_SOURCE: ${{ github.workspace }}/.tools/xidl
 
   web:
     name: Web build + typecheck

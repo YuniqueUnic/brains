@@ -6,7 +6,7 @@
 
 
     export interface CapabilityLimits {
-            
+
                 max_text_bytes: number;
                     max_attachment_bytes: number;
                 }
@@ -14,7 +14,7 @@
 
 
     export interface Capabilities {
-            
+
                 api_version: string;
                     store_format: number;
                     runtime: Runtime;
@@ -25,7 +25,7 @@
 
 
     export interface Entry {
-            
+
                 path: string;
                     revision: string;
                     generation: number;
@@ -40,7 +40,7 @@
 
 
     export interface PurgeResult {
-            
+
                 path: string;
                     purged: boolean;
                     index_state: string;
@@ -49,7 +49,7 @@
 
 
     export interface MutationResult {
-            
+
                 path: string;
                     revision: string;
                     generation: number;
@@ -67,7 +67,7 @@
 
 
     export interface FilePage {
-            
+
                 items: Array<Entry>;
                     next_cursor?: string;
                     source: string;
@@ -76,7 +76,7 @@
 
 
     export interface ContentRef {
-            
+
                 size: number;
                     sha256: string;
                     media_type: string;
@@ -85,14 +85,14 @@
 
 
     export interface CopiedFrom {
-            
+
                 path: string;
                     revision: string;
                 }
 
 
     export interface Revision {
-            
+
                 revision: string;
                     path: string;
                     generation: number;
@@ -109,7 +109,7 @@
 
 
     export interface ArchiveContent {
-            
+
                 key: string;
                     sha256: string;
                     size: number;
@@ -119,7 +119,7 @@
 
 
     export interface ArchiveRevision {
-            
+
                 schema_version: number;
                     revision: string;
                     path: string;
@@ -136,7 +136,7 @@
 
 
     export interface ArchiveHead {
-            
+
                 schema_version: number;
                     path: string;
                     revision: string;
@@ -147,20 +147,20 @@
 
 
     export interface ArchivePublished {
-            
+
                 head: ArchiveHead;
                     index_state: string;
                 }
 
 
     export interface ArchiveBlobStored {
-            
+
                 stored: boolean;
                 }
 
 
     export interface HistoryPage {
-            
+
                 items: Array<Revision>;
                     anchor_revision: string;
                     next_cursor?: string;
@@ -168,7 +168,7 @@
 
 
     export interface SearchHit {
-            
+
                 path: string;
                     indexed_revision: string;
                     snippet: string;
@@ -176,7 +176,7 @@
 
 
     export interface SearchPage {
-            
+
                 items: Array<SearchHit>;
                     next_cursor?: string;
                     complete: boolean;
@@ -186,7 +186,7 @@
 
 
     export interface LinkItem {
-            
+
                 source: string;
                     target: string;
                     kind: string;
@@ -195,28 +195,28 @@
 
 
     export interface LinkPage {
-            
+
                 items: Array<LinkItem>;
                     next_cursor?: string;
                 }
 
 
     export interface ReindexRequest {
-            
+
                 cursor?: string;
                     limit?: number;
                 }
 
 
     export interface ReindexFailure {
-            
+
                 path: string;
                     code: string;
                 }
 
 
     export interface ReindexPage {
-            
+
                 processed: number;
                     failed: Array<ReindexFailure>;
                     next_cursor?: string;
@@ -224,7 +224,7 @@
 
 
     export interface Session {
-            
+
                 actor: string;
                     scopes: Array<string>;
                     expires_at?: string;
@@ -233,13 +233,13 @@
 
 
     export interface OkResult {
-            
+
                 ok: boolean;
                 }
 
 
     export interface PatchEdit {
-            
+
                 old_text: string;
                     new_text: string;
                     expected_matches: number;
@@ -247,21 +247,21 @@
 
 
     export interface PatchBody {
-            
+
                 edits: Array<PatchEdit>;
                     dry_run?: boolean;
                 }
 
 
     export interface RestoreBody {
-            
+
                 path: string;
                     revision: string;
                 }
 
 
     export interface TransferBody {
-            
+
                 source: string;
                     target: string;
                     expected_source_revision: string;
@@ -270,7 +270,7 @@
 
 
     export interface ErrorDetail {
-            
+
                 code: string;
                     message: string;
                     request_id: string;
@@ -280,7 +280,7 @@
 
 
     export interface TransferResult {
-            
+
                 copied: boolean;
                     source_trashed: boolean;
                     partial: boolean;
@@ -292,13 +292,13 @@
 
 
     export interface DiffResult {
-            
+
                 diff: string;
                 }
 
 
     export interface PatchResult {
-            
+
                 diff: string;
                     base_revision: string;
                     committed?: MutationResult;
@@ -306,87 +306,87 @@
 
 
     export interface BadRequest {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface Forbidden {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface NotFound {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface Conflict {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface Gone {
-            
+
                 error: ErrorDetail;
                     etag?: string;
                 }
 
 
     export interface PreconditionFailed {
-            
+
                 error: ErrorDetail;
                     etag?: string;
                 }
 
 
     export interface PayloadTooLarge {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface UnprocessableEntity {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface PreconditionRequired {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface Internal {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface NotImplemented {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface ServiceUnavailable {
-            
+
                 error: ErrorDetail;
                 }
 
 
     export interface NotModified {
-            
+
                 etag: string;
                 }
 
 
     export interface TransferConflict {
-            
+
                 copied: boolean;
                     source_trashed: boolean;
                     partial: boolean;

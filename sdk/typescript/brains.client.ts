@@ -50,7 +50,7 @@ import {
                 this.auth = options.auth;
                 this.codecs = options.codecs ?? {};
             }
-            
+
                 async capabilities(): Promise<types.brains.Capabilities> {
                     let xidlPath = "/capabilities";
                     const query = new URLSearchParams();
@@ -67,11 +67,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.Capabilities>(resp, "application/json", this.codecs);
         }
-        
+
                 async list_files(source: string | undefined, prefix: string | undefined, limit: number | undefined, cursor: string | undefined, tag: string | undefined, kind: string | undefined, sort: string | undefined, include_deleted: boolean | undefined): Promise<types.brains.FilePage> {
                     const parsed = ifaceSchemas.brains.FilesListFilesRequestSchema.parse({ "source": source, "prefix": prefix, "limit": limit, "cursor": cursor, "tag": tag, "kind": kind, "sort": sort, "include_deleted": include_deleted });
                     let xidlPath = "/files";
@@ -97,11 +97,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 await this.throwListFilesError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.FilePage>(resp, "application/json", this.codecs);
         }
-        
+
                 async put_file(path: string, if_match: string | undefined, if_none_match: string | undefined, operation_id: string | undefined, content_sha256: string | undefined, executable: boolean | undefined, content_type: string | undefined, body: Uint8Array): Promise<ifaceTypes.brains.FilesPutFileResponse> {
                     const parsed = ifaceSchemas.brains.FilesPutFileRequestSchema.parse({ "path": path, "if_match": if_match, "if_none_match": if_none_match, "operation_id": operation_id, "content_sha256": content_sha256, "executable": executable, "content_type": content_type, "body": body });
                     let xidlPath = "/file";
@@ -126,18 +126,18 @@ import {
             if (!headers.has("Content-Type")) {
                 headers.set("Content-Type", "application/octet-stream");
             }
-            
+
             headers.set("Accept", "application/json");
             const resp = await this.fetchImpl(url, { method: "PUT", headers, body: encodeRequestBody(xidlBody, "application/octet-stream", this.codecs, undefined) });
             if (!resp.ok) {
                 await this.throwPutFileError(resp);
-                
+
             }
             const responseBody = await decodeOptionalResponseBody(resp, "application/json", this.codecs);
             const responsePayload = buildResponsePayload(responseBody, resp, "return", [{ wireName: "return", key: "return" }], [{ name: "ETag", key: "etag", optional: true, isMulti: false, decode: value => value }], []);
             return ifaceSchemas.brains.FilesPutFileResponseSchema.parse(deserialize(responsePayload, ifaceSchemas.brains.FilesPutFileResponseSchema)) as ifaceTypes.brains.FilesPutFileResponse;
         }
-        
+
                 async get_file(path: string, format: string | undefined, if_none_match: string | undefined): Promise<{ kind: "Json", value: types.brains.Entry, etag?: string, media_type?: string, content_disposition?: string } | { kind: "OctetStream", value: Uint8Array, etag?: string, media_type?: string, content_disposition?: string }> {
                     const parsed = ifaceSchemas.brains.FilesGetFileRequestSchema.parse({ "path": path, "format": format, "if_none_match": if_none_match });
                     let xidlPath = "/file";
@@ -158,9 +158,9 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 await this.throwGetFileError(resp);
-                
+
             }
-            
+
                 const contentType = (resp.headers.get("Content-Type") ?? "").split(";")[0].trim();
                     if (contentType === "application/json") {
                         const schema = ifaceSchemas.models.brains.EntrySchema;
@@ -173,7 +173,7 @@ import {
                 }
             throw await parseXidlError(resp);
         }
-        
+
                 async delete_file(path: string, if_match: string | undefined, operation_id: string | undefined): Promise<ifaceTypes.brains.FilesDeleteFileResponse> {
                     const parsed = ifaceSchemas.brains.FilesDeleteFileRequestSchema.parse({ "path": path, "if_match": if_match, "operation_id": operation_id });
                     let xidlPath = "/file";
@@ -194,13 +194,13 @@ import {
             const resp = await this.fetchImpl(url, { method: "DELETE", headers });
             if (!resp.ok) {
                 await this.throwDeleteFileError(resp);
-                
+
             }
             const responseBody = await decodeOptionalResponseBody(resp, "application/json", this.codecs);
             const responsePayload = buildResponsePayload(responseBody, resp, "return", [{ wireName: "return", key: "return" }], [{ name: "ETag", key: "etag", optional: true, isMulti: false, decode: value => value }], []);
             return ifaceSchemas.brains.FilesDeleteFileResponseSchema.parse(deserialize(responsePayload, ifaceSchemas.brains.FilesDeleteFileResponseSchema)) as ifaceTypes.brains.FilesDeleteFileResponse;
         }
-        
+
                 async purge_file(path: string, if_match: string | undefined, operation_id: string | undefined): Promise<types.brains.PurgeResult> {
                     const parsed = ifaceSchemas.brains.FilesPurgeFileRequestSchema.parse({ "path": path, "if_match": if_match, "operation_id": operation_id });
                     let xidlPath = "/trash";
@@ -221,11 +221,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "DELETE", headers });
             if (!resp.ok) {
                 await this.throwPurgeFileError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.PurgeResult>(resp, "application/json", this.codecs);
         }
-        
+
                 async patch_file(path: string, if_match: string | undefined, operation_id: string | undefined, body: types.brains.PatchBody): Promise<ifaceTypes.brains.FilesPatchFileResponse> {
                     const parsed = ifaceSchemas.brains.FilesPatchFileRequestSchema.parse({ "path": path, "if_match": if_match, "operation_id": operation_id, "body": body });
                     let xidlPath = "/file";
@@ -244,18 +244,18 @@ import {
                     const url = joinUrl(this.baseUrl, xidlPath);
                     const xidlBody = parsed["body"];
             headers.set("Content-Type", "application/json");
-            
+
             headers.set("Accept", "application/json");
             const resp = await this.fetchImpl(url, { method: "PATCH", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.PatchBodySchema) });
             if (!resp.ok) {
                 await this.throwPatchFileError(resp);
-                
+
             }
             const responseBody = await decodeOptionalResponseBody(resp, "application/json", this.codecs);
             const responsePayload = buildResponsePayload(responseBody, resp, "return", [{ wireName: "return", key: "return" }], [{ name: "ETag", key: "etag", optional: true, isMulti: false, decode: value => value }], []);
             return ifaceSchemas.brains.FilesPatchFileResponseSchema.parse(deserialize(responsePayload, ifaceSchemas.brains.FilesPatchFileResponseSchema)) as ifaceTypes.brains.FilesPatchFileResponse;
         }
-        
+
                 async list_revisions(path: string, limit: number | undefined, cursor: string | undefined): Promise<types.brains.HistoryPage> {
                     const parsed = ifaceSchemas.brains.FilesListRevisionsRequestSchema.parse({ "path": path, "limit": limit, "cursor": cursor });
                     let xidlPath = "/revisions";
@@ -276,11 +276,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 await this.throwListRevisionsError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.HistoryPage>(resp, "application/json", this.codecs);
         }
-        
+
                 async get_revision(path: string, revision: string, format: string | undefined): Promise<{ kind: "Json", value: types.brains.Revision, etag?: string, media_type?: string, content_disposition?: string } | { kind: "OctetStream", value: Uint8Array, etag?: string, media_type?: string, content_disposition?: string }> {
                     const parsed = ifaceSchemas.brains.FilesGetRevisionRequestSchema.parse({ "path": path, "revision": revision, "format": format });
                     let xidlPath = "/revision";
@@ -301,9 +301,9 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 await this.throwGetRevisionError(resp);
-                
+
             }
-            
+
                 const contentType = (resp.headers.get("Content-Type") ?? "").split(";")[0].trim();
                     if (contentType === "application/json") {
                         const schema = ifaceSchemas.models.brains.RevisionSchema;
@@ -316,7 +316,7 @@ import {
                 }
             throw await parseXidlError(resp);
         }
-        
+
                 async restore(if_match: string | undefined, operation_id: string | undefined, body: types.brains.RestoreBody): Promise<ifaceTypes.brains.FilesRestoreResponse> {
                     const parsed = ifaceSchemas.brains.FilesRestoreRequestSchema.parse({ "if_match": if_match, "operation_id": operation_id, "body": body });
                     let xidlPath = "/restore";
@@ -334,18 +334,18 @@ import {
                     const url = joinUrl(this.baseUrl, xidlPath);
                     const xidlBody = parsed["body"];
             headers.set("Content-Type", "application/json");
-            
+
             headers.set("Accept", "application/json");
             const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.RestoreBodySchema) });
             if (!resp.ok) {
                 await this.throwRestoreError(resp);
-                
+
             }
             const responseBody = await decodeOptionalResponseBody(resp, "application/json", this.codecs);
             const responsePayload = buildResponsePayload(responseBody, resp, "return", [{ wireName: "return", key: "return" }], [{ name: "ETag", key: "etag", optional: true, isMulti: false, decode: value => value }], []);
             return ifaceSchemas.brains.FilesRestoreResponseSchema.parse(deserialize(responsePayload, ifaceSchemas.brains.FilesRestoreResponseSchema)) as ifaceTypes.brains.FilesRestoreResponse;
         }
-        
+
                 async search(q: string, mode: string | undefined, prefix: string | undefined, tag: string | undefined, scan_limit: number | undefined, cursor: string | undefined): Promise<types.brains.SearchPage> {
                     const parsed = ifaceSchemas.brains.FilesSearchRequestSchema.parse({ "q": q, "mode": mode, "prefix": prefix, "tag": tag, "scan_limit": scan_limit, "cursor": cursor });
                     let xidlPath = "/search";
@@ -369,11 +369,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 await this.throwSearchError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.SearchPage>(resp, "application/json", this.codecs);
         }
-        
+
                 async links(path: string, direction: string | undefined, cursor: string | undefined): Promise<types.brains.LinkPage> {
                     const parsed = ifaceSchemas.brains.FilesLinksRequestSchema.parse({ "path": path, "direction": direction, "cursor": cursor });
                     let xidlPath = "/links";
@@ -394,11 +394,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 await this.throwLinksError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.LinkPage>(resp, "application/json", this.codecs);
         }
-        
+
                 async copy(body: types.brains.TransferBody): Promise<types.brains.TransferResult> {
                     const parsed = ifaceSchemas.brains.FilesCopyRequestSchema.parse({ "body": body });
                     let xidlPath = "/copy";
@@ -414,16 +414,16 @@ import {
                     const url = joinUrl(this.baseUrl, xidlPath);
                     const xidlBody = parsed["body"];
             headers.set("Content-Type", "application/json");
-            
+
             headers.set("Accept", "application/json");
             const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.TransferBodySchema) });
             if (!resp.ok) {
                 await this.throwCopyError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.TransferResult>(resp, "application/json", this.codecs);
         }
-        
+
                 async move(body: types.brains.TransferBody): Promise<types.brains.TransferResult> {
                     const parsed = ifaceSchemas.brains.FilesMoveRequestSchema.parse({ "body": body });
                     let xidlPath = "/move";
@@ -439,16 +439,16 @@ import {
                     const url = joinUrl(this.baseUrl, xidlPath);
                     const xidlBody = parsed["body"];
             headers.set("Content-Type", "application/json");
-            
+
             headers.set("Accept", "application/json");
             const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.TransferBodySchema) });
             if (!resp.ok) {
                 await this.throwMoveError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.TransferResult>(resp, "application/json", this.codecs);
         }
-        
+
                 async diff(path: string, _from: string, to: string | undefined): Promise<types.brains.DiffResult> {
                     const parsed = ifaceSchemas.brains.FilesDiffRequestSchema.parse({ "path": path, "from": _from, "to": to });
                     let xidlPath = "/diff";
@@ -469,11 +469,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 await this.throwDiffError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.DiffResult>(resp, "application/json", this.codecs);
         }
-        
+
                 async reindex(body: types.brains.ReindexRequest): Promise<types.brains.ReindexPage> {
                     const parsed = ifaceSchemas.brains.FilesReindexRequestSchema.parse({ "body": body });
                     let xidlPath = "/maintenance/reindex";
@@ -489,16 +489,16 @@ import {
                     const url = joinUrl(this.baseUrl, xidlPath);
                     const xidlBody = parsed["body"];
             headers.set("Content-Type", "application/json");
-            
+
             headers.set("Accept", "application/json");
             const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.ReindexRequestSchema) });
             if (!resp.ok) {
                 await this.throwReindexError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.ReindexPage>(resp, "application/json", this.codecs);
         }
-        
+
                 async validate(): Promise<void> {
                     let xidlPath = "/maintenance/validate";
                     const query = new URLSearchParams();
@@ -515,12 +515,12 @@ import {
             const resp = await this.fetchImpl(url, { method: "POST", headers });
             if (!resp.ok) {
                 await this.throwValidateError(resp);
-                
+
             }
             return;
         }
-        
-        
+
+
             async throwListFilesError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -569,7 +569,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwPutFileError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -675,7 +675,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwGetFileError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -752,7 +752,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwDeleteFileError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -847,7 +847,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwPurgeFileError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -941,7 +941,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwPatchFileError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1069,7 +1069,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwListRevisionsError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1141,7 +1141,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwGetRevisionError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1213,7 +1213,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwRestoreError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1308,7 +1308,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwSearchError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1357,7 +1357,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwLinksError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1406,7 +1406,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwCopyError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1518,7 +1518,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwMoveError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1630,7 +1630,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwDiffError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1690,7 +1690,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwReindexError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1739,7 +1739,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwValidateError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 501) {
@@ -1755,7 +1755,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
     }
 
 
@@ -1773,7 +1773,7 @@ import {
                 this.auth = options.auth;
                 this.codecs = options.codecs ?? {};
             }
-            
+
                 async archive_revision(path: string, revision: string): Promise<types.brains.ArchiveRevision> {
                     const parsed = ifaceSchemas.brains.ArchivesArchiveRevisionRequestSchema.parse({ "path": path, "revision": revision });
                     let xidlPath = "/maintenance/archive/revision";
@@ -1793,11 +1793,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 await this.throwArchiveRevisionError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.ArchiveRevision>(resp, "application/json", this.codecs);
         }
-        
+
                 async import_archive_revision(body: types.brains.ArchiveRevision): Promise<types.brains.ArchiveRevision> {
                     const parsed = ifaceSchemas.brains.ArchivesImportArchiveRevisionRequestSchema.parse({ "body": body });
                     let xidlPath = "/maintenance/archive/revision";
@@ -1813,16 +1813,16 @@ import {
                     const url = joinUrl(this.baseUrl, xidlPath);
                     const xidlBody = parsed["body"];
             headers.set("Content-Type", "application/json");
-            
+
             headers.set("Accept", "application/json");
             const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.ArchiveRevisionSchema) });
             if (!resp.ok) {
                 await this.throwImportArchiveRevisionError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.ArchiveRevision>(resp, "application/json", this.codecs);
         }
-        
+
                 async import_archive_blob(path: string, revision: string, body: Uint8Array): Promise<types.brains.ArchiveBlobStored> {
                     const parsed = ifaceSchemas.brains.ArchivesImportArchiveBlobRequestSchema.parse({ "path": path, "revision": revision, "body": body });
                     let xidlPath = "/maintenance/archive/blob";
@@ -1842,16 +1842,16 @@ import {
             if (!headers.has("Content-Type")) {
                 headers.set("Content-Type", "application/octet-stream");
             }
-            
+
             headers.set("Accept", "application/json");
             const resp = await this.fetchImpl(url, { method: "PUT", headers, body: encodeRequestBody(xidlBody, "application/octet-stream", this.codecs, undefined) });
             if (!resp.ok) {
                 await this.throwImportArchiveBlobError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.ArchiveBlobStored>(resp, "application/json", this.codecs);
         }
-        
+
                 async import_archive_head(path: string, revision: string): Promise<types.brains.ArchivePublished> {
                     const parsed = ifaceSchemas.brains.ArchivesImportArchiveHeadRequestSchema.parse({ "path": path, "revision": revision });
                     let xidlPath = "/maintenance/archive/head";
@@ -1871,12 +1871,12 @@ import {
             const resp = await this.fetchImpl(url, { method: "POST", headers });
             if (!resp.ok) {
                 await this.throwImportArchiveHeadError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.ArchivePublished>(resp, "application/json", this.codecs);
         }
-        
-        
+
+
             async throwArchiveRevisionError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -1947,7 +1947,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwImportArchiveRevisionError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -2030,7 +2030,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwImportArchiveBlobError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -2112,7 +2112,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
             async throwImportArchiveHeadError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -2195,7 +2195,7 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
     }
 
 
@@ -2213,7 +2213,7 @@ import {
                 this.auth = options.auth;
                 this.codecs = options.codecs ?? {};
             }
-            
+
                 async login(authorization: string): Promise<ifaceTypes.brains.SessionsLoginResponse> {
                     const parsed = ifaceSchemas.brains.SessionsLoginRequestSchema.parse({ "authorization": authorization });
                     let xidlPath = "/session";
@@ -2232,13 +2232,13 @@ import {
             const resp = await this.fetchImpl(url, { method: "POST", headers });
             if (!resp.ok) {
                 await this.throwLoginError(resp);
-                
+
             }
             const responseBody = await decodeOptionalResponseBody(resp, "application/json", this.codecs);
             const responsePayload = buildResponsePayload(responseBody, resp, "return", [{ wireName: "return", key: "return" }], [{ name: "Set-Cookie", key: "set_cookie", optional: true, isMulti: false, decode: value => value }], []);
             return ifaceSchemas.brains.SessionsLoginResponseSchema.parse(deserialize(responsePayload, ifaceSchemas.brains.SessionsLoginResponseSchema)) as ifaceTypes.brains.SessionsLoginResponse;
         }
-        
+
                 async current(): Promise<types.brains.Session> {
                     let xidlPath = "/session";
                     const query = new URLSearchParams();
@@ -2255,11 +2255,11 @@ import {
             const resp = await this.fetchImpl(url, { method: "GET", headers });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
-                
+
             }
             return await decodeResponseBody<types.brains.Session>(resp, "application/json", this.codecs);
         }
-        
+
                 async logout(): Promise<ifaceTypes.brains.SessionsLogoutResponse> {
                     let xidlPath = "/session";
                     const query = new URLSearchParams();
@@ -2276,14 +2276,14 @@ import {
             const resp = await this.fetchImpl(url, { method: "DELETE", headers });
             if (!resp.ok) {
                 throw await parseXidlError(resp);
-                
+
             }
             const responseBody = await decodeOptionalResponseBody(resp, "application/json", this.codecs);
             const responsePayload = buildResponsePayload(responseBody, resp, "return", [{ wireName: "return", key: "return" }], [{ name: "Set-Cookie", key: "set_cookie", optional: true, isMulti: false, decode: value => value }], []);
             return ifaceSchemas.brains.SessionsLogoutResponseSchema.parse(deserialize(responsePayload, ifaceSchemas.brains.SessionsLogoutResponseSchema)) as ifaceTypes.brains.SessionsLogoutResponse;
         }
-        
-        
+
+
             async throwLoginError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -2321,6 +2321,6 @@ import {
                 }
                 throw await parseXidlError(resp);
             }
-        
+
     }
 }
