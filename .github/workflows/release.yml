@@ -93,10 +93,7 @@ jobs:
           worker-build --release
         env:
           RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
-      - name: Generate OpenAPI document
-        run: |
-          cargo install xidlc --locked --version 0.95.0 --features cli,fmt
-          bash scripts/gen-api.sh
+      # Ship the committed schema checked by api-codegen with the pinned xidl revision.
       - uses: actions/upload-artifact@v4
         with:
           name: brains-openapi

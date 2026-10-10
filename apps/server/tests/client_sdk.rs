@@ -43,8 +43,8 @@ async fn generated_client_talks_to_generated_server() {
     let files = brains_sdk::FilesClient::with_http(&api, sdk_http(token));
 
     // Create: `created` travels in-band, the ETag rides the out parameter.
-    // The generated client uploads raw octet bytes, so the §22.3 digest
-    // header applies; the stored media type falls back to the extension.
+    // The generated client sends raw bytes with the explicitly declared
+    // media type; the digest verifies the exact uploaded bytes.
     let created = files
         .put_file(
             "sdk/a.md".into(),
@@ -52,6 +52,7 @@ async fn generated_client_talks_to_generated_server() {
             Some("*".into()),
             None,
             Some(sha256_hex(b"# hello")),
+            Some("text/markdown".into()),
             b"# hello".to_vec(),
         )
         .await
@@ -71,6 +72,7 @@ async fn generated_client_talks_to_generated_server() {
             None,
             None,
             Some(sha256_hex(b"# hello v2")),
+            Some("text/markdown".into()),
             b"# hello v2".to_vec(),
         )
         .await
@@ -86,6 +88,7 @@ async fn generated_client_talks_to_generated_server() {
             None,
             None,
             Some(sha256_hex(b"stale")),
+            Some("text/markdown".into()),
             b"stale".to_vec(),
         )
         .await;
@@ -120,9 +123,7 @@ async fn generated_client_talks_to_generated_server() {
         panic!("expected the OctetStream case");
     };
     assert_eq!(bytes, b"# hello v2");
-    // The SDK uploads declare application/octet-stream, and that header
-    // wins over the extension fallback.
-    assert_eq!(raw.media_type.as_deref(), Some("application/octet-stream"));
+    assert_eq!(raw.media_type.as_deref(), Some("text/markdown"));
 
     // Conditional read: typed NotModified with the unchanged ETag.
     let not_modified = match files
@@ -133,6 +134,61 @@ async fn generated_client_talks_to_generated_server() {
         _ => panic!("expected NotModified"),
     };
     assert_eq!(not_modified.etag, format!("\"{rev2}\""));
+
+    // Preview and commit use one success contract, preserving HEAD on preview.
+    let patch = |dry_run| brains_sdk::PatchBody {
+        edits: vec![brains_sdk::PatchEdit {
+            old_text: "v2".into(),
+            new_text: "v3".into(),
+            expected_matches: 1,
+        }],
+        dry_run: Some(dry_run),
+    };
+    let preview = files
+        .patch_file(
+            "sdk/a.md".into(),
+            Some(format!("\"{rev2}\"")),
+            None,
+            patch(true),
+        )
+        .await
+        .unwrap();
+    assert!(preview.r#return.committed.is_none());
+    assert_eq!(preview.r#return.base_revision, rev2);
+    assert!(preview.r#return.diff.contains("+# hello v3"));
+    let unchanged = files.get_file("sdk/a.md".into(), None, None).await.unwrap();
+    assert_eq!(
+        unchanged.etag.as_deref(),
+        Some(format!("\"{rev2}\"").as_str())
+    );
+    let brains_sdk::FilePayload::OctetStream(bytes) = unchanged.r#return else {
+        panic!("expected raw bytes after preview");
+    };
+    assert_eq!(bytes, b"# hello v2");
+    let patched = files
+        .patch_file(
+            "sdk/a.md".into(),
+            Some(format!("\"{rev2}\"")),
+            None,
+            patch(false),
+        )
+        .await
+        .unwrap();
+    let committed = patched.r#return.committed.unwrap();
+    assert_ne!(committed.revision, rev2);
+    assert_eq!(
+        patched.etag.as_deref(),
+        Some(format!("\"{}\"", committed.revision).as_str())
+    );
+    let rev2 = committed.revision;
+    let after_commit = files.get_file("sdk/a.md".into(), None, None).await.unwrap();
+    assert_eq!(
+        after_commit.etag.as_deref(),
+        Some(format!("\"{rev2}\"").as_str())
+    );
+    assert!(
+        matches!(after_commit.r#return, brains_sdk::FilePayload::OctetStream(bytes) if bytes == b"# hello v3")
+    );
 
     // Trash then read: typed Gone, tombstone ETag attached.
     let deleted = files
@@ -165,28 +221,120 @@ async fn generated_client_talks_to_generated_server() {
     let logout = sessions.logout().await.unwrap();
     assert!(logout.r#return.ok);
 
-    // The create request really travels as raw octet bytes (no JSON shell).
-    let http = xidl_rust_axum::reqwest::Client::new();
-    let seed = http
-        .put(format!("{api}/file?path=raw.md"))
-        .header(AUTHORIZATION, format!("Bearer {token}"))
-        .header("If-None-Match", "*")
-        .header("Content-Type", "text/html")
-        .body("<b>raw</b>")
-        .send()
+    // Explicit media types and raw bytes round-trip through the generated SDK.
+    let seed = files
+        .put_file(
+            "raw.md".into(),
+            None,
+            Some("*".into()),
+            None,
+            None,
+            Some("text/html".into()),
+            b"<b>raw</b>".to_vec(),
+        )
         .await
         .unwrap();
-    assert_eq!(
-        seed.status(),
-        200,
-        "{}",
-        seed.text().await.unwrap_or_default()
+    assert_eq!(seed.r#return.created, Some(true));
+    let served = files.get_file("raw.md".into(), None, None).await.unwrap();
+    assert_eq!(served.media_type.as_deref(), Some("text/html"));
+    assert!(
+        served
+            .content_disposition
+            .as_deref()
+            .is_some_and(|value| value.starts_with("attachment;"))
     );
-    let served = http
-        .get(format!("{api}/file?path=raw.md"))
-        .header(AUTHORIZATION, format!("Bearer {token}"))
-        .send()
+    assert!(
+        matches!(served.r#return, brains_sdk::FilePayload::OctetStream(bytes) if bytes == b"<b>raw</b>")
+    );
+}
+
+#[tokio::test]
+async fn generated_client_preserves_permission_and_size_failures() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = "root-business-test-token-0000000000";
+    let limited = "limited-business-test-token-000000";
+    let registry = serde_json::json!({"tokens": [{
+        "id": "limited", "name": "limited",
+        "token_sha256": sha256_hex(limited.as_bytes()),
+        "scopes": ["read:allowed"], "enabled": true,
+    }]});
+    std::fs::write(dir.path().join("auth.json"), registry.to_string()).unwrap();
+    let address = brains_server::serve(ServerConfig {
+        data_dir: dir.path().to_path_buf(),
+        vault: "default".into(),
+        bind: "127.0.0.1".into(),
+        port: 0,
+        token: Some(root.into()),
+        web_dist: None,
+        allowed_origins: vec![],
+        seed_templates: false,
+    })
+    .await
+    .unwrap();
+    let api = format!("http://{address}/api/v1");
+    let limited_files = brains_sdk::FilesClient::with_http(&api, sdk_http(limited));
+    assert!(matches!(
+        limited_files
+            .get_file("private.md".into(), None, None)
+            .await,
+        Err(brains_sdk::FilesGetFileError::Forbidden(_))
+    ));
+    let files = brains_sdk::FilesClient::with_http(&api, sdk_http(root));
+    let created = files
+        .put_file(
+            "size.md".into(),
+            None,
+            Some("*".into()),
+            None,
+            None,
+            Some("text/markdown".into()),
+            b"small".to_vec(),
+        )
         .await
         .unwrap();
-    assert_eq!(served.bytes().await.unwrap(), "<b>raw</b>");
+    let revision = created.r#return.revision;
+    let oversized = files
+        .patch_file(
+            "size.md".into(),
+            Some(format!("\"{revision}\"")),
+            None,
+            brains_sdk::PatchBody {
+                edits: vec![brains_sdk::PatchEdit {
+                    old_text: "small".into(),
+                    new_text: "x".repeat(8 * 1024 * 1024 + 1),
+                    expected_matches: 1,
+                }],
+                dry_run: Some(false),
+            },
+        )
+        .await;
+    assert!(matches!(
+        oversized,
+        Err(brains_sdk::FilesPatchFileError::PayloadTooLarge(_))
+    ));
+    // The extractor's 9 MiB limit uses the framework envelope, not the domain exception.
+    let rejected = files
+        .put_file(
+            "size.md".into(),
+            Some(format!("\"{revision}\"")),
+            None,
+            None,
+            None,
+            Some("text/markdown".into()),
+            vec![b'x'; 9 * 1024 * 1024 + 1],
+        )
+        .await;
+    let Err(brains_sdk::FilesPutFileError::Framework(error)) = rejected else {
+        panic!("expected framework 413 for an oversized HTTP body");
+    };
+    assert_eq!(error.http_status().as_u16(), 413);
+    let current = files.get_file("size.md".into(), None, None).await.unwrap();
+    assert_eq!(
+        current.etag.as_deref(),
+        Some(format!("\"{revision}\"").as_str())
+    );
+    let brains_sdk::FilePayload::OctetStream(bytes) = current.r#return else {
+        panic!("expected raw bytes");
+    };
+    assert_eq!(bytes, b"small");
 }

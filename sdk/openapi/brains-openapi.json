@@ -269,6 +269,17 @@
           }
         ]
       },
+      "brains.Forbidden": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
       "brains.Gone": {
         "properties": {
           "error": {
@@ -458,21 +469,6 @@
         ],
         "type": "object"
       },
-      "brains.PatchDryRun": {
-        "properties": {
-          "base_revision": {
-            "type": "string"
-          },
-          "diff": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "diff",
-          "base_revision"
-        ],
-        "type": "object"
-      },
       "brains.PatchEdit": {
         "properties": {
           "expected_matches": {
@@ -490,6 +486,24 @@
           "old_text",
           "new_text",
           "expected_matches"
+        ],
+        "type": "object"
+      },
+      "brains.PatchResult": {
+        "properties": {
+          "base_revision": {
+            "type": "string"
+          },
+          "committed": {
+            "$ref": "#/components/schemas/MutationResult"
+          },
+          "diff": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "diff",
+          "base_revision"
         ],
         "type": "object"
       },
@@ -939,6 +953,16 @@
             },
             "description": "Error: BadRequest"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1070,6 +1094,16 @@
             },
             "description": "Error: BadRequest"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1156,6 +1190,16 @@
               }
             },
             "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
           },
           "404": {
             "content": {
@@ -1302,6 +1346,16 @@
             },
             "description": "Error: BadRequest"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -1397,11 +1451,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/brains.PatchDryRun"
+                  "$ref": "#/components/schemas/PatchResult"
                 }
               }
             },
-            "description": "Error: PatchDryRun"
+            "description": "OK"
           },
           "400": {
             "content": {
@@ -1412,6 +1466,16 @@
               }
             },
             "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
           },
           "404": {
             "content": {
@@ -1466,6 +1530,16 @@
                 }
               }
             }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PayloadTooLarge"
+                }
+              }
+            },
+            "description": "Error: PayloadTooLarge"
           },
           "422": {
             "content": {
@@ -1555,6 +1629,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "Content-Type",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1586,6 +1668,16 @@
               }
             },
             "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
           },
           "410": {
             "content": {
@@ -1769,6 +1861,16 @@
             },
             "description": "Error: BadRequest"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -1846,6 +1948,16 @@
             },
             "description": "Error: BadRequest"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -1905,6 +2017,16 @@
               }
             },
             "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
           },
           "500": {
             "content": {
@@ -1999,6 +2121,16 @@
               }
             },
             "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
           },
           "404": {
             "content": {
@@ -2131,6 +2263,16 @@
               }
             },
             "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
           },
           "404": {
             "content": {
@@ -2269,6 +2411,16 @@
             },
             "description": "Error: BadRequest"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -2373,6 +2525,16 @@
               }
             },
             "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
           },
           "404": {
             "content": {
@@ -2503,6 +2665,16 @@
             },
             "description": "Error: BadRequest"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2621,6 +2793,16 @@
               }
             },
             "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
           },
           "500": {
             "content": {

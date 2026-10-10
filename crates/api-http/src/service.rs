@@ -5,7 +5,6 @@
 //! and the generated server serializes them (status, ETag headers, the
 //! `{"error": ErrorDetail}` envelope).
 
-use axum::http::header;
 use brains_application::Precondition;
 use brains_application::commit::CommitInput;
 use brains_domain::{DomainError, HeadState, HexId, VaultPath};
@@ -25,6 +24,7 @@ use crate::state::{Blob, Head, Idx, Rev, SharedState};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Failure {
     BadRequest,
+    Forbidden,
     NotFound,
     Gone,
     Conflict,
@@ -54,9 +54,9 @@ fn classify(err: &DomainError) -> Failure {
             Failure::ServiceUnavailable
         }
         DomainError::Internal(_) => Failure::Internal,
-        // Authentication and CSRF/Origin failures never reach a handler; the
-        // middleware answers them with the shared envelope (§15).
-        DomainError::Unauthenticated | DomainError::Forbidden(_) => Failure::Internal,
+        DomainError::Forbidden(_) => Failure::Forbidden,
+        // Authentication failures are handled before dispatch.
+        DomainError::Unauthenticated => Failure::Internal,
     }
 }
 
@@ -114,13 +114,14 @@ macro_rules! error_from_domain {
 error_from_domain!(
     list_files_error,
     FilesListFilesError,
-    [BadRequest, ServiceUnavailable, Internal]
+    [BadRequest, Forbidden, ServiceUnavailable, Internal]
 );
 error_from_domain!(
     put_file_error,
     FilesPutFileError,
     [
         BadRequest,
+        Forbidden,
         Gone,
         PreconditionRequired,
         PreconditionFailed,
@@ -133,13 +134,21 @@ error_from_domain!(
 error_from_domain!(
     get_file_error,
     FilesGetFileError,
-    [BadRequest, NotFound, Gone, ServiceUnavailable, Internal]
+    [
+        BadRequest,
+        Forbidden,
+        NotFound,
+        Gone,
+        ServiceUnavailable,
+        Internal
+    ]
 );
 error_from_domain!(
     delete_file_error,
     FilesDeleteFileError,
     [
         BadRequest,
+        Forbidden,
         NotFound,
         Gone,
         PreconditionRequired,
@@ -153,11 +162,13 @@ error_from_domain!(
     FilesPatchFileError,
     [
         BadRequest,
+        Forbidden,
         NotFound,
         Gone,
         Conflict,
         PreconditionRequired,
         PreconditionFailed,
+        PayloadTooLarge,
         UnprocessableEntity,
         ServiceUnavailable,
         Internal
@@ -166,18 +177,33 @@ error_from_domain!(
 error_from_domain!(
     list_revisions_error,
     FilesListRevisionsError,
-    [BadRequest, NotFound, Gone, ServiceUnavailable, Internal]
+    [
+        BadRequest,
+        Forbidden,
+        NotFound,
+        Gone,
+        ServiceUnavailable,
+        Internal
+    ]
 );
 error_from_domain!(
     get_revision_error,
     FilesGetRevisionError,
-    [BadRequest, NotFound, Gone, ServiceUnavailable, Internal]
+    [
+        BadRequest,
+        Forbidden,
+        NotFound,
+        Gone,
+        ServiceUnavailable,
+        Internal
+    ]
 );
 error_from_domain!(
     restore_error,
     FilesRestoreError,
     [
         BadRequest,
+        Forbidden,
         NotFound,
         Gone,
         PreconditionRequired,
@@ -189,18 +215,19 @@ error_from_domain!(
 error_from_domain!(
     search_error,
     FilesSearchError,
-    [BadRequest, ServiceUnavailable, Internal]
+    [BadRequest, Forbidden, ServiceUnavailable, Internal]
 );
 error_from_domain!(
     links_error,
     FilesLinksError,
-    [BadRequest, ServiceUnavailable, Internal]
+    [BadRequest, Forbidden, ServiceUnavailable, Internal]
 );
 error_from_domain!(
     copy_error,
     FilesCopyError,
     [
         BadRequest,
+        Forbidden,
         NotFound,
         Gone,
         PreconditionFailed,
@@ -213,6 +240,7 @@ error_from_domain!(
     FilesMoveError,
     [
         BadRequest,
+        Forbidden,
         NotFound,
         Gone,
         PreconditionFailed,
@@ -223,12 +251,18 @@ error_from_domain!(
 error_from_domain!(
     diff_error,
     FilesDiffError,
-    [BadRequest, NotFound, ServiceUnavailable, Internal]
+    [
+        BadRequest,
+        Forbidden,
+        NotFound,
+        ServiceUnavailable,
+        Internal
+    ]
 );
 error_from_domain!(
     reindex_error,
     FilesReindexError,
-    [BadRequest, ServiceUnavailable, Internal]
+    [BadRequest, Forbidden, ServiceUnavailable, Internal]
 );
 
 // -- Payload conversions ---------------------------------------------------
@@ -620,6 +654,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
         if_none_match: Option<String>,
         operation_id: Option<String>,
         content_sha256: Option<String>,
+        content_type: Option<String>,
         body: Vec<u8>,
     ) -> Result<contract::FilesPutFileResponse, contract::FilesPutFileError> {
         let ctx = current();
@@ -629,13 +664,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             .map_err(|e| put_file_error(e, rid))?;
         let op_id =
             parse_operation_id(operation_id.as_ref()).map_err(|e| put_file_error(e, rid))?;
-        // The upload's Content-Type (a text media type for text edits) is
-        // ambient: the union transport only speaks octet-stream bodies.
-        let media_type = ctx
-            .headers
-            .get(header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.trim().to_owned());
+        let media_type = content_type.map(|value| value.trim().to_owned());
         let effective_media = media_type
             .clone()
             .unwrap_or_else(|| brains_domain::media_type_for(path.as_str()).to_owned());
@@ -829,19 +858,17 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             )
             .await
             .map_err(|e| patch_file_error(e, rid))?;
-        // The dry-run alternate rides the typed channel as a 200 exception:
-        // both JSON shapes share one Content-Type (see api/brains.idl).
-        let Some(committed) = outcome.committed else {
-            return Err(contract::FilesPatchFileError::PatchDryRun(
-                contract::PatchDryRun {
-                    diff: outcome.diff,
-                    base_revision: outcome.base_revision,
-                },
-            ));
-        };
+        let committed = outcome.committed.as_ref().map(mutation_result);
+        let etag = committed
+            .as_ref()
+            .map(|result| format!("\"{}\"", result.revision));
         Ok(contract::FilesPatchFileResponse {
-            r#return: mutation_result(&committed),
-            etag: Some(format!("\"{}\"", committed.revision)),
+            r#return: contract::PatchResult {
+                diff: outcome.diff,
+                base_revision: outcome.base_revision,
+                committed,
+            },
+            etag,
         })
     }
 

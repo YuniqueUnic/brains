@@ -265,9 +265,11 @@ pub struct PatchBody {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PatchDryRun {
+pub struct PatchResult {
     pub diff: String,
     pub base_revision: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub committed: Option<MutationResult>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

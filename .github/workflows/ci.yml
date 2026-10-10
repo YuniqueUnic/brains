@@ -38,18 +38,51 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install xidlc
-        run: cargo install xidlc --locked --version 0.95.0 --features cli,fmt
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.28.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Resolve the workspace xidl revision
+        id: xidl
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import tomllib
+          with open("Cargo.toml", "rb") as manifest:
+              dependency = tomllib.load(manifest)["workspace"]["dependencies"]["xidl-rust-axum"]
+          print(f"rev={dependency['rev']}")
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: YuniqueUnic/xidl
+          ref: ${{ steps.xidl.outputs.rev }}
+          path: .tools/xidl
+      - name: Build the matching IDL compiler
+        working-directory: .tools/xidl
+        env:
+          XIDLC_GIT_HASH: ${{ steps.xidl.outputs.rev }}
+        run: cargo build --locked -p xidlc --features cli,fmt
       - name: Regenerate committed SDK artifacts
         run: bash scripts/gen-api.sh
+        env:
+          XIDLC: ${{ github.workspace }}/.tools/xidl/target/debug/xidlc
       - name: Fail on any drift
         run: |
-          git diff --exit-code -- sdk
-          untracked=$(git ls-files --others --exclude-standard -- sdk)
+          git diff --exit-code -- sdk crates/api-http/src/contract
+          untracked=$(git ls-files --others --exclude-standard -- sdk crates/api-http/src/contract)
           if [ -n "$untracked" ]; then
             echo "generated files missing from git: $untracked"
             exit 1
           fi
+      - name: Generated TypeScript SDK business acceptance
+        run: bash tests/http-sdk/run.sh
+        env:
+          XIDL_SOURCE: ${{ github.workspace }}/.tools/xidl
 
   web:
     name: Web build + typecheck
@@ -138,7 +171,7 @@ jobs:
             sleep 2
           done
           curl -sf http://127.0.0.1:8799/healthz
-          bash tests/worker-smoke.sh
+          bash ../../tests/worker-smoke.sh
       - name: Worker dev log (on failure)
         if: failure()
         run: tail -50 /tmp/wrangler-dev.log

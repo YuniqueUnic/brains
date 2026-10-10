@@ -5,7 +5,7 @@
 pub mod export;
 
 use brains_api_types::{
-    DiffResult, Entry, FilePage, HistoryPage, LinkPage, MutationResult, PatchBody, PatchDryRun,
+    DiffResult, Entry, FilePage, HistoryPage, LinkPage, MutationResult, PatchBody, PatchResult,
     ReindexPage, RestoreBody, SearchPage, Session, TransferBody, TransferResult,
 };
 use brains_domain::Capabilities;
@@ -349,7 +349,7 @@ impl BrainClient {
         if_revision: &str,
         body: PatchBody,
         operation_id: Option<&str>,
-    ) -> ClientResult<PatchOutcomeClient> {
+    ) -> ClientResult<PatchResult> {
         let query = format!("path={}", urlencode(path));
         let mut request = self
             .http
@@ -361,20 +361,7 @@ impl BrainClient {
         }
         let response =
             self.send(request.body(serde_json::to_string(&body).expect("serializes")))?;
-        let status = response.status().as_u16();
-        let text = response
-            .text()
-            .map_err(|e| ClientError::transport(e.to_string()))?;
-        if status >= 400 {
-            return Err(self.decode_error(status, &text));
-        }
-        // Dry-run answers PatchDryRun; a committed patch answers MutationResult.
-        if let Ok(dry) = serde_json::from_str::<PatchDryRun>(&text) {
-            return Ok(PatchOutcomeClient::DryRun(dry));
-        }
-        serde_json::from_str::<MutationResult>(&text)
-            .map(PatchOutcomeClient::Committed)
-            .map_err(|e| ClientError::transport(format!("malformed response: {e}")))
+        self.expect_json(response)
     }
 
     pub fn transfer(&self, kind: TransferKind, body: TransferBody) -> ClientResult<TransferResult> {
@@ -408,11 +395,6 @@ pub enum Precondition {
 pub enum TransferKind {
     Copy,
     Move,
-}
-
-pub enum PatchOutcomeClient {
-    DryRun(PatchDryRun),
-    Committed(MutationResult),
 }
 
 pub fn urlencode(raw: &str) -> String {

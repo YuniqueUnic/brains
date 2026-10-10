@@ -395,6 +395,7 @@ async fn patch_copy_move_diff_contract() {
     let dry_body = dry.json::<Value>().await.unwrap();
     assert!(dry_body["diff"].as_str().unwrap().contains("+ALPHA"));
     assert_eq!(dry_body["base_revision"], rev);
+    assert!(dry_body.get("committed").is_none());
 
     // Committed patch.
     let patched = http
@@ -408,7 +409,7 @@ async fn patch_copy_move_diff_contract() {
         .await
         .unwrap();
     assert_eq!(patched.status(), 200);
-    let rev2 = patched.json::<Value>().await.unwrap()["revision"]
+    let rev2 = patched.json::<Value>().await.unwrap()["committed"]["revision"]
         .as_str()
         .unwrap()
         .to_owned();

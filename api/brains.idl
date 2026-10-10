@@ -223,14 +223,12 @@ struct DiffResult {
 
 // -- Error vocabulary -------------------------------------------------------
 
-// A dry-run patch answers 200 with the unified diff instead of a commit.
-// Both JSON shapes share one Content-Type, so content negotiation cannot
-// switch them; the typed channel carries the request-correlated alternate
-// (clients match the `PatchDryRun` case before the success payload).
-@http(200)
-exception PatchDryRun {
+// Every successful patch returns its preview and an optional committed mutation.
+// This mirrors the application result; dry-run leaves committed absent.
+struct PatchResult {
     string diff;
     string base_revision;
+    @optional MutationResult committed;
 };
 // Bodies mirror the server's `ErrorBody` envelope exactly: `{"error": ...}`.
 // 410/412 carry the current HEAD ETag so clients can rebase; 304 carries the
@@ -238,6 +236,11 @@ exception PatchDryRun {
 
 @http(400)
 exception BadRequest {
+    ErrorDetail error;
+};
+
+@http(403)
+exception Forbidden {
     ErrorDetail error;
 };
 
@@ -340,8 +343,8 @@ union RevisionPayload switch (PayloadType) {
 // Request bodies are inline (the JSON document is the value itself, no
 // envelope), so every struct body is declared `@flatten`.
 // Shared mutation headers. `If-Match`/`If-None-Match` carry STRONG revision
-// ETags; `*` on If-None-Match means create-only. `X-Operation-ID` makes
-// retries idempotent (design §8.2).
+// ETags; `*` on If-None-Match means create-only. `X-Operation-ID` correlates
+// revisions with client operations; retries still require a matching ETag.
 
 // Auth is enforced by middleware (Bearer or session cookie; CSRF for
 // cookie-driven mutations), so the interface declares no scheme.
@@ -364,11 +367,11 @@ interface Files {
         @query @optional string kind,
         @query @optional string sort,
         @query @rename("include_deleted") @optional boolean include_deleted
-    ) raises(BadRequest, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
 
     // Create or conditionally replace one file's exact bytes (design §8.2).
     // Raw body = application/octet-stream; text media types are declared via
-    // Content-Type. Responds 201 on create, 200 on update, 412 on CAS loss.
+    // Content-Type. Success is 200 with created in-band; CAS loss is 412.
     @put(path = "/file")
     MutationResult put_file(
         @query string path,
@@ -376,9 +379,10 @@ interface Files {
         @header @rename("If-None-Match") @optional string if_none_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("X-Content-SHA256") @optional string content_sha256,
+        @header @rename("Content-Type") @optional string content_type,
         @header @rename("ETag") @optional out string etag,
         in sequence<octet> body
-    ) raises(BadRequest, Gone, PreconditionRequired, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, Gone, PreconditionRequired, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
 
     // Current-HEAD read: JSON metadata (`format=meta`) or raw bytes
     // (`format` omitted). Both views answer If-None-Match with 304 + ETag;
@@ -392,7 +396,7 @@ interface Files {
         @header @rename("ETag") @optional out string etag,
         @header @rename("X-Brain-Media-Type") @optional out string media_type,
         @header @rename("Content-Disposition") @optional out string content_disposition
-    ) raises(BadRequest, NotFound, Gone, NotModified, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, NotModified, ServiceUnavailable, Internal);
 
     // Conditional delete: writes a tombstone revision. 412 on stale base.
     @delete(path = "/file")
@@ -401,22 +405,18 @@ interface Files {
         @header @rename("If-Match") @optional string if_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("ETag") @optional out string etag
-    ) raises(BadRequest, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
 
-    // Patch text in place: exact-match replacements on the stored bytes.
-    // With body.dry_run the server answers the unified diff
-    // (`PatchDryRun`: diff + base_revision) instead of committing — one
-    // route, two JSON shapes selected by the request, which content
-    // negotiation cannot express; the typed SDK covers the committed
-    // response and dry-run stays a raw-HTTP affordance.
+    // Patch text in place. Dry-run previews the same edits without changing
+    // HEAD; committed contains the new mutation only after a successful write.
     @patch(path = "/file")
-    MutationResult patch_file(
+    PatchResult patch_file(
         @query string path,
         @header @rename("If-Match") @optional string if_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("ETag") @optional out string etag,
         @flatten in PatchBody body
-    ) raises(PatchDryRun, BadRequest, NotFound, Gone, Conflict, PreconditionRequired, PreconditionFailed, UnprocessableEntity, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, Conflict, PreconditionRequired, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
 
     // Reachable history of one path, newest first (signed cursor pages).
     @get(path = "/revisions")
@@ -424,7 +424,7 @@ interface Files {
         @query string path,
         @query @optional int64 limit,
         @query @optional string cursor
-    ) raises(BadRequest, NotFound, Gone, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, ServiceUnavailable, Internal);
 
     // One immutable revision by ID: metadata (`format=meta`) or raw bytes.
     @get(path = "/revision")
@@ -435,7 +435,7 @@ interface Files {
         @header @rename("ETag") @optional out string etag,
         @header @rename("X-Brain-Media-Type") @optional out string media_type,
         @header @rename("Content-Disposition") @optional out string content_disposition
-    ) raises(BadRequest, NotFound, Gone, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, ServiceUnavailable, Internal);
 
     // Restore a prior revision's content as a NEW revision (gen only moves
     // forward). If-Match anchors on the current head.
@@ -445,7 +445,7 @@ interface Files {
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("ETag") @optional out string etag,
         @flatten in RestoreBody body
-    ) raises(BadRequest, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
 
     // Literal (case-sensitive UTF-8 substring) or FTS (tokenized) search.
     @get(path = "/search")
@@ -456,7 +456,7 @@ interface Files {
         @query @optional string tag,
         @query @rename("scan_limit") @optional int64 scan_limit,
         @query @optional string cursor
-    ) raises(BadRequest, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
 
     // Wiki-link graph induced by [[links]] in stored text. Pages are fixed
     // at 50 rows; `cursor` walks the rest.
@@ -465,7 +465,7 @@ interface Files {
         @query string path,
         @query @rename("direction") @optional string direction,
         @query @optional string cursor
-    ) raises(BadRequest, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
 
     // Copy: create target from a source revision; source stays live. A
     // partially failed transfer answers TransferConflict (409) whose body
@@ -473,14 +473,14 @@ interface Files {
     @post(path = "/copy")
     TransferResult copy(
         @flatten in TransferBody body
-    ) raises(BadRequest, NotFound, Gone, PreconditionFailed, TransferConflict, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, ServiceUnavailable, Internal);
 
     // Move: copy + trash source; partial outcomes are TransferConflict (409),
     // never hidden.
     @post(path = "/move")
     TransferResult move(
         @flatten in TransferBody body
-    ) raises(BadRequest, NotFound, Gone, PreconditionFailed, TransferConflict, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, ServiceUnavailable, Internal);
 
     // Unified diff between two revisions of one path.
     @get(path = "/diff")
@@ -488,13 +488,13 @@ interface Files {
         @query string path,
         @query string from,
         @query @optional string to
-    ) raises(BadRequest, NotFound, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, ServiceUnavailable, Internal);
 
     // Paged index rebuild from authoritative storage (safe anytime).
     @post(path = "/maintenance/reindex")
     ReindexPage reindex(
         @flatten in ReindexRequest body
-    ) raises(BadRequest, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
 
     // Reserved server-side consistency check; answers 501 until delivered
     // (design §22.5).
@@ -513,7 +513,7 @@ interface Sessions {
     Session login(
         @header string authorization,
         @header @rename("Set-Cookie") @optional out string set_cookie
-    ) raises(BadRequest, Internal);
+    ) raises(BadRequest, Forbidden, Internal);
 
     @get(path = "/session")
     Session current();

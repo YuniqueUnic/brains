@@ -8,8 +8,7 @@ use clap::{Parser, Subcommand};
 use config::{Config, Profile};
 
 use brains_client::{
-    BrainClient, ClientError, ClientResult, PatchOutcomeClient, Precondition, TransferKind,
-    urlencode,
+    BrainClient, ClientError, ClientResult, Precondition, TransferKind, urlencode,
 };
 
 #[derive(Parser)]
@@ -751,19 +750,16 @@ fn patch(
         }],
         dry_run,
     };
-    match client.patch(path, if_revision, body, None)? {
-        PatchOutcomeClient::DryRun(dry) => {
-            print!("{}", dry.diff);
-            Ok(0)
-        }
-        PatchOutcomeClient::Committed(result) => {
-            println!(
-                "patched gen={} rev={}",
-                result.entry.generation, result.entry.revision
-            );
-            Ok(0)
-        }
+    let outcome = client.patch(path, if_revision, body, None)?;
+    if let Some(result) = outcome.committed {
+        println!(
+            "patched gen={} rev={}",
+            result.entry.generation, result.entry.revision
+        );
+    } else {
+        print!("{}", outcome.diff);
     }
+    Ok(0)
 }
 
 fn transfer(
