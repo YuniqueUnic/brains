@@ -21,8 +21,8 @@ hmac.workspace = true
 rand.workspace = true
 serde.workspace = true
 async-trait = "0.1"
-tokio = { workspace = true, features = ["macros"] }
-xidl-rust-axum = { version = "0.96", default-features = false, features = ["server"] }
+tokio = { workspace = true, features = ["rt"] }
+xidl-rust-axum = { workspace = true, features = ["router"] }
 serde_json.workspace = true
 sha2.workspace = true
 time.workspace = true

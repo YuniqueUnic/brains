@@ -21,11 +21,10 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-tokio.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 assert_cmd = "2.2.2"
 brains-server = { path = "../server" }
 predicates = "3.1.4"
 tempfile = "3.27.0"
-tokio.workspace = true

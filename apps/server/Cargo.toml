@@ -12,16 +12,17 @@ brains-api-http = { workspace = true, features = ["local"] }
 brains-application.workspace = true
 brains-domain.workspace = true
 clap.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "net"] }
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["macros"] }
 hex.workspace = true
 sha2.workspace = true
 brains-sdk = { path = "../../sdk/rust" }
 reqwest = { workspace = true, features = ["json"] }
 serde_json.workspace = true
 tempfile = "3.27.0"
-xidl-rust-axum = { version = "0.96", default-features = false, features = ["client"] }
+xidl-rust-axum = { workspace = true, features = ["client"] }
