@@ -1,16 +1,12 @@
 name: Release
 
-# One-click release: push a tag `v*` (or dispatch with a version) and this
-# workflow builds every artifact and publishes a GitHub release.
-#   git tag v0.1.0 && git push origin v0.1.0
+# Release Please owns the tag and notes; this workflow only builds assets.
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (e.g. v0.1.0); tag is created for you"
+        description: "Existing release tag (e.g. v0.2.0) to build assets for"
         required: true
-  push:
-    tags: ["v*"]
 
 permissions:
   contents: read
@@ -32,10 +28,13 @@ jobs:
       sha: ${{ steps.identity.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check unified product versions
+        run: python3 scripts/check-versions.py
       - name: Resolve tag, package version and commit
         id: identity
         env:
           INPUT_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'PY'
           import os
@@ -44,10 +43,13 @@ jobs:
           import tomllib
 
           version = tomllib.loads(Path("Cargo.toml").read_text())["workspace"]["package"]["version"]
-          tag = os.environ["INPUT_VERSION"] if os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch" else os.environ["GITHUB_REF_NAME"]
+          tag = os.environ["INPUT_VERSION"]
           if tag != f"v{version}":
               raise SystemExit(f"Release tag must match Cargo workspace version: v{version}")
           sha = subprocess.check_output(["git", "rev-parse", "HEAD^{commit}"], text=True).strip()
+          if os.environ["GITHUB_REF"] != f"refs/tags/{tag}":
+              raise SystemExit("Run this workflow on the existing release tag")
+          subprocess.run(["gh", "release", "view", tag], check=True, stdout=subprocess.DEVNULL)
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"tag={tag}\nversion={version}\nsha={sha}\n")
           print(f"Release {tag} from {sha}")
@@ -194,29 +196,21 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Verify remote tag or create it for dispatch
+      - name: Verify remote release tag
         run: |
           remote_tag="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG")"
-          if [[ -n "$remote_tag" ]]; then
-            git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG"
-            actual="$(git rev-parse 'FETCH_HEAD^{commit}')"
-            if [[ "$actual" != "$RELEASE_SHA" ]]; then
-              echo "Remote tag points to a different commit; refusing to publish" >&2
-              exit 1
-            fi
-          elif [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
-            git tag "$RELEASE_TAG" "$RELEASE_SHA"
-            git push origin "refs/tags/$RELEASE_TAG"
-          else
-            echo "Triggered tag no longer exists; refusing to recreate it" >&2
+          if [[ -z "$remote_tag" ]]; then
+            echo "Release tag must already exist" >&2
+            exit 1
+          fi
+          git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG"
+          actual="$(git rev-parse 'FETCH_HEAD^{commit}')"
+          if [[ "$actual" != "$RELEASE_SHA" ]]; then
+            echo "Remote tag points to a different commit; refusing to publish" >&2
             exit 1
           fi
       - name: Publish
         run: |
-          gh release create "$RELEASE_TAG" \
-            --verify-tag \
-            --title "Brains $RELEASE_TAG" \
-            --generate-notes \
-            artifacts/*/*
+          gh release upload "$RELEASE_TAG" artifacts/*/*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

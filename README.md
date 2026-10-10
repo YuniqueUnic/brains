@@ -132,7 +132,8 @@ bash tests/worker-smoke.sh                                               # again
 | Workflow | Trigger | What it does |
 |---|---|---|
 | [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · clippy `-D warnings` · Rust tests · SDK codegen drift check · wasm check · web build · screenplay E2E (native **and** Worker) · workerd business smoke |
-| [release.yml](.github/workflows/release.yml) | tag `v*` **or** manual dispatch | builds CLI+server (macOS arm64/x64, Linux musl), web dist, Worker bundle → publishes a GitHub release with SHA-256s. One click: *Actions → Release → Run workflow → version* |
+| [release-please.yml](.github/workflows/release-please.yml) | `main` push / manual | one release PR updates all product versions; merging creates the tag and release notes, then dispatches the asset build. See [releasing](docs/releasing.md). |
+| [release.yml](.github/workflows/release.yml) | dispatch at an existing release tag | builds CLI+server (macOS arm64/x64, Linux musl), web dist and Worker bundle, verifies the tag and uploads assets with SHA-256s. |
 | [deploy.yml](.github/workflows/deploy.yml) | manual dispatch | builds the Worker and deploys to Cloudflare (`wrangler deploy` + remote D1 migrations). Requires `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets and the one-time provisioning documented in the file header |
 | dependabot | weekly | cargo · npm · actions updates |
 
