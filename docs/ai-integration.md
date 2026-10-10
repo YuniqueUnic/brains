@@ -33,15 +33,19 @@ browser flows). Agents can simply use the bearer token on every call.
 | `GET /capabilities` | feature flags, limits, vault name | no auth needed? — auth required |
 | `GET /files?source=store\|index&prefix=&limit=&cursor=` | list; `store` = authoritative, `index` = tag/kind/sort filters | cursor is **opaque and signed**; echo it back unchanged, changing filters invalidates it (400) |
 | `GET /file?path=P` | raw bytes; `ETag` header = current revision | `If-None-Match` supported (weak compare, 304) |
+| `HEAD /file?path=P` | 只查元数据，成功 200；ETag、X-Brain-Generation、X-Brain-State | 不读取 blob；失败通过 X-Brain-Error-Code 返回错误码，无正文 |
 | `GET /file?path=P&format=meta` | JSON metadata (revision, generation, state, sha256, media_type) | 410 Gone once trashed |
 | `PUT /file?path=P` | create/update bytes | create: `If-None-Match: *`; update: `If-Match: "<revision>"`. `X-Content-SHA256` (hex) **required** for non-text, verified server-side |
 | `DELETE /file?path=P` | soft delete (tombstone) | `If-Match: "<revision>"` |
+| `DELETE /trash?path=P` | 永久删除已在回收站的路径，返回 PurgeResult | `If-Match` 必填；live 为 409，过期版本为 412 |
 | `POST /restore` | restore a prior revision as a NEW revision | body `{path, revision}`, `If-Match` on the current head |
 | `GET /revisions?path=P` | reachable history, newest first | signed cursor pagination |
 | `GET /search?q=&mode=literal\|fts&prefix=` | literal = case-sensitive UTF-8 substring (complete or honestly incomplete); FTS = tokenized, needs index | `423`/`building` while index is behind — retry or use literal |
 | `GET /links?path=P&direction=outbound\|backlinks` | wiki-link graph | |
 | `POST /maintenance/reindex` | rebuild index projection | safe anytime |
-| `POST /copy`, `POST /move`, `GET /diff` | transfer between paths | move is CAS on the source |
+| `POST /copy`, `POST /move` | transfer between paths | move is CAS on the source |
+| `GET /diff?path=P&from=A&to=B` | 比较两个历史版本 | from、to 均必填，缺省为 400 |
+| `/maintenance/archive/revision`, `/maintenance/archive/blob`, `/maintenance/archive/head` | 管理员归档传输；按 revision → blob → HEAD 顺序恢复 | 缺省 HTTP optional 与存储 null 在边界转换；相同历史可重复导入 |
 | `POST /session`, `DELETE /session` | login/logout (browser) | |
 
 ## Write etiquette for agents
