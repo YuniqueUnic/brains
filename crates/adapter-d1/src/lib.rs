@@ -170,6 +170,10 @@ impl From<LinkDbRow> for LinkRow {
 }
 
 impl IndexStore for D1Index {
+    fn full_text_search(&self) -> brains_domain::FullTextSearch {
+        brains_domain::FullTextSearch::Fts5
+    }
+
     fn remove_path(&self, path: &str) -> impl Future<Output = DomainResult<()>> + Send {
         let db = &self.db;
         let path = path.to_owned();

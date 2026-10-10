@@ -100,6 +100,9 @@ pub fn prefix_upper_bound(prefix: &str) -> String {
 }
 
 pub trait IndexStore {
+    /// Available full-text query grammar; consumers report this capability.
+    fn full_text_search(&self) -> brains_domain::FullTextSearch;
+
     /// Monotonic upsert (design §10.2): an older generation, or an older
     /// parser at the same generation, must never overwrite a newer row.
     fn upsert(&self, projection: &FileProjection) -> impl Future<Output = DomainResult<()>> + Send;
@@ -121,7 +124,7 @@ pub trait IndexStore {
         tag: Option<&str>,
     ) -> impl Future<Output = DomainResult<Vec<LiteralRow>>> + Send;
 
-    /// Explicit FTS5 token search. Invalid syntax is an error, not a fallback.
+    /// Explicit engine-native full-text search. Invalid syntax is an error, not a fallback.
     /// `lower`/`upper` bound the path range (exclusive upper, `None` = whole
     /// vault) and `tag` requires the tag row — filters are never silently
     /// ignored (design §11.1).

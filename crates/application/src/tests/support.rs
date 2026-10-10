@@ -75,6 +75,10 @@ impl FlakyIndex {
 }
 
 impl IndexStore for FlakyIndex {
+    fn full_text_search(&self) -> brains_domain::FullTextSearch {
+        self.inner.full_text_search()
+    }
+
     async fn upsert(&self, projection: &FileProjection) -> brains_domain::DomainResult<()> {
         let count = self.upserts.fetch_add(1, Ordering::SeqCst);
         if count >= self.fail_after {

@@ -91,6 +91,10 @@ fn kind_from(raw: &str) -> FileKind {
 }
 
 impl IndexStore for SqliteIndex {
+    fn full_text_search(&self) -> brains_domain::FullTextSearch {
+        brains_domain::FullTextSearch::Fts5
+    }
+
     async fn remove_path(&self, path: &str) -> DomainResult<()> {
         // The files_ad trigger cascades the FTS row, links and tags.
         let conn = self.conn.lock().map_err(|_| poisoned())?;

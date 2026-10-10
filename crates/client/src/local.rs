@@ -83,6 +83,7 @@ impl Library for LocalClient {
             &self.vault.vault,
             self.vault.limits.max_text_bytes,
             self.vault.limits.max_attachment_bytes,
+            brains_ports::IndexStore::full_text_search(&self.vault.index),
         ))
     }
     fn session(&self) -> ClientResult<Session> {

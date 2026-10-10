@@ -16,7 +16,7 @@ pub mod revision;
 pub mod scope;
 pub mod timestamp;
 
-pub use capabilities::{Capabilities, Runtime};
+pub use capabilities::{Capabilities, FullTextSearch, Runtime};
 pub use cursor::{CursorSigner, Endpoint};
 pub use entry::EntryInfo;
 pub use error::{DomainError, DomainResult};

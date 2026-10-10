@@ -65,6 +65,7 @@ pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool),
         &config.vault,
         limits.max_text_bytes,
         limits.max_attachment_bytes,
+        brains_ports::IndexStore::full_text_search(&vault.index),
     );
     let state: SharedState = Arc::new(AppState {
         session_cookie_policy: if config

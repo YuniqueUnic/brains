@@ -483,6 +483,7 @@ dependencies = [
  "brains-application",
  "brains-domain",
  "brains-local",
+ "brains-ports",
  "brains-sdk",
  "clap",
  "hex",

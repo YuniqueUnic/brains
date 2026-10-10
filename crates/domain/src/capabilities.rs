@@ -13,6 +13,13 @@ pub enum Runtime {
     CloudflareTypescript,
 }
 
+/// Query grammar supplied by the instance's derived index.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FullTextSearch {
+    Disabled,
+    Fts5,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Capabilities {
     pub api_version: String, // "1"
@@ -39,16 +46,26 @@ impl Capabilities {
         max_text_bytes: usize,
         max_attachment_bytes: usize,
     ) -> Self {
-        let mut capabilities = Self::local(vault, max_text_bytes, max_attachment_bytes);
+        let mut capabilities = Self::local(
+            vault,
+            max_text_bytes,
+            max_attachment_bytes,
+            FullTextSearch::Fts5,
+        );
         capabilities.runtime = Runtime::CloudflareRust;
         capabilities
     }
 
     /// The local-rust profile's P0+P1(partial) feature set.
-    pub fn local(vault: &str, max_text_bytes: usize, max_attachment_bytes: usize) -> Self {
+    pub fn local(
+        vault: &str,
+        max_text_bytes: usize,
+        max_attachment_bytes: usize,
+        full_text: FullTextSearch,
+    ) -> Self {
         let features: BTreeMap<String, bool> = BTreeMap::from([
             ("literal_search".into(), true),
-            ("fts_search".into(), true),
+            ("fts_search".into(), full_text != FullTextSearch::Disabled),
             ("regex_search".into(), false), // checkout-local rg only (design §10.3)
             ("history".into(), true),
             ("restore".into(), true),
