@@ -1,4 +1,4 @@
-import { parseDocument, isMap } from "yaml";
+import { parseDocument, isMap, isScalar, isSeq } from "yaml";
 
 export interface DocumentMetadata {
   title?: string;
@@ -11,6 +11,11 @@ export interface MarkdownDocument {
   body: string;
   metadata: DocumentMetadata | null;
   invalidMetadata: boolean;
+  /** UTF-16 source ranges, shared by editor decoration and hover lookup. */
+  frontmatter?: {
+    end: number;
+    tags: { from: number; to: number; tag: string }[];
+  };
 }
 
 const string = (value: unknown): string | undefined =>
@@ -53,13 +58,27 @@ export function parseMarkdownDocument(source: string): MarkdownDocument {
         add(target, label);
     } else add(values.links);
     const tags = [...new Set(strings(values.tags))];
+    const acceptedTags = tags.slice(0, 64);
+    const tagNode = doc.get("tags", true);
+    const nodes = isSeq(tagNode) ? tagNode.items : [tagNode];
+    const offset = match[0].indexOf("\n") + 1;
     return {
       body: source.slice(match[0].length),
       invalidMetadata: false,
+      frontmatter: {
+        end: match[0].length,
+        tags: nodes.flatMap((node) => {
+          if (!isScalar(node) || !node.range) return [];
+          const tag = string(node.value);
+          return tag && acceptedTags.includes(tag)
+            ? [{ from: offset + node.range[0], to: offset + node.range[1], tag }]
+            : [];
+        }),
+      },
       metadata: {
         title: string(values.title),
         description: string(values.description),
-        tags: tags.slice(0, 64),
+        tags: acceptedTags,
         tagsTruncated: tags.length > 64,
         links,
       },
