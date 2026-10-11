@@ -362,8 +362,13 @@ impl SecurityStore {
             return Ok((existing.plaintext.clone().unwrap_or_default(), false));
         }
         let plaintext = match token {
-            Some(t) if !t.is_empty() => (t.to_owned(), None),
-            _ => {
+            Some(t) if t.is_empty() || t.chars().any(char::is_whitespace) => {
+                return Err(DomainError::InvalidArgument(
+                    "root token must be nonempty and contain no whitespace".into(),
+                ));
+            }
+            Some(t) => (t.to_owned(), None),
+            None => {
                 let generated = brains_domain::HexId::generate().as_str().to_owned()
                     + brains_domain::HexId::generate().as_str();
                 let stored = generated.clone();
@@ -460,21 +465,33 @@ fn unauthenticated() -> DomainError {
 
 fn write_private(path: &std::path::Path, bytes: &[u8]) -> DomainResult<()> {
     use std::io::Write;
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(path)
-        .map_err(|e| DomainError::Internal(format!("{}: {e}", path.display())))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        file.set_permissions(std::fs::Permissions::from_mode(0o600))
-            .map_err(|e| DomainError::Internal(format!("permissions: {e}")))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| DomainError::Internal("private file has no parent directory".into()))?;
+    let temporary = parent.join(format!(
+        ".auth-{}",
+        brains_domain::HexId::generate().as_str()
+    ));
+    let result = (|| -> std::io::Result<()> {
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut file = options.open(&temporary)?;
+        file.write_all(bytes)?;
+        file.sync_all()?;
+        drop(file);
+        std::fs::rename(&temporary, path)?;
+        std::fs::File::open(parent)?.sync_all()
+    })();
+    if result.is_err() {
+        // Preserve the original error; removal only cleans an unpublished file.
+        let _ = std::fs::remove_file(&temporary);
     }
-    file.write_all(bytes)
-        .and_then(|()| file.sync_all())
-        .map_err(|e| DomainError::Internal(format!("{}: {e}", path.display())))
+    result.map_err(|error| DomainError::Internal(format!("{}: {error}", path.display())))
 }
 
 fn now_unix() -> u64 {
