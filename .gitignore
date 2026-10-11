@@ -23,6 +23,13 @@ brainstore-design
 /docs/xidl-issues-review.md
 /docs/evidence/
 
+# Container assembly and local deployment overrides
+/docker-artifacts/
+/compose.override.yaml
+/.env
+/.env.*
+/secrets/
+
 # Local runtimes & stores (never commit knowledge data or local state)
 /brain-data
 /data

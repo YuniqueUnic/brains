@@ -19,7 +19,7 @@ brains-local.workspace = true
 brains-ports.workspace = true
 brains-domain.workspace = true
 clap.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "net"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "net", "signal", "macros"] }
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

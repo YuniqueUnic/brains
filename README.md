@@ -158,3 +158,7 @@ bash tests/worker-smoke.sh                                               # again
 [MIT](LICENSE)
 
 Native search now uses Turso 0.8.2 with optional Tantivy. See [build features and search semantics](docs/turso.md).
+
+## Docker
+
+Run the server and bundled web app with persistent storage using `docker compose up -d`. Linux AMD64 and ARM64 images are published with releases. See [Docker deployment](docs/docker.md) for volumes, bind mounts, non-root permissions, secrets, HTTPS and source builds. The existing v0.3.0 release predates this Docker support.
