@@ -16,7 +16,7 @@ Brains 的产品版本统一管理，Rust、Web、Worker、SDK 和验收工具�
 Release 已创建而构建或分发失败时，在仓库目录手动重跑资产工作流。`--ref main` 选择最新构建脚本，`version` 选择已有发布标签：
 
 ```bash
-gh workflow run release.yml --ref main -f version=v0.3.0
+gh workflow run release.yml --ref main -f version=v0.3.0 -f publish_docker=false
 ```
 
 构建脚本位于默认分支，产品源码始终来自输入标签，后续 job 使用首次解析出的同一提交。上传前会再次核对远端标签，标签发生变化就拒绝发布。修复构建脚本后可以重新构建已有版本，不需要移动标签。重跑 release-please 不保证再次分发资产构建。如果资产只上传了一部分，先核对已有文件，再手动上传缺失文件；同名资产不会被静默覆盖。
@@ -83,3 +83,14 @@ Worker 通过 `worker-build --release` 使用根发布配置，其中 `brains-wo
 配置依据：[Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.html)、[Rust 编译配置与体积权衡](https://nnethercote.github.io/perf-book/build-configuration.html)、[符号裁剪的诊断影响](https://doc.rust-lang.org/rustc/codegen-options/index.html#strip)。
 
 依据（2026-10-11 核对）：[xidl 的 release-please 配置](https://github.com/xidl/xidl/blob/master/release-please-config.json)、[release-please extra-files](https://github.com/googleapis/release-please/blob/main/docs/customizing.md#updating-arbitrary-files)、[GitHub 工作流触发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。
+
+
+## Docker 分发与 CI 产物复用
+
+新版本发布默认同时推送 `yunique001/brains`，需要仓库 Actions Secrets `DOCKERHUB_USERNAME`、`DOCKERHUB_TOKEN`。这是 Docker Hub 用户名与访问令牌，不是 GitHub App 私钥。旧标签缺少 Dockerfile 或容器配置能力时，显式使用 `publish_docker=false`，只重建该标签原有的原生/Web/Worker 资产；不拿新源码冒充旧版本。
+
+Linux x64/ARM64 使用对应架构的 Ubuntu 24.04 runner 原生编译 musl 二进制。Web 与 Worker 编译并行，Worker 打包再取同次 Web 产物。Docker 直接取同次 Linux 和 Web 资产，在两个架构各运行一次持久化与停机验收，通过后推送带运行编号的构建镜像。GitHub 资产上传成功后才合并这两个镜像 digest，发布版本号及 `sha-<12位提交>` 标签。只有该标签仍是 GitHub 最新稳定 Release 时才更新 `latest`；预发布和旧版本重建不覆盖它。Docker Hub 无法与 GitHub 资产上传组成原子事务；镜像发布失败会明确使 workflow 失败，不能只凭 Release 页面认为镜像已可用。
+
+开发 CI 保留完整 Rust 检查，并与代码生成、Web、原生 release 和 Worker 构建并行。每种原生功能/架构组合只编译一次，浏览器、SDK、CLI 和 Docker 验收下载同次产物；最终 `Development gates` 汇总全部结果。代码生成器使用包含工具链、依赖清单及安装脚本哈希的独立缓存，命中缓存仍做生成差异检查。Linux runner 固定 `ubuntu-24.04` / `ubuntu-24.04-arm`，不跟随 `ubuntu-latest` 的系统版本切换；固定标签仍会接收该系统镜像的维护更新。
+
+部署命令、挂载、权限和 secret 配置见 [Docker 部署](docker.md)。

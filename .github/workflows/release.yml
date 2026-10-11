@@ -7,6 +7,10 @@ on:
       version:
         description: "Existing release tag (e.g. v0.2.0) to build assets for"
         required: true
+      publish_docker:
+        description: "Publish server images (disable when rebuilding tags without Docker support)"
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -21,7 +25,7 @@ env:
 jobs:
   prepare:
     name: Validate release identity
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.identity.outputs.tag }}
       version: ${{ steps.identity.outputs.version }}
@@ -30,6 +34,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: refs/tags/${{ inputs.version }}
+      - name: Validate Docker release inputs
+        if: inputs.publish_docker
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -f Dockerfile || { echo 'This source tag has no Docker support; select publish_docker=false for native/Web/Worker assets only.' >&2; exit 1; }
+          test -n "$DOCKERHUB_USERNAME" && test -n "$DOCKERHUB_TOKEN" || { echo 'Docker Hub repository secrets are required.' >&2; exit 1; }
       - name: Check unified product versions
         run: python3 scripts/check-versions.py
       - name: Resolve tag, package version and commit
@@ -73,8 +85,11 @@ jobs:
             os: macos-15-intel
             target: x86_64-apple-darwin
           - id: linux-x64
-            os: ubuntu-22.04
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
+          - id: linux-arm64
+            os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v7
         with:
@@ -87,9 +102,12 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - name: Install musl toolchain
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+        if: startsWith(matrix.id, 'linux-')
         run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Build (release)
+        env:
+          CC_aarch64_unknown_linux_musl: musl-gcc
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: cargo build --locked --release -p brains-server -p brains-cli --target ${{ matrix.target }}
       - name: Verify compiled identity
         run: |
@@ -118,10 +136,68 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  web-worker:
-    name: web dist + worker bundle
+  web:
+    name: Web release assets
     needs: prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --dir apps/web build
+      - name: Package web dist
+        run: |
+          tar czf "brains-web-${VERSION}.tar.gz" -C apps/web dist
+          shasum -a 256 "brains-web-${VERSION}.tar.gz" > "brains-web-${VERSION}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: brains-web
+          path: brains-web-*.tar.gz*
+          retention-days: 7
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: brains-openapi
+          path: sdk/openapi/brains-openapi.json
+          retention-days: 7
+          if-no-files-found: error
+
+  worker-build:
+    name: Compile Worker release
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Worker build tool for the host
+        run: cargo install worker-build --locked --version 0.8.7
+      - name: Build Worker wasm
+        working-directory: apps/worker
+        run: worker-build --release
+        env:
+          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: worker-build
+          path: apps/worker/build
+          retention-days: 7
+          if-no-files-found: error
+
+  worker-package:
+    name: Package and verify Worker
+    needs: [prepare, web, worker-build]
+    runs-on: ubuntu-24.04
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
@@ -129,36 +205,22 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.sha }}
-      - name: Install the repository Rust toolchain
-        run: rustup show
-      - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Build web
-        run: pnpm --dir apps/web build
-      - name: Install Worker build tool for the host
-        run: cargo install worker-build --locked --version 0.8.7
-      - name: Build worker wasm
-        working-directory: apps/worker
-        run: worker-build --release
-        env:
-          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
-      # CI's codegen drift check owns generation. Publish this commit's contract.
-      - uses: actions/upload-artifact@v7
+      - run: pnpm install --frozen-lockfile --filter brains-worker...
+      - uses: actions/download-artifact@v8
         with:
-          name: brains-openapi
-          path: sdk/openapi/brains-openapi.json
-          retention-days: 7
-          if-no-files-found: error
-      - name: Package web dist
-        run: |
-          tar czf "brains-web-${VERSION}.tar.gz" -C apps/web dist
-          shasum -a 256 "brains-web-${VERSION}.tar.gz" > "brains-web-${VERSION}.tar.gz.sha256"
-      - name: Package worker bundle
+          name: worker-build
+          path: apps/worker/build
+      - uses: actions/download-artifact@v8
+        with:
+          name: brains-web
+          path: artifacts
+      - run: tar xzf "artifacts/brains-web-${VERSION}.tar.gz" -C apps/web
+      - name: Package Worker bundle
         run: |
           DIR="brains-worker-${VERSION}"
           python3 scripts/package-worker.py "$DIR" --version "$VERSION" --sha "$RELEASE_SHA"
@@ -173,17 +235,15 @@ jobs:
           WRANGLER_SEND_METRICS: "false"
       - uses: actions/upload-artifact@v7
         with:
-          name: brains-web-worker
-          path: |
-            brains-web-*.tar.gz*
-            brains-worker-*.tar.gz*
+          name: brains-worker
+          path: brains-worker-*.tar.gz*
           retention-days: 7
           if-no-files-found: error
 
   publish:
     name: Publish GitHub release
-    runs-on: ubuntu-latest
-    needs: [prepare, cli-server, web-worker]
+    runs-on: ubuntu-24.04
+    needs: [prepare, cli-server, web, worker-package]
     permissions:
       contents: write
     env:
@@ -196,6 +256,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
+          pattern: brains-*
       - name: Verify remote release tag
         run: |
           remote_tag="$(git ls-remote --tags origin "refs/tags/$RELEASE_TAG")"
@@ -214,3 +275,117 @@ jobs:
           gh release upload "$RELEASE_TAG" artifacts/*/*
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker:
+    name: Server image (${{ matrix.arch }})
+    if: inputs.publish_docker
+    needs: [prepare, cli-server, web]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            os: ubuntu-24.04
+            native: linux-x64
+          - arch: arm64
+            os: ubuntu-24.04-arm
+            native: linux-arm64
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      IMAGE: yunique001/brains
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: brains-${{ matrix.native }}
+          path: artifacts/native
+      - uses: actions/download-artifact@v8
+        with:
+          name: brains-web
+          path: artifacts/web
+      - name: Assemble the tested release artifacts
+        env:
+          NATIVE: ${{ matrix.native }}
+        run: |
+          mkdir -p docker-artifacts/web
+          tar xzf "artifacts/native/brains-${VERSION}-${NATIVE}.tar.gz" -C artifacts/native
+          cp "artifacts/native/brains-${VERSION}-${NATIVE}/brains-server" docker-artifacts/
+          tar xzf "artifacts/web/brains-web-${VERSION}.tar.gz" --strip-components=1 -C docker-artifacts/web
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: release
+          load: true
+          tags: brains-verify:release
+          platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/YuniqueUnic/brains
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.sha }}
+            org.opencontainers.image.licenses=MIT
+          cache-from: type=gha,scope=release-image-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-image-${{ matrix.arch }}
+      - name: Verify mounted storage and container lifecycle
+        run: python3 tests/docker-workflows.py brains-verify:release
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push the verified image by digest
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          staging="$IMAGE:build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$ARCH"
+          docker tag brains-verify:release "$staging"
+          docker push "$staging"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$staging")
+          mkdir -p digests
+          printf '%s\n' "$digest" > "digests/$ARCH.txt"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: docker-digest-${{ matrix.arch }}
+          path: digests/*.txt
+          retention-days: 7
+          if-no-files-found: error
+
+  docker-publish:
+    name: Publish multi-platform server image
+    concurrency:
+      group: docker-publish
+      cancel-in-progress: false
+    if: inputs.publish_docker
+    needs: [prepare, publish, docker]
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+      IMAGE: yunique001/brains
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: docker-digest-*
+          merge-multiple: true
+          path: digests
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Publish version tags after verifying release identity
+        run: |
+          git fetch --no-tags --depth=1 origin "refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse 'FETCH_HEAD^{commit}')" = "$RELEASE_SHA"
+          tags=(--tag "$IMAGE:$VERSION" --tag "$IMAGE:sha-${RELEASE_SHA:0:12}")
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [[ "$latest" == "$RELEASE_TAG" ]]; then tags+=(--tag "$IMAGE:latest"); fi
+          docker buildx imagetools create "${tags[@]}" "$(cat digests/amd64.txt)" "$(cat digests/arm64.txt)"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
