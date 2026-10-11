@@ -83,3 +83,7 @@ opt-level = "s"
 lto = "thin"
 codegen-units = 1
 strip = "symbols"
+
+# wasm-bindgen still needs the module's target_features before JS generation.
+[profile.release.package.brains-worker]
+strip = "debuginfo"
