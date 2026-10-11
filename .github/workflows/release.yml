@@ -357,6 +357,7 @@ jobs:
     concurrency:
       group: docker-publish
       cancel-in-progress: false
+      queue: max
     if: inputs.publish_docker
     needs: [prepare, publish, docker]
     runs-on: ubuntu-24.04
