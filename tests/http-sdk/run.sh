@@ -18,11 +18,14 @@ if [[ -n "${BRAINS_BASE_URL:-}" ]]; then
   BRAINS_TEST_ORIGIN=$BRAINS_BASE_URL
   BRAINS_TEST_TOKEN=${BRAINS_E2E_TOKEN:?set BRAINS_E2E_TOKEN for the selected server}
 else
-  "${CARGO:-cargo}" build -p brains-server
+  if [[ -z "${BRAINS_SERVER_BIN:-}" ]]; then
+    "${CARGO:-cargo}" build -p brains-server
+    BRAINS_SERVER_BIN="$repo_dir/target/debug/brains-server"
+  fi
   BRAINS_TEST_TOKEN=$(node -p "require('node:crypto').randomBytes(24).toString('hex')")
   port=${BRAINS_SDK_TEST_PORT:-$(node -e 'const s=require("node:net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')}
   BRAINS_TEST_ORIGIN="http://127.0.0.1:$port"
-  "$repo_dir/target/debug/brains-server" --data-dir "$probe_dir/data" --bind 127.0.0.1 \
+  "$BRAINS_SERVER_BIN" --data-dir "$probe_dir/data" --bind 127.0.0.1 \
     --port "$port" --token "$BRAINS_TEST_TOKEN" \
     --origin "$BRAINS_TEST_ORIGIN" > "$probe_dir/server.log" 2>&1 &
   server_pid=$!

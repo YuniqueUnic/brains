@@ -40,7 +40,7 @@ jobs:
       - name: Build web and install Worker build tool
         run: |
           pnpm --dir apps/web build
-          cargo install worker-build --locked
+          cargo install worker-build --locked --version 0.8.7
       - name: Apply remote D1 migrations
         if: inputs.apply_migrations
         working-directory: apps/worker

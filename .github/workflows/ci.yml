@@ -37,6 +37,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Tests (workspace, all features)
         run: cargo test --workspace --all-features
+      - name: Basic index tests
+        run: cargo test -p brains-adapter-turso --no-default-features
       - name: Worker wasm check
         run: cargo check -p brains-worker --target wasm32-unknown-unknown
         env:
@@ -50,16 +52,16 @@ jobs:
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2
-      - uses: pnpm/action-setup@v6
+      - uses: actions/cache@v5
+        id: xidlc
         with:
-          version: 10.28.2
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
+          path: ${{ runner.temp }}/xidlc
+          key: xidlc-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.toml', 'rust-toolchain.toml', 'scripts/install-xidlc.sh') }}
       - name: Install the matching released IDL compiler
-        run: |
-          bash scripts/install-xidlc.sh "$RUNNER_TEMP/xidlc"
-          echo "XIDLC=$RUNNER_TEMP/xidlc/bin/xidlc" >> "$GITHUB_ENV"
+        if: steps.xidlc.outputs.cache-hit != 'true'
+        run: bash scripts/install-xidlc.sh "$RUNNER_TEMP/xidlc"
+      - name: Select the cached compiler
+        run: echo "XIDLC=$RUNNER_TEMP/xidlc/bin/xidlc" >> "$GITHUB_ENV"
       - name: Regenerate committed SDK artifacts
         run: bash scripts/gen-api.sh
       - name: Fail on any drift
@@ -70,8 +72,6 @@ jobs:
             echo "generated files missing from git: $untracked"
             exit 1
           fi
-      - name: Generated TypeScript SDK business acceptance
-        run: bash tests/http-sdk/run.sh
 
   web:
     name: Web build + typecheck
@@ -91,33 +91,96 @@ jobs:
       - name: Typecheck e2e suite
         run: pnpm --dir tests/e2e exec tsc --noEmit
 
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: apps/web/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  native-build:
+    name: Native release (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [full, basic]
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: native-${{ matrix.variant }}
+      - name: Build release binaries
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          flags=()
+          if [[ "$VARIANT" == basic ]]; then flags+=(--no-default-features); fi
+          cargo build --locked --release -p brains-server -p brains-cli "${flags[@]}"
+          tar cf "native-$VARIANT.tar" -C target/release bsx brains-server
+      - uses: actions/upload-artifact@v7
+        with:
+          name: native-${{ matrix.variant }}
+          path: native-${{ matrix.variant }}.tar
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+
+  worker-build:
+    name: Worker release bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Worker build tool for the host
+        run: cargo install worker-build --locked --version 0.8.7
+      - name: Build Worker wasm
+        working-directory: apps/worker
+        run: worker-build --release
+        env:
+          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: worker-build
+          path: apps/worker/build
+          if-no-files-found: error
+          retention-days: 1
+
   e2e:
     name: Browser E2E (screenplay, real server)
     runs-on: ubuntu-latest
-    needs: [rust, web]
+    needs: [native-build, web]
     env:
       BRAINS_CLI_BIN: ${{ github.workspace }}/target/release/bsx
       BRAINS_SERVER_BIN: ${{ github.workspace }}/target/release/brains-server
     steps:
       - uses: actions/checkout@v7
-      - name: Install the repository Rust toolchain
-        run: rustup show
-      - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Build server + web
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: native-*
+          merge-multiple: true
+          path: artifacts
+      - name: Extract release binaries
         run: |
-          cargo build --locked --release -p brains-server -p brains-cli
-          pnpm --dir apps/web build
-      - name: Build and exercise native feature combinations
-        run: |
-          cargo build --locked --release -p brains-cli -p brains-server --no-default-features --target-dir target/basic
-          cargo test -p brains-adapter-turso --no-default-features
-          python3 tests/feature-workflows.py --fts-cli target/release/bsx --fts-server target/release/brains-server --basic-cli target/basic/release/bsx --basic-server target/basic/release/brains-server
+          mkdir -p target/release target/basic/release
+          tar xf artifacts/native-full.tar -C target/release
+          tar xf artifacts/native-basic.tar -C target/basic/release
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: apps/web/dist
+      - name: Exercise native feature combinations
+        run: python3 tests/feature-workflows.py --fts-cli target/release/bsx --fts-server target/release/brains-server --basic-cli target/basic/release/bsx --basic-server target/basic/release/brains-server
+      - name: Generated TypeScript SDK business acceptance
+        run: bash tests/http-sdk/run.sh
       - name: Standalone CLI and native server handoff
         run: python3 tests/local-workflows.py
       - name: Install Playwright browser
@@ -138,7 +201,7 @@ jobs:
   quality-gate:
     name: Development gates
     if: ${{ always() }}
-    needs: [rust, api-codegen, web, e2e, worker-smoke, worker-e2e]
+    needs: [rust, api-codegen, web, native-build, worker-build, e2e, worker-smoke, worker-e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Require every development check to pass
@@ -159,27 +222,26 @@ jobs:
   worker-smoke:
     name: Cloudflare local smoke (workerd + R2/D1)
     runs-on: ubuntu-latest
-    needs: [rust, web]
+    needs: [native-build, web, worker-build]
+    env:
+      BRAINS_CLI_BIN: ${{ github.workspace }}/target/release/bsx
+      BRAINS_SERVER_BIN: ${{ github.workspace }}/target/release/brains-server
     steps:
       - uses: actions/checkout@v7
-      - name: Install the repository Rust toolchain
-        run: rustup show
-      - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-      - name: Install worker-build
-        run: cargo install worker-build --locked
       - run: pnpm install --frozen-lockfile
-      - name: Build web + worker wasm
-        run: |
-          pnpm --dir apps/web build
-          cd apps/worker
-          worker-build --release
-        env:
-          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: apps/web/dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: worker-build
+          path: apps/worker/build
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -187,36 +249,37 @@ jobs:
         run: python3 scripts/run-workerd.py -- bash tests/worker-smoke.sh
       - name: Generated SDK against Worker
         run: python3 scripts/run-workerd.py -- bash tests/http-sdk/run.sh
+      - uses: actions/download-artifact@v8
+        with:
+          name: native-full
+          path: artifacts
+      - name: Extract native binaries
+        run: mkdir -p target/release && tar xf artifacts/native-full.tar -C target/release
       - name: Archive and profile-pair sync through the CLI
         run: |
-          cargo build -p brains-server -p brains-cli
           python3 scripts/run-workerd.py -- python3 tests/cli-workflows.py --source-mode local
           python3 scripts/run-workerd.py -- python3 tests/cli-workflows.py --source-mode remote
 
   worker-e2e:
     name: Browser E2E against the Worker (workerd)
     runs-on: ubuntu-latest
-    needs: [rust, web]
+    needs: [web, worker-build]
     steps:
       - uses: actions/checkout@v7
-      - name: Install the repository Rust toolchain
-        run: rustup show
-      - uses: Swatinem/rust-cache@v2
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
-      - name: Install worker-build
-        run: cargo install worker-build --locked
       - run: pnpm install --frozen-lockfile
-      - name: Build web + worker wasm
-        run: |
-          pnpm --dir apps/web build
-          cd apps/worker
-          worker-build --release
-        env:
-          RUSTFLAGS: ${{ env.WASM_RUSTFLAGS }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: apps/web/dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: worker-build
+          path: apps/worker/build
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
