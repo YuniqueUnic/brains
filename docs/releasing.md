@@ -89,8 +89,10 @@ Worker 通过 `worker-build --release` 使用根发布配置，其中 `brains-wo
 
 新版本发布默认同时推送 `yunique001/brains`，需要仓库 Actions Secrets `DOCKERHUB_USERNAME`、`DOCKERHUB_TOKEN`。这是 Docker Hub 用户名与访问令牌，不是 GitHub App 私钥。旧标签缺少 Dockerfile 或容器配置能力时，显式使用 `publish_docker=false`，只重建该标签原有的原生/Web/Worker 资产；不拿新源码冒充旧版本。
 
-Linux x64/ARM64 使用对应架构的 Ubuntu 24.04 runner 原生编译 musl 二进制。Web 与 Worker 编译并行，Worker 打包再取同次 Web 产物。Docker 直接取同次 Linux 和 Web 资产，在两个架构各运行一次持久化与停机验收，通过后推送带运行编号的构建镜像。GitHub 资产上传成功后才合并这两个镜像 digest，发布版本号及 `sha-<12位提交>` 标签。只有该标签仍是 GitHub 最新稳定 Release 时才更新 `latest`；预发布和旧版本重建不覆盖它。Docker Hub 无法与 GitHub 资产上传组成原子事务；镜像发布失败会明确使 workflow 失败，不能只凭 Release 页面认为镜像已可用。
+Linux x64/ARM64 使用对应架构的 Ubuntu 24.04 runner 原生编译 musl 二进制。Web 与 Worker 编译并行，Worker 打包再取同次 Web 产物。Docker 直接取同次 Linux 和 Web 资产，在两个架构各运行一次持久化与停机验收，通过后推送带运行编号的构建镜像。GitHub 资产上传成功后才合并这两个镜像 digest，发布版本号及 `sha-<12位提交>` 标签。只有该标签仍是 GitHub 最新稳定 Release 时才更新 `latest`；预发布和旧版本重建不覆盖它。镜像最终标签发布使用仓库级并发组排队，避免两个版本竞争覆盖 `latest`。Docker Hub 无法与 GitHub 资产上传组成原子事务；镜像发布失败会明确使 workflow 失败，不能只凭 Release 页面认为镜像已可用。
 
 开发 CI 保留完整 Rust 检查，并与代码生成、Web、原生 release 和 Worker 构建并行。每种原生功能/架构组合只编译一次，浏览器、SDK、CLI 和 Docker 验收下载同次产物；最终 `Development gates` 汇总全部结果。代码生成器使用包含工具链、依赖清单及安装脚本哈希的独立缓存，命中缓存仍做生成差异检查。Linux runner 固定 `ubuntu-24.04` / `ubuntu-24.04-arm`，不跟随 `ubuntu-latest` 的系统版本切换；固定标签仍会接收该系统镜像的维护更新。
 
 部署命令、挂载、权限和 secret 配置见 [Docker 部署](docker.md)。
+
+如果 GitHub 资产已上传、后续 Docker job 失败，使用 `gh run rerun <run-id> --failed` 重跑失败及受影响任务，复用已成功的构建和 GitHub 发布结果。在 artifact 保留期（7 天）内执行；不要重新 dispatch 整套资产上传，否则同名资产保护会阻止再次上传。修改了构建配方时，需先核对失败位置及已发布内容，再选择新 dispatch 或手动补交缺失资产，不能通过覆盖已有资产掩盖不同构建输入。

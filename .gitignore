@@ -32,12 +32,14 @@ brainstore-design
 
 # Local runtimes & stores (never commit knowledge data or local state)
 /brain-data
+/brains-data/
 /data
 .wrangler/
 .dev.vars
 .dev.vars.local
 
 # Test artifacts
+__pycache__/
 /test-results
 /playwright-report
 /tests/e2e/report

@@ -2,6 +2,7 @@
 
 # Shared runtime: deployment policy lives here, regardless of build input.
 FROM alpine:3.23 AS runtime
+COPY LICENSE /usr/share/licenses/brains/LICENSE
 RUN apk add --no-cache ca-certificates \
     && mkdir -p /data /app/web \
     && chown 65532:65532 /data \
@@ -27,7 +28,9 @@ COPY docker-artifacts/web/ /app/web/
 FROM rust:1.96-alpine3.23 AS server-build
 RUN apk add --no-cache build-base
 WORKDIR /src
-COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY rust-toolchain.toml ./
+RUN rustup show
+COPY Cargo.toml Cargo.lock ./
 COPY crates/ crates/
 COPY migrations/ migrations/
 COPY apps/ apps/

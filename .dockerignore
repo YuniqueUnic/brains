@@ -1,6 +1,7 @@
 # Allow only build inputs. Git metadata, local stores and secrets never enter context.
 **
 !Dockerfile
+!LICENSE
 !Cargo.toml
 !Cargo.lock
 !rust-toolchain.toml

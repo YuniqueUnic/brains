@@ -25,7 +25,7 @@ def docker(*args, check=True):
 
 def request(base, token, method, route, body=None, headers=None, expected=200):
     req = urllib.request.Request(base + route, data=body, method=method,
-                                 headers={'Authorization': 'Bearer ' + token, **(headers or {})})
+                                 headers={**({'Authorization': 'Bearer ' + token} if token else {}), **(headers or {})})
     try:
         response = urllib.request.urlopen(req, timeout=15)
     except urllib.error.HTTPError as error:
@@ -34,6 +34,15 @@ def request(base, token, method, route, body=None, headers=None, expected=200):
         raw = response.read()
         assert response.status == expected, (method, route, response.status, expected)
         return json.loads(raw) if 'application/json' in response.headers.get('Content-Type', '') else raw
+
+
+def login(base, token, origin):
+    req = urllib.request.Request(base + '/api/v1/session', method='POST',
+                                 headers={'Authorization': 'Bearer ' + token, 'Origin': origin})
+    with urllib.request.urlopen(req, timeout=15) as response:
+        cookie = response.headers['Set-Cookie']
+        assert '; Secure' in cookie and '; HttpOnly' in cookie
+        return cookie.split(';')[0], json.load(response)
 
 
 class Containers:
@@ -113,6 +122,8 @@ def named_volume_flow(containers):
     assert b'<html' in request(base, '', 'GET', '/')
     listing = request(base, token, 'POST', '/api/v1/files/query', b'{}', {'Content-Type': 'application/json'})
     assert not listing['items'], 'no-seed must leave an empty vault'
+    cookie, _ = login(base, token, base)
+    session = request(base, '', 'GET', '/api/v1/session', headers={'Cookie': cookie})
     route = '/api/v1/file?path=persist.md'
     first = request(base, token, 'PUT', route, b'first version',
                     {'Content-Type': 'text/markdown', 'If-None-Match': '*'})
@@ -125,6 +136,7 @@ def named_volume_flow(containers):
     containers.stop(name)
     docker('rm', name)
     name, base = containers.start(mount, env=['BRAINS_NO_SEED=true'])
+    assert request(base, '', 'GET', '/api/v1/session', headers={'Cookie': cookie}) == session
     assert docker('exec', name, 'sha256sum', '/data/secret.key').stdout == signing
     request(base, token, 'GET', '/api/v1/capabilities')
     assert request(base, token, 'GET', route) == b'searchable second version'
@@ -146,8 +158,11 @@ def named_volume_flow(containers):
     connection.endheaders()
     interim = connection.sock.makefile('rb', buffering=0)
     assert interim.readline().startswith(b'HTTP/1.1 100')
-    while interim.readline() != b'\r\n':
-        pass
+    while True:
+        line = interim.readline()
+        assert line, 'connection closed before completing 100 Continue headers'
+        if line == b'\r\n':
+            break
     with ThreadPoolExecutor(max_workers=1) as pool:
         stop = pool.submit(containers.stop, name)
         deadline = time.monotonic() + 5
@@ -189,6 +204,11 @@ def bind_and_secret_flow(containers, root):
     name, base = containers.start(mount, env=env, extra=extra, port=45801)
     caps = request(base, token, 'GET', '/api/v1/capabilities')
     assert caps['vault'] == 'mounted'
+    cookie, session = login(base, token, 'https://notes.example.com')
+    for origin, status in [('https://other.example.com', 200), ('https://unlisted.example.com', 403)]:
+        request(base, '', 'PUT', '/api/v1/file?path=origin.md', b'origin policy',
+                {'Cookie': cookie, 'Origin': origin, 'X-CSRF-Token': session['csrf_token'],
+                 'If-None-Match': '*', 'Content-Type': 'text/markdown'}, expected=status)
     request(base, token, 'PUT', '/api/v1/file?path=bind.md', b'bind persisted',
             {'Content-Type': 'text/markdown', 'If-None-Match': '*'})
     # Exercise the actual image healthcheck command with the nondefault port.
@@ -198,15 +218,27 @@ def bind_and_secret_flow(containers, root):
     containers.stop(name)
     docker('rm', name)
     # An explicit file token persists too; the second boot needs no token input.
-    name, base = containers.start(mount, env=['BRAINS_NO_SEED=true', 'BRAINS_VAULT=mounted'], extra=extra)
+    name, base = containers.start(mount, env=['BRAINS_NO_SEED=true', 'BRAINS_VAULT=env-value'],
+                                  extra=extra, command=['--vault', 'mounted'])
     assert request(base, token, 'GET', '/api/v1/file?path=bind.md') == b'bind persisted'
     containers.stop(name)
     assert (data / 'auth.json').is_file() and (data / 'secret.key').is_file()
     assert not list(data.glob('.auth-*')), 'private writes left temporary files'
+    blank = root / 'blank-token'
+    blank.write_text('\n')
+    unreadable = root / 'unreadable-token'
+    unreadable.write_text(token)
+    unreadable.chmod(0)
+    extra += ['--mount', f'type=bind,src={blank},dst=/run/secrets/blank,readonly',
+              '--mount', f'type=bind,src={unreadable},dst=/run/secrets/unreadable,readonly']
     # Invalid configuration is rejected before any storage initialization.
     for i, (invalid, message) in enumerate([
         (['BRAINS_TOKEN='], 'root token must be nonempty'),
         (['BRAINS_TOKEN_FILE=/missing'], 'cannot read token file'),
+        (['BRAINS_TOKEN_FILE=/run/secrets/blank'], 'root token must be nonempty'),
+        (['BRAINS_TOKEN_FILE=/run/secrets/unreadable'], 'cannot read token file'),
+        (['BRAINS_TOKEN=has whitespace'], 'root token must be nonempty'),
+        (['BRAINS_BIND=not-an-address.invalid'], 'cannot bind'),
         (['BRAINS_TOKEN_FILE=/run/secrets/root', 'BRAINS_TOKEN=conflicting'], 'cannot be used with'),
     ]):
         empty = root / f'invalid-{i}'
