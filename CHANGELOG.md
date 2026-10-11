@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0](https://github.com/YuniqueUnic/brains/compare/v0.3.0...v0.4.0) (2026-10-11)
+
+
+### Features
+
+* **build:** report unified identity across CLI server and Worker ([625d04b](https://github.com/YuniqueUnic/brains/commit/625d04b12fd08366587170f83d8ea1a3005c9741))
+* **release:** publish verified multi-platform server images and pin runners ([96c6c9e](https://github.com/YuniqueUnic/brains/commit/96c6c9e5f485cfca3730fb4e82a55c1b5ea56703))
+* **server:** support persistent non-root containers and graceful shutdown ([78581fd](https://github.com/YuniqueUnic/brains/commit/78581fd5d98bef5b0bd60452d6350b61f631180d))
+
+
+### Bug Fixes
+
+* **auth:** atomically persist private files and reject empty root tokens ([264f160](https://github.com/YuniqueUnic/brains/commit/264f1606f034c750d6106cabc9cff1cdbcbd14ea))
+* **build:** preserve strict identity validation in source images ([6677da7](https://github.com/YuniqueUnic/brains/commit/6677da795c4c9433de8d76608fdfde35cd2b97ed))
+* **build:** retain Worker metadata needed by wasm-bindgen ([721f62e](https://github.com/YuniqueUnic/brains/commit/721f62e5dd0d3f4e5d5e946a65c21a62b1c46ddb))
+* **deploy:** serialize image tags and verify sessions across container rebuilds ([6bdc44e](https://github.com/YuniqueUnic/brains/commit/6bdc44e3cb0040fa3b90dc9c57333aef0bd9d89a))
+
+
+### Performance Improvements
+
+* **build:** tune development and release profiles for smaller artifacts ([f584915](https://github.com/YuniqueUnic/brains/commit/f584915b3a07f92abc7f4dbb94ffc65e8807c319))
+
 ## [0.3.0](https://github.com/YuniqueUnic/brains/compare/v0.2.0...v0.3.0) (2026-10-10)
 
 
