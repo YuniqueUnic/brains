@@ -113,6 +113,8 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## 测试
 
+Rust 构建配置统一在 workspace 根目录：`dev` 保留源码位置与增量编译，`release` 使用体积优化、Thin LTO 和符号裁剪。CI 的原生端到端任务使用 release 二进制验证功能组合、CLI 操作和浏览器流程。构建命令及调试取舍见[开发与发布构建](docs/releasing.md#开发与发布构建)。
+
 - **91 个 Rust 测试**——domain、format、适配器、31 个业务测试（真实 fs+Turso，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
 - **24 项网页验收（22 项浏览器流程 + 2 项解析规则）**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
 - **独立 CLI 业务验收与快照**——离线导入、编辑、历史、分页、服务器接管与多端协作，见 `tests/local-workflows.py`；local/remote 两类来源分别与 Worker 验证归档和同步。

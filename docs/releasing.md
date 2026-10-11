@@ -31,4 +31,33 @@ pnpm install --frozen-lockfile
 
 `check-versions.py` 只校验，不负责改写版本。版本写入统一交给 release-please，避免两套版本更新器。pnpm lock v9 不存各工作区自身的版本，无需新增字段；不要对锁文件里的第三方版本做全局替换。
 
+## 开发与发布构建
+
+Rust 编译配置统一放在根 `Cargo.toml`。CLI、原生服务和 Worker 共享这份配置，CI 和发布工作流只选择构建模式，不再复制优化参数。
+
+| 模式 | 命令 | 用途与取舍 |
+| --- | --- | --- |
+| 开发（`dev`） | `mbx build -p brains-cli -p brains-server` | 不优化机器码，保留增量编译、调试断言和整数溢出检查；`debug = 1` 保留源码位置，减少完整类型与变量调试数据。产物在 `target/debug/`。 |
+| 发布（`release`） | `mbx build --locked --release -p brains-cli -p brains-server` | `opt-level = "s"` 面向体积优化，保留循环向量化；Thin LTO 与 `codegen-units = 1` 配合跨模块优化，`strip = "symbols"` 裁剪符号。产物在 `target/release/`。 |
+
+发布构建保留默认全文检索功能，以及原生平台的 panic 展开行为；没有通过关闭全文检索或改成进程直接退出缩小体积。代价是优化编译耗时更长，且裁剪符号后，部分平台的崩溃堆栈和性能分析不能完整显示函数名。需要用调试器检查变量时，可临时构建完整开发调试信息；需要排查优化构建时，关闭符号裁剪并启用完整调试信息：
+
+```bash
+CARGO_PROFILE_DEV_DEBUG=2 mbx build -p brains-cli -p brains-server
+CARGO_PROFILE_RELEASE_DEBUG=2 CARGO_PROFILE_RELEASE_STRIP=none \
+  mbx build --locked --release -p brains-cli -p brains-server
+```
+
+`cargo test` 默认继承开发配置。CI 的原生端到端任务使用发布二进制验证功能组合、CLI 操作和浏览器流程；本地可以复用同一组业务用例：
+
+```bash
+BRAINS_CLI_BIN="$PWD/target/release/bsx" \
+BRAINS_SERVER_BIN="$PWD/target/release/brains-server" \
+  python3 tests/local-workflows.py
+```
+
+Worker 继续通过 `worker-build --release` 使用根发布配置；`apps/worker/Cargo.toml` 中的 `wasm-opt` 是另一项 Wasm 后处理开关，本次没有引入额外优化工具链。已发布标签和资产保持不变，新配置从后续源码构建与正式版本开始生效。
+
+配置依据：[Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.html)、[Rust 编译配置与体积权衡](https://nnethercote.github.io/perf-book/build-configuration.html)、[符号裁剪的诊断影响](https://doc.rust-lang.org/rustc/codegen-options/index.html#strip)。
+
 依据（2026-10-11 核对）：[xidl 的 release-please 配置](https://github.com/xidl/xidl/blob/master/release-please-config.json)、[release-please extra-files](https://github.com/googleapis/release-please/blob/main/docs/customizing.md#updating-arbitrary-files)、[GitHub 工作流触发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)。

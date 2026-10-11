@@ -118,6 +118,8 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## Testing
 
+Rust build profiles are shared at the workspace root: `dev` keeps source locations and incremental compilation; `release` optimizes size with Thin LTO and symbol stripping. The native E2E job runs its feature combinations, CLI workflows and browser scenarios against release binaries. See [build commands and debugging trade-offs](docs/releasing.md#开发与发布构建).
+
 - **91 Rust tests** — domain, format, adapters, 31 application business tests (real fs+Turso, injected CAS/index failures), HTTP + CLI contract tests.
 - **24 Web checks (22 browser E2E + 2 parsing checks)** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
 - **Standalone CLI business scenarios and snapshot** — offline edits/history, pagination, directory ownership, and multi-server collaboration (`tests/local-workflows.py`); both local/remote sources exercise archive and sync against Worker.

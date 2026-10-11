@@ -72,5 +72,14 @@ diffy = "0.5.2"
 futures = "0.3"
 bytes = "1"
 
+# Keep source locations for everyday debugging without full type/variable data.
+# Use CARGO_PROFILE_DEV_DEBUG=2 when inspecting variables in a debugger.
+[profile.dev]
+debug = 1
+
+# Ship smaller binaries without changing panic unwinding or default features.
 [profile.release]
+opt-level = "s"
 lto = "thin"
+codegen-units = 1
+strip = "symbols"
