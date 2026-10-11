@@ -153,3 +153,7 @@ bash tests/worker-smoke.sh                                               # 对�
 [MIT](LICENSE)
 
 原生索引使用 Turso 0.8.2，可通过 `fts` 选择是否构建 Tantivy；见[构建开关与搜索规则](docs/turso.md)。
+
+## Docker 部署
+
+使用 `docker compose up -d` 启动服务端和内置 Web，数据保存在持久化卷中。后续正式发布提供 Linux AMD64、ARM64 镜像；已有 v0.3.0 不含这套 Docker 支持。命名卷、宿主目录挂载、非 root 权限、文件 secret、HTTPS 与源码构建见 [Docker 部署说明](docs/docker.md)。

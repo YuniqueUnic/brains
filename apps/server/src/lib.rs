@@ -98,6 +98,11 @@ where
     FsBlobStore: Blob,
     TursoIndex: Idx,
 {
+    let addr = format!("{}:{}", config.bind, config.port);
+    let listener = tokio::net::TcpListener::bind((config.bind.as_str(), config.port))
+        .await
+        .map_err(|e| format!("cannot bind {addr}: {e}"))?;
+    let local = listener.local_addr().map_err(|e| e.to_string())?;
     let (state, plaintext, token_new) = build_state(&config)?;
     // First boot on a completely empty vault: lay down the template notes so
     // humans and AI agents start from guide content, not a blank screen.
@@ -117,12 +122,7 @@ where
         Some(_) => router,
         None => router.fallback(brains_api_http::error::api_not_found),
     };
-    let addr = format!("{}:{}", config.bind, config.port);
-    let listener = tokio::net::TcpListener::bind((config.bind.as_str(), config.port))
-        .await
-        .map_err(|e| format!("cannot bind {addr}: {e}"))?;
-    let local = listener.local_addr().map_err(|e| e.to_string())?;
-    if config.token.is_none() && std::env::var("BRAINS_TOKEN").is_err() {
+    if config.token.is_none() {
         if token_new {
             eprintln!("brains-server: generated root token (also stored in auth.json):");
             eprintln!("  {plaintext}");

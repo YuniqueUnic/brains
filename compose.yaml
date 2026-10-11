@@ -1,0 +1,26 @@
+services:
+  brains:
+    image: ${BRAINS_IMAGE:-yunique001/brains:latest}
+    restart: unless-stopped
+    ports:
+      - "${BRAINS_HOST_BIND:-127.0.0.1}:${BRAINS_HOST_PORT:-45800}:45800"
+    environment:
+      BRAINS_VAULT: ${BRAINS_VAULT:-default}
+      BRAINS_NO_SEED: ${BRAINS_NO_SEED:-false}
+      RUST_LOG: ${RUST_LOG:-brains_server=info,tower_http=warn}
+    volumes:
+      - brains-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  brains-data:
