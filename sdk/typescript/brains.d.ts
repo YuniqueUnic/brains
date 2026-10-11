@@ -15,7 +15,8 @@
 
     export interface Capabilities {
 
-                api_version: string;
+                build_version: string;
+                    api_version: string;
                     store_format: number;
                     runtime: Runtime;
                     limits: CapabilityLimits;

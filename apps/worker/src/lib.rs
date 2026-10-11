@@ -95,6 +95,7 @@ fn build_state(env: &Env) -> StateResult {
         CursorSigner::new(cursor_key),
     );
     let capabilities = Capabilities::cloudflare_rust(
+        brains_build_info::VERSION,
         &vault_name,
         limits.max_text_bytes,
         limits.max_attachment_bytes,

@@ -80,6 +80,7 @@ fn limit(value: usize, max: usize) -> ClientResult<()> {
 impl Library for LocalClient {
     fn capabilities(&self) -> ClientResult<Capabilities> {
         Ok(Capabilities::local(
+            brains_build_info::VERSION,
             &self.vault.vault,
             self.vault.limits.max_text_bytes,
             self.vault.limits.max_attachment_bytes,

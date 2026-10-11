@@ -41,6 +41,10 @@ async fn generated_client_talks_to_generated_server() {
     let api = format!("{base}/api/v1");
     let token = "sdk-probe-token-0000000000000000";
     let files = brains_sdk::FilesClient::with_http(&api, sdk_http(token));
+    assert_eq!(
+        files.capabilities().await.unwrap().build_version,
+        brains_build_info::VERSION
+    );
 
     // Create: `created` travels in-band, the ETag rides the out parameter.
     // The generated client sends raw bytes with the explicitly declared

@@ -368,6 +368,7 @@ fn capabilities(
 ) -> contract::Capabilities {
     let caps = &state.capabilities;
     contract::Capabilities {
+        build_version: caps.build_version.clone(),
         api_version: caps.api_version.clone(),
         store_format: caps.store_format,
         runtime: runtime(caps.runtime),

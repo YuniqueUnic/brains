@@ -8,6 +8,7 @@ license.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
+brains-build-info.workspace = true
 axum = { version = "0.8", default-features = false, features = ["json", "query", "macros"] }
 base64.workspace = true
 brains-adapter-d1.workspace = true

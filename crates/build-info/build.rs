@@ -25,7 +25,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=BRAINS_BUILD_GIT_DIRTY");
     println!("cargo:rerun-if-changed=build.rs");
     // Watch tracked workspace inputs as well as refs/index. Changes in a
-    // dependency crate must refresh the CLI's dirty marker too. Untracked
+    // dependency crate must refresh the shared dirty marker too. Untracked
     // files are deliberately excluded from the definition of `dirty`.
     let checkout = root.join(".git").exists();
     if checkout {

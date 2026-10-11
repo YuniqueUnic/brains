@@ -17,6 +17,8 @@ import { xjson } from "xidl-typescript-codec";
 
         export const CapabilitiesSchema = z.object({
 
+                build_version: z.coerce.string(),
+
                 api_version: z.coerce.string(),
 
                 store_format: z.coerce.number().int().nonnegative(),

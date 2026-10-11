@@ -24,6 +24,7 @@ pub mod brains {
     }
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct Capabilities {
+        pub build_version: String,
         pub api_version: String,
         pub store_format: u64,
         pub runtime: Runtime,
@@ -1163,6 +1164,7 @@ pub mod brains {
         use super::*;
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Capabilities {
+            pub build_version: String,
             pub api_version: String,
             pub store_format: u64,
             pub runtime: __xidl_in_Files::brains_Runtime,
@@ -1175,6 +1177,7 @@ pub mod brains {
         impl From<super::Capabilities> for brains_Capabilities {
             fn from(value: super::Capabilities) -> Self {
                 Self {
+                    build_version: value.build_version,
                     api_version: value.api_version,
                     store_format: value.store_format,
                     runtime: value.runtime.into(),
@@ -1188,6 +1191,7 @@ pub mod brains {
         impl From<brains_Capabilities> for super::Capabilities {
             fn from(value: brains_Capabilities) -> Self {
                 Self {
+                    build_version: value.build_version,
                     api_version: value.api_version,
                     store_format: value.store_format,
                     runtime: value.runtime.into(),
@@ -2071,6 +2075,7 @@ pub mod brains {
         use super::*;
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Capabilities {
+            pub build_version: String,
             pub api_version: String,
             pub store_format: u64,
             pub runtime: __xidl_out_Files::brains_Runtime,
@@ -2083,6 +2088,7 @@ pub mod brains {
         impl From<super::Capabilities> for brains_Capabilities {
             fn from(value: super::Capabilities) -> Self {
                 Self {
+                    build_version: value.build_version,
                     api_version: value.api_version,
                     store_format: value.store_format,
                     runtime: value.runtime.into(),
@@ -2096,6 +2102,7 @@ pub mod brains {
         impl From<brains_Capabilities> for super::Capabilities {
             fn from(value: brains_Capabilities) -> Self {
                 Self {
+                    build_version: value.build_version,
                     api_version: value.api_version,
                     store_format: value.store_format,
                     runtime: value.runtime.into(),

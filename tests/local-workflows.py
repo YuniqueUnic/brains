@@ -30,6 +30,27 @@ class LocalWorkflows(unittest.TestCase):
     def rows(self, profile, *args):
         return [json.loads(line) for line in self.cli(profile, *args).splitlines()]
 
+    def test_build_identity_is_reported_by_the_running_instance(self):
+        """Given CLI/server binaries, version and instance reports agree without starting on --version."""
+        version_dir = self.root / "version-only"
+        version_dir.mkdir()
+        versions = {}
+        for name, binary in (("bsx", CLI_BIN), ("brains-server", SERVER_BIN)):
+            output = subprocess.check_output(
+                [str(binary.resolve()), "--version"], cwd=version_dir,
+                env=self.cli.env, text=True, timeout=10,
+            ).strip()
+            self.assertTrue(output.startswith(name + " "), output)
+            versions[name] = output.removeprefix(name + " ")
+            self.assertRegex(versions[name], r"^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)? \(git (?:[0-9a-f]{7,12}|unknown)(?:-dirty)?\)$")
+        self.assertEqual(list(version_dir.iterdir()), [])
+        self.assertEqual(json.loads(self.cli("local", "capabilities", "--json"))["build_version"], versions["bsx"])
+        with native_server(self.root, self.root / "server", "version-proof") as (url, token):
+            self.cli.remote("server", url, token)
+            caps = json.loads(self.cli("server", "capabilities", "--json"))
+            self.assertEqual(caps["build_version"], versions["brains-server"])
+            self.assertIn(versions["brains-server"].encode(), self.cli("server", "capabilities"))
+
     def test_offline_documents_history_and_export_snapshot(self):
         """Given no server, import/edit/copy/move/restore preserve bytes and history."""
         cli = self.cli

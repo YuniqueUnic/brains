@@ -611,6 +611,7 @@ version = "0.3.0"
 dependencies = [
  "brains-api-types",
  "brains-application",
+ "brains-build-info",
  "brains-domain",
  "brains-local",
  "brains-ports",
@@ -699,6 +700,7 @@ dependencies = [
  "brains-adapter-turso",
  "brains-api-http",
  "brains-application",
+ "brains-build-info",
  "brains-domain",
  "brains-local",
  "brains-ports",
@@ -727,6 +729,7 @@ dependencies = [
  "brains-api-http",
  "brains-api-types",
  "brains-application",
+ "brains-build-info",
  "brains-domain",
  "hex",
  "hmac",

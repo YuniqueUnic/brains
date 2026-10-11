@@ -62,6 +62,7 @@ pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool),
         .map_err(|e| format!("token bootstrap failed: {e}"))?;
 
     let capabilities = brains_domain::Capabilities::local(
+        brains_build_info::VERSION,
         &config.vault,
         limits.max_text_bytes,
         limits.max_attachment_bytes,

@@ -9,6 +9,7 @@ default = ["fts"]
 fts = ["brains-local/fts"]
 
 [dependencies]
+brains-build-info.workspace = true
 brains-api-types.workspace = true
 brains-sdk = { path = "../../sdk/rust" }
 brains-domain.workspace = true

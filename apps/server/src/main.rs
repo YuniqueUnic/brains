@@ -1,11 +1,11 @@
-//! brain-server binary: parse CLI flags and run the library server.
+//! brains-server binary: parse CLI flags and run the library server.
 
 use clap::Parser;
 
 use brains_server::ServerConfig;
 
 #[derive(Parser, Debug)]
-#[command(name = "brain-server", about = "Brains local server")]
+#[command(name = "brains-server", version = brains_build_info::VERSION, about = "Brains local server")]
 struct Args {
     /// Durable data directory (store, index db, auth registry, signing keys).
     #[arg(long, default_value = "./brain-data")]
@@ -57,7 +57,7 @@ fn main() {
     let code = match runtime.block_on(brains_server::serve(config)) {
         Ok(addr) => {
             // serve() spawns the accept loop; park this thread for process life.
-            tracing::info!("serving on {addr}");
+            tracing::info!(version = brains_build_info::VERSION, "serving on {addr}");
             loop {
                 std::thread::park();
             }
