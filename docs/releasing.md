@@ -4,7 +4,7 @@ Brains 的产品版本统一管理，Rust、Web、Worker、SDK 和验收工具�
 
 ## 日常发布
 
-采用与 xidl 相同的 release-please 单组件方案：`release-please-config.json` 中只有根组件 `.`，使用 `simple` 策略及结构化 `extra-files` 同步 Cargo workspace、16 个本地锁定包、5 个 JavaScript package 和独立 npm lock。Rust 成员继续继承 workspace 版本。新增产品包时，需要同时加入 extra-files。
+采用与 xidl 相同的 release-please 单组件方案：`release-please-config.json` 中只有根组件 `.`，使用 `simple` 策略及结构化 `extra-files` 同步 Cargo workspace、全部本地锁定包、5 个 JavaScript package 和独立 npm lock。Rust 成员继续继承 workspace 版本。新增产品包时，需要同时加入 extra-files。
 
 1. 使用 Conventional Commits 提交业务修改，例如 `fix(web): ...`、`feat(search): ...`。
 2. `main` 更新后，Release Please 工作流创建或更新一个版本 PR，一次修改版本文件和 `CHANGELOG.md`。审核 PR 中的版本、日志和 CI。
@@ -30,6 +30,28 @@ pnpm install --frozen-lockfile
 ```
 
 `check-versions.py` 只校验，不负责改写版本。版本写入统一交给 release-please，避免两套版本更新器。pnpm lock v9 不存各工作区自身的版本，无需新增字段；不要对锁文件里的第三方版本做全局替换。
+
+## 构建身份
+
+`brains-build-info` 集中采集并格式化整个 workspace 的构建身份，CLI、原生服务器和 Worker 读取同一个版本常量。`bsx --version` 与 `brains-server --version` 在版本前加各自的程序名；实例的 `capabilities.build_version` 返回版本正文，例如 `0.3.0 (git 123456789abc-dirty)`。该字段由被查询的实例提供，`api_version` 仍单独表示协议版本。
+
+默认规则：
+
+- 包版本继承根 `Cargo.toml` 的 workspace 版本；Git 提交取最多前 12 位，转为小写。
+- `-dirty` 只统计整个 workspace 已跟踪文件的暂存和未暂存修改，包括文档；不包含未跟踪文件，也不说明具体改了什么。
+- workspace 根没有 `.git` 时，不借用上级目录的 Git 仓库。未提供覆盖值时显示 `git unknown`，且不加 `-dirty`。
+- Cargo 监听已跟踪的 workspace 文件、存在的 Git index、HEAD、packed-refs、当前分支引用以及以下两个环境变量，以便常规编辑、提交和切换分支后刷新身份。不同目标或构建模式可能分别执行采集。
+
+构建者可显式提供以下环境变量，源码归档和 Git checkout 都适用；两个变量分别覆盖自动检测结果：
+
+| 变量 | 合法值 | 未提供时 |
+| --- | --- | --- |
+| `BRAINS_BUILD_GIT_SHA` | 7–64 位十六进制；显示时最多取前 12 位并转小写 | 从 workspace 自身的 Git 读取；没有可用值则为 `unknown` |
+| `BRAINS_BUILD_GIT_DIRTY` | 严格为 `true` 或 `false` | 有 Git 时检查已跟踪文件，否则为 `false` |
+
+非法值使构建失败。合法格式不表示已经核实它对应当前源码；例如显式的 `false` 会覆盖实际工作区的修改状态。发布方应从可信的源码来源提供元数据，不应把覆盖变量用于掩盖修改。
+
+版本字符串不含构建时间。同一组选定元数据会生成相同文字，但不同修改也可能共享同一个 `-dirty` 版本字符串。缺少 `-dirty` 不等于源码未改动，版本相同也不等于二进制相同。若要验证下载文件，应检查发布资产的 SHA-256；二进制可复现还需固定工具链、依赖及其它构建输入，本文没有承诺已实现完整的可复现构建。
 
 ## 开发与发布构建
 
