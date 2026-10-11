@@ -40,8 +40,6 @@ ARG BRAINS_BUILD_GIT_SHA
 ARG BRAINS_BUILD_GIT_DIRTY
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/src/target \
-    if [ -n "$BRAINS_BUILD_GIT_SHA" ]; then export BRAINS_BUILD_GIT_SHA; else unset BRAINS_BUILD_GIT_SHA; fi; \
-    if [ -n "$BRAINS_BUILD_GIT_DIRTY" ]; then export BRAINS_BUILD_GIT_DIRTY; else unset BRAINS_BUILD_GIT_DIRTY; fi; \
     cargo build --locked --release -p brains-server && cp target/release/brains-server /brains-server
 
 FROM node:22-alpine AS web-build
