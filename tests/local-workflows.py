@@ -15,7 +15,7 @@ import threading
 import time
 import unittest
 
-from cli_support import Cli, REPO, exercise_repeated_relations, native_server
+from cli_support import CLI_BIN, SERVER_BIN, Cli, REPO, exercise_repeated_relations, native_server
 
 
 class LocalWorkflows(unittest.TestCase):
@@ -153,7 +153,7 @@ class LocalWorkflows(unittest.TestCase):
         alias = self.root / "alias"
         alias.symlink_to(self.data, target_is_directory=True)
         cli("local", "profile", "add", "alias", "--data-dir", alias)
-        writer = subprocess.Popen([str(REPO / "target/debug/bsx"), "--profile", "local",
+        writer = subprocess.Popen([str(CLI_BIN), "--profile", "local",
             "put", "held.md", "--create"], env=cli.env,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
@@ -169,7 +169,7 @@ class LocalWorkflows(unittest.TestCase):
                     self.assertLess(time.monotonic(), deadline)
                     time.sleep(0.01)
             cli("alias", "ls", expected=6)
-            server = subprocess.run([str(REPO / "target/debug/brains-server"),
+            server = subprocess.run([str(SERVER_BIN),
                 "--data-dir", str(alias), "--no-seed"], capture_output=True, timeout=10)
             self.assertEqual(server.returncode, 2)
             self.assertIn(b"in use", server.stderr)
