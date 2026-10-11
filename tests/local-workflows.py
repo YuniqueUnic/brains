@@ -50,6 +50,30 @@ class LocalWorkflows(unittest.TestCase):
             caps = json.loads(self.cli("server", "capabilities", "--json"))
             self.assertEqual(caps["build_version"], versions["brains-server"])
             self.assertIn(versions["brains-server"].encode(), self.cli("server", "capabilities"))
+        # A separately deployed service can have a different identity from this CLI.
+        caps["build_version"] = "99.0.0 (git abcdef123456)"
+
+        class OtherBuild(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(caps).encode())
+
+            def log_message(self, *_):
+                pass
+
+        with ThreadingHTTPServer(("127.0.0.1", 0), OtherBuild) as server:
+            thread = threading.Thread(target=server.serve_forever)
+            thread.start()
+            try:
+                self.cli.remote("other-build", f"http://127.0.0.1:{server.server_port}", "fixture")
+                remote = json.loads(self.cli("other-build", "capabilities", "--json"))
+                self.assertEqual(remote["build_version"], caps["build_version"])
+                self.assertIn(caps["build_version"].encode(), self.cli("other-build", "capabilities"))
+            finally:
+                server.shutdown()
+                thread.join()
 
     def test_offline_documents_history_and_export_snapshot(self):
         """Given no server, import/edit/copy/move/restore preserve bytes and history."""

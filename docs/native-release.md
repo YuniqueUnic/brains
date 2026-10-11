@@ -20,9 +20,10 @@ The native archive does not include the web app. To use the browser UI, extract 
 
 ## Connect the CLI
 
-Add this directory to PATH yourself, or continue using `./bsx`. Store the token in a private file (0600), then log in through standard input; do not place it in a shell argument or Git.
+Keep the server running and open another terminal. Add this directory to PATH yourself, or continue using `./bsx`. Store the token in a private file (0600 on Unix), then log in through standard input; do not place it in a shell argument or Git.
 
 ```bash
+unset BRAINS_URL BRAINS_TOKEN
 ./bsx profile add local --url http://127.0.0.1:45800
 ./bsx --profile local login --stdin-token < /absolute/private/local-token.txt
 ./bsx profile use local
