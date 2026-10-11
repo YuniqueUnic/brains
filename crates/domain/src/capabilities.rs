@@ -23,6 +23,8 @@ pub enum FullTextSearch {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Capabilities {
+    /// Product version and build metadata supplied by the running application.
+    pub build_version: String,
     pub api_version: String, // "1"
     pub store_format: u64,   // 1
     pub runtime: Runtime,
@@ -43,11 +45,13 @@ impl Capabilities {
     /// The cloudflare-rust profile (design §22.1): R2/D1 adapters deliver the
     /// same P0+P1(partial) feature set on the shared axum layer.
     pub fn cloudflare_rust(
+        build_version: &str,
         vault: &str,
         max_text_bytes: usize,
         max_attachment_bytes: usize,
     ) -> Self {
         let mut capabilities = Self::local(
+            build_version,
             vault,
             max_text_bytes,
             max_attachment_bytes,
@@ -59,6 +63,7 @@ impl Capabilities {
 
     /// The local-rust profile's P0+P1(partial) feature set.
     pub fn local(
+        build_version: &str,
         vault: &str,
         max_text_bytes: usize,
         max_attachment_bytes: usize,
@@ -85,6 +90,7 @@ impl Capabilities {
             ("presigned_attachment_upload".into(), false),
         ]);
         Self {
+            build_version: build_version.to_owned(),
             api_version: "1".into(),
             store_format: 1,
             runtime: Runtime::LocalRust,

@@ -44,6 +44,8 @@ enum Runtime {
 };
 
 struct Capabilities {
+    // Product version and Git metadata of the running instance, not the client.
+    string build_version;
     string api_version;
     uint64 store_format;
     Runtime runtime;

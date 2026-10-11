@@ -177,6 +177,9 @@
           "api_version": {
             "type": "string"
           },
+          "build_version": {
+            "type": "string"
+          },
           "features": {
             "additionalProperties": {
               "type": "boolean"
@@ -199,6 +202,7 @@
           }
         },
         "required": [
+          "build_version",
           "api_version",
           "store_format",
           "runtime",

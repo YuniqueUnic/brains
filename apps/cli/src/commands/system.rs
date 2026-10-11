@@ -10,6 +10,7 @@ pub(crate) fn capabilities(client: &dyn Library, json: bool) -> ClientResult<i32
     if json {
         print_pretty(&caps)?;
     } else {
+        println!("build_version {}", caps.build_version);
         println!("api_version   {}", caps.api_version);
         println!("store_format  {}", caps.store_format);
         println!(

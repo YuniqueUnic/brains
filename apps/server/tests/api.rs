@@ -314,6 +314,7 @@ async fn capabilities_and_undelivered_routes() {
         .await
         .unwrap();
     assert_eq!(caps["api_version"], "1");
+    assert_eq!(caps["build_version"], brains_build_info::VERSION);
     assert_eq!(caps["store_format"], 1);
     assert_eq!(caps["runtime"], "local-rust");
     assert_eq!(caps["vault"], "default");

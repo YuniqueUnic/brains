@@ -214,6 +214,7 @@ assert.equal(pipeNext.items[0].path, 'ts-sdk/pipe/c.md');
 // A cookie-authenticated mutation requires Origin and the session's CSRF token.
 const login = await new sdk.SessionsClient(api, { headers: { Origin: origin } }).login(authorization);
 const caps = await files.capabilities();
+assert.match(caps.build_version, /^\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)? \(git (?:[0-9a-f]{7,12}|unknown)(?:-dirty)?\)$/);
 assert.equal(login.set_cookie?.includes('; Secure'), caps.runtime !== 'local-rust');
 const cookie = login.set_cookie?.split(';')[0];
 const csrf = login.return.csrf_token;

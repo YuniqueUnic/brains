@@ -7,6 +7,7 @@ exec python3 - <<'PY'
 from concurrent.futures import ThreadPoolExecutor
 import json
 import os
+import re
 import threading
 import urllib.error
 import urllib.parse
@@ -46,6 +47,7 @@ def put(content, revision=None, expected=200):
 
 caps, _ = request('GET', '/capabilities')
 assert caps['runtime'] == 'cloudflare-rust' and caps['limits']['max_text_bytes'] > 0
+assert re.fullmatch(r'\d+\.\d+\.\d+(?:-[\w.-]+)?(?:\+[\w.-]+)? \(git (?:[0-9a-f]{7,12}|unknown)(?:-dirty)?\)', caps['build_version']), caps['build_version']
 print('capabilities: cloudflare-rust with text limits', flush=True)
 first_text = '第一版内容 cache-strategy'
 first = put(first_text)
