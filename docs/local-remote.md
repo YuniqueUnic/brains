@@ -14,6 +14,7 @@ profile 是一个有名字的连接配置。名字可以自选；例如 `laptop`
 安装后在任意目录执行：
 
 ```bash
+unset BRAINS_URL BRAINS_TOKEN
 bsx init "$HOME/.brains/my-library" --profile laptop
 bsx import ./notes --dry-run
 bsx import ./notes
@@ -24,13 +25,13 @@ bsx export ./notes-export
 
 `init` 创建空库，并把该 profile 设为默认。`notes` 是用户已有的普通文件目录；`my-library` 是 Brains 管理的数据目录，两者不能混用。命令不会启动监听端口，也不会创建服务器认证文件。需要示例笔记时另行运行 `bsx seed`。已存在的库用 `bsx profile add laptop --data-dir /absolute/path --vault default` 登记，不要重复初始化。
 
-保存已有文件需要明确的版本条件。先用 `bsx stat notes/a.md --json` 取得编辑依据中的 `revision`，编辑后执行：
+保存已有文件需要明确的版本条件。先用 `bsx stat a.md --json` 取得编辑依据中的 `revision`，编辑后执行：
 
 ```bash
-bsx put notes/a.md --from ./a.md --if-revision "$BASE_REVISION"
+bsx put a.md --from ./a.md --if-revision "$BASE_REVISION"
 ```
 
-版本变了就拒绝写入。`bsx edit notes/a.md --if-revision "$BASE_REVISION"` 可以调用 `$EDITOR` 完成同样的流程。不要临写前取一次最新版本来掩盖编辑期间的并发修改。
+版本变了就拒绝写入。`bsx edit a.md --if-revision "$BASE_REVISION"` 可以调用 `$EDITOR` 完成同样的流程。不要临写前取一次最新版本来掩盖编辑期间的并发修改。
 
 ## 2. 将离线库交给服务器一起管理
 
@@ -101,7 +102,7 @@ BRAINS_TOKEN="$HOME_SERVER_TOKEN" brains-server \
 }
 ```
 
-local profile 不接受 `BRAINS_URL` / `BRAINS_TOKEN` 覆盖，避免本地命令意外访问服务器。双 profile 同步要求两个具名配置，不能混用环境覆盖。配置文件权限为 `0600`；不要提交 token。
+local profile 不接受 `BRAINS_URL` / `BRAINS_TOKEN` 覆盖，避免本地命令意外访问服务器。双 profile 同步要求两个具名配置，不能混用环境覆盖。Unix 上写入配置时使用 `0600` 权限；配置含 token，不要公开。
 
 旧版只含 URL/token 的 profile 需要在备份配置后明确添加 `"mode": "remote"`，其余值保持原样。代码不猜测旧配置属于哪种模式，也不会静默转换。
 

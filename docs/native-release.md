@@ -1,6 +1,8 @@
 # Brains native release
 
-This archive contains `bsx` (CLI), `brains-server` (FS + SQLite runtime), this guide and `VERSION`. Choose the archive matching your operating system and CPU. Verify the adjacent SHA-256 file before extracting; macOS builds are not signed or notarized by this workflow. `bsx --version` reports the package version and Git commit; published artifacts must not carry `-dirty`.
+This archive contains `bsx` (CLI), `brains-server` (FS + SQLite runtime), this guide and `VERSION`. Choose the archive matching your operating system and CPU. Verify the adjacent SHA-256 file before extracting; macOS builds are not signed or notarized by this workflow. `bsx --version` and `brains-server --version` report the package version and Git commit in the same format; published artifacts must not carry `-dirty`. An authenticated `bsx capabilities --json` reports the connected instance’s `build_version`, which can differ from the CLI version.
+
+This guide describes the current source. Unified version reporting was added after v0.3.0; upgrade the CLI and server/Worker together to a release containing it. The older server does not return the `build_version` field required by the new CLI. Rebuilding the old tag does not add this feature.
 
 ## Run a local instance
 
@@ -8,6 +10,7 @@ Run from the extracted directory. Keep the data directory outside the release di
 
 ```bash
 ./bsx --version
+./brains-server --version
 ./brains-server --data-dir "$HOME/.brains/local-data" --port 45800
 ```
 
