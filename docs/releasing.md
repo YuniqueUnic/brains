@@ -56,7 +56,7 @@ BRAINS_SERVER_BIN="$PWD/target/release/brains-server" \
   python3 tests/local-workflows.py
 ```
 
-Worker 继续通过 `worker-build --release` 使用根发布配置；`apps/worker/Cargo.toml` 中的 `wasm-opt` 是另一项 Wasm 后处理开关，本次没有引入额外优化工具链。已发布标签和资产保持不变，新配置从后续源码构建与正式版本开始生效。
+Worker 通过 `worker-build --release` 使用根发布配置，其中 `brains-worker` 的 `strip` 单独设为 `"debuginfo"`：生成 JavaScript 接口前，wasm-bindgen 还要读取 Wasm 的 `target_features`，不能提前裁剪全部符号与模块元数据（[上游问题](https://github.com/cloudflare/workers-rs/issues/1014)）。`apps/worker/Cargo.toml` 中的 `wasm-opt` 是另一项 Wasm 后处理开关，本次没有引入额外优化工具链。已发布标签和资产保持不变，新配置从后续源码构建与正式版本开始生效。
 
 配置依据：[Cargo profiles](https://doc.rust-lang.org/cargo/reference/profiles.html)、[Rust 编译配置与体积权衡](https://nnethercote.github.io/perf-book/build-configuration.html)、[符号裁剪的诊断影响](https://doc.rust-lang.org/rustc/codegen-options/index.html#strip)。
 
