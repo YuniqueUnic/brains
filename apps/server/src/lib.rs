@@ -88,8 +88,10 @@ pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool),
     Ok((state, plaintext, token_new))
 }
 
-/// Bind and serve until the process stops. Returns the bound address.
-pub async fn serve(config: ServerConfig) -> Result<std::net::SocketAddr, String>
+/// Bind the server. The caller owns polling, shutdown and error reporting.
+pub async fn serve(
+    config: ServerConfig,
+) -> Result<axum::serve::Serve<tokio::net::TcpListener, axum::Router, axum::Router>, String>
 where
     FsHeadStore: Head,
     FsRevisionStore: Rev,
@@ -130,10 +132,5 @@ where
         }
     }
     tracing::info!("listening on http://{local} (vault {:?})", config.vault);
-    tokio::spawn(async move {
-        if let Err(e) = axum::serve(listener, router).await {
-            eprintln!("brains-server: serve failed: {e}");
-        }
-    });
-    Ok(local)
+    Ok(axum::serve(listener, router))
 }

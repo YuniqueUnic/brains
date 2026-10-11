@@ -54,18 +54,13 @@ fn main() {
         .enable_all()
         .build()
         .expect("tokio runtime");
-    let code = match runtime.block_on(brains_server::serve(config)) {
-        Ok(addr) => {
-            // serve() spawns the accept loop; park this thread for process life.
-            tracing::info!(version = brains_build_info::VERSION, "serving on {addr}");
-            loop {
-                std::thread::park();
-            }
-        }
-        Err(message) => {
-            eprintln!("brains-server: {message}");
-            2
-        }
-    };
-    std::process::exit(code);
+    let result = runtime.block_on(async {
+        let server = brains_server::serve(config).await?;
+        tracing::info!(version = brains_build_info::VERSION, "server started");
+        server.await.map_err(|error| error.to_string())
+    });
+    if let Err(message) = result {
+        eprintln!("brains-server: {message}");
+        std::process::exit(2);
+    }
 }

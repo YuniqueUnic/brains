@@ -34,12 +34,9 @@ fn boot_server() -> TestServer {
             // (export counts, seeded-note behavior), so keep seeding on.
             seed_templates: true,
         };
-        let addr = runtime.block_on(brains_server::serve(config)).unwrap();
-        addr_tx.send(addr).unwrap();
-        // Park the runtime thread forever; the test process exits around it.
-        loop {
-            std::thread::park();
-        }
+        let server = runtime.block_on(brains_server::serve(config)).unwrap();
+        addr_tx.send(server.local_addr().unwrap()).unwrap();
+        runtime.block_on(async { server.await.unwrap() });
     });
     let addr = addr_rx.recv().unwrap();
     let config_path = dir.path().join("cli-config.json");
