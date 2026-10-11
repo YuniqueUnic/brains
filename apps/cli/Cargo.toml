@@ -14,6 +14,7 @@ default = ["fts"]
 fts = ["brains-client/fts"]
 
 [dependencies]
+brains-build-info.workspace = true
 anyhow.workspace = true
 brains-api-types.workspace = true
 brains-application.workspace = true

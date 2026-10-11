@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/build-info",
     "crates/domain",
     "crates/format",
     "crates/ports",
@@ -26,6 +27,7 @@ license = "MIT"
 repository = "https://github.com/YuniqueUnic/brains"
 
 [workspace.dependencies]
+brains-build-info = { path = "crates/build-info" }
 xidl-rust-axum = { version = "=0.99.0", default-features = false }
 brains-domain = { path = "crates/domain" }
 brains-format = { path = "crates/format" }

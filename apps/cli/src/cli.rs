@@ -6,7 +6,7 @@ use brains_client::TransferKind;
 use clap::{CommandFactory, Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "bsx", version = env!("BSX_VERSION"), about = "Brains local and remote library manager")]
+#[command(name = "bsx", version = brains_build_info::VERSION, about = "Brains local and remote library manager")]
 struct Cli {
     /// Named profile from ~/.brains/config.json (default: active profile).
     #[arg(long, global = true)]
