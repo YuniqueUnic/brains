@@ -576,6 +576,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "brains-build-info"
+version = "0.3.0"
+
+[[package]]
 name = "brains-cli"
 version = "0.3.0"
 dependencies = [
@@ -583,6 +587,7 @@ dependencies = [
  "assert_cmd",
  "brains-api-types",
  "brains-application",
+ "brains-build-info",
  "brains-client",
  "brains-domain",
  "brains-ports",

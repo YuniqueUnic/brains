@@ -1,0 +1,5 @@
+[package]
+name = "brains-build-info"
+version.workspace = true
+edition.workspace = true
+license.workspace = true

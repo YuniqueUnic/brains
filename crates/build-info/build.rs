@@ -1,4 +1,4 @@
-//! Build identity. No timestamps: the same source has the same version string.
+//! Build identity from package and Git metadata, without a build timestamp.
 
 use std::{env, path::Path, process::Command};
 
@@ -88,7 +88,7 @@ fn main() {
         });
     let suffix = if dirty { "-dirty" } else { "" };
     println!(
-        "cargo:rustc-env=BSX_VERSION={} (git {sha}{suffix})",
+        "cargo:rustc-env=BRAINS_BUILD_VERSION={} (git {sha}{suffix})",
         env::var("CARGO_PKG_VERSION").expect("package version")
     );
 }
