@@ -11,11 +11,13 @@ import time
 import urllib.request
 
 REPO = Path(__file__).resolve().parent.parent
+CLI_BIN = Path(os.environ.get("BRAINS_CLI_BIN", REPO / "target/debug/bsx"))
+SERVER_BIN = Path(os.environ.get("BRAINS_SERVER_BIN", REPO / "target/debug/brains-server"))
 
 
 class Cli:
     def __init__(self, root, binary=None):
-        self.binary = binary or REPO / "target/debug/bsx"
+        self.binary = binary or CLI_BIN
         self.config = root / "config.json"
         self.env = {key: value for key, value in os.environ.items()
                     if key not in ("BRAINS_URL", "BRAINS_TOKEN")}
@@ -103,7 +105,7 @@ def native_server(root, data_dir, vault, binary=None):
     with (root / f"server-{port}.log").open("w+") as log:
         env = dict(os.environ, BRAINS_TOKEN=token)
         server = subprocess.Popen([
-            str(binary or REPO / "target/debug/brains-server"), "--data-dir", str(data_dir),
+            str(binary or SERVER_BIN), "--data-dir", str(data_dir),
             "--bind", "127.0.0.1", "--port", str(port), "--vault", vault, "--no-seed",
         ], env=env, stdout=log, stderr=subprocess.STDOUT)
         try:
