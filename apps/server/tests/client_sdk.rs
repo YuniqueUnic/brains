@@ -35,7 +35,9 @@ async fn generated_client_talks_to_generated_server() {
         allowed_origins: vec![],
         seed_templates: false,
     };
-    let addr = brains_server::serve(config).await.unwrap();
+    let server = brains_server::serve(config).await.unwrap();
+    let addr = server.local_addr().unwrap();
+    tokio::spawn(async move { server.await.unwrap() });
     let base = format!("http://{addr}");
     // Generated routes are relative; the server nests them under /api/v1.
     let api = format!("{base}/api/v1");
@@ -267,7 +269,7 @@ async fn generated_client_preserves_permission_and_size_failures() {
         "scopes": ["read:allowed"], "enabled": true,
     }]});
     std::fs::write(dir.path().join("auth.json"), registry.to_string()).unwrap();
-    let address = brains_server::serve(ServerConfig {
+    let server = brains_server::serve(ServerConfig {
         data_dir: dir.path().to_path_buf(),
         vault: "default".into(),
         bind: "127.0.0.1".into(),
@@ -279,6 +281,8 @@ async fn generated_client_preserves_permission_and_size_failures() {
     })
     .await
     .unwrap();
+    let address = server.local_addr().unwrap();
+    tokio::spawn(async move { server.await.unwrap() });
     let api = format!("http://{address}/api/v1");
     let limited_files = brains_sdk::FilesClient::with_http(&api, sdk_http(limited));
     assert!(matches!(

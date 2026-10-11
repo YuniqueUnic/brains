@@ -15,7 +15,9 @@ async fn boot() -> (String, String) {
         allowed_origins: vec!["http://localhost:5173".into()],
         seed_templates: false,
     };
-    let addr = brains_server::serve(config).await.unwrap();
+    let server = brains_server::serve(config).await.unwrap();
+    let addr = server.local_addr().unwrap();
+    tokio::spawn(async move { server.await.unwrap() });
     // Keep the tempdir alive for the process lifetime of the test.
     std::mem::forget(dir);
     (
