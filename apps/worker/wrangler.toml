@@ -23,6 +23,17 @@ database_name = "brains-index"
 database_id = "local"
 migrations_dir = "../../migrations/d1"
 
+# Semantic search (issue #17): Workers AI embeddings + a Vectorize index,
+# declared so a standard deployment has semantic search enabled. Disable
+# explicitly with SEMANTIC_SEARCH=off; a missing binding downgrades
+# capabilities to semantic_search=false with the reason (never a silent off).
+[ai]
+binding = "AI"
+
+[[vectorize]]
+binding = "BRAINS_VECTORS"
+index_name = "brains-vectors"
+
 [secrets]
 required = ["TOKEN_REGISTRY_JSON", "SESSION_SIGNING_KEY", "CURSOR_SIGNING_KEY"]
 
@@ -30,5 +41,9 @@ required = ["TOKEN_REGISTRY_JSON", "SESSION_SIGNING_KEY", "CURSOR_SIGNING_KEY"]
 VAULT_ID = "default"
 MAX_TEXT_BYTES = "262144"
 MAX_ATTACHMENT_BYTES = "8388608"
+# Embedding model identity; dimensions must match the Vectorize index.
+EMBEDDING_MODEL = "@cf/baai/bge-small-en-v1.5"
+EMBEDDING_DIMENSIONS = "384"
+SEMANTIC_SEARCH = "on"
 # First deployment: pass all three required secrets with `wrangler deploy --secrets-file`.
 # Local verification generates isolated .dev.vars via scripts/run-workerd.py.
