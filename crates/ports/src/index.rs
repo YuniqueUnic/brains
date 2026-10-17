@@ -9,7 +9,9 @@ use brains_domain::{DomainResult, FileKind};
 /// Bump when the parser's projection shape changes; the monotonic upsert
 /// then refreshes rows at equal generation (design §10.2).
 // Version 3 reads standard YAML scalars and sequences for frontmatter tags.
-pub const PARSER_VERSION: i64 = 3;
+// Version 4 adds root-relative link targets and the lifecycle/trust/provenance
+// projection (`meta_json`).
+pub const PARSER_VERSION: i64 = 4;
 
 /// One searchable projection derived from a verified, committed revision.
 #[derive(Clone, Debug)]
@@ -28,6 +30,10 @@ pub struct FileProjection {
     pub media_type: String,
     pub tags_json: String,
     pub links_json: String,
+    /// Lifecycle/trust/provenance projection (type, description, status,
+    /// stale_after, generated, verified, sources, trust tier). Derived from
+    /// frontmatter; the note stays authoritative.
+    pub meta_json: String,
     pub parser_version: i64,
     /// From HEAD, never the time of indexing (design §10.1).
     pub updated_at: String,
@@ -55,6 +61,9 @@ pub struct ListRow {
     pub sha256: Option<String>,
     pub media_type: String,
     pub updated_at: String,
+    /// Lifecycle/trust/provenance projection; `{}` when the note carries no
+    /// recognized fields.
+    pub meta_json: String,
 }
 
 #[derive(Clone, Debug)]
@@ -73,6 +82,65 @@ pub enum ListOrder {
     UpdatedDesc,
 }
 
+/// Lifecycle/trust filters over the `meta_json` projection (issue #13).
+/// `None` leaves the dimension unfiltered; a set requires membership.
+#[derive(Clone, Debug, Default)]
+pub struct MetaFilter {
+    /// `draft` | `stable` | `deprecated`
+    pub status: Option<String>,
+    /// Note `type` frontmatter, exact match.
+    pub type_: Option<String>,
+    /// `unverified` | `machine-confirmed` | `human-reviewed`
+    pub trust: Option<String>,
+    /// `true` = only stale (`stale_after` reached), `false` = only fresh.
+    pub stale: Option<bool>,
+    /// ISO date used to compute staleness at query time (UTC `YYYY-MM-DD`).
+    pub today: Option<String>,
+}
+
+impl MetaFilter {
+    pub fn is_empty(&self) -> bool {
+        self.status.is_none()
+            && self.type_.is_none()
+            && self.trust.is_none()
+            && self.stale.is_none()
+    }
+}
+
+/// Positional SQL clauses for [`MetaFilter`] over the `meta_json` column.
+/// Returns the clause text with `?N` placeholders starting at `start`, plus
+/// the bound values in order: status, type, trust, stale (0/1), today.
+/// Unset dimensions bind NULL, which their clause short-circuits on — the
+/// same SQL shape serves filtered and unfiltered queries.
+pub fn meta_filter_clause(meta: &MetaFilter, start: usize) -> (String, Vec<String>) {
+    let stale = match meta.stale {
+        Some(true) => "1".to_owned(),
+        Some(false) => "0".to_owned(),
+        None => String::new(),
+    };
+    let params = vec![
+        meta.status.clone().unwrap_or_default(),
+        meta.type_.clone().unwrap_or_default(),
+        meta.trust.clone().unwrap_or_default(),
+        stale,
+        meta.today.clone().unwrap_or_default(),
+    ];
+    let (s, t, tr, want, today) = (start, start + 1, start + 2, start + 3, start + 4);
+    let sql = [
+        format!(" AND (?{s} IS NULL OR json_extract(meta_json, '$.status') = ?{s})"),
+        format!(" AND (?{t} IS NULL OR json_extract(meta_json, '$.type') = ?{t})"),
+        format!(" AND (?{tr} IS NULL OR json_extract(meta_json, '$.trust') = ?{tr})"),
+        format!(
+            " AND (?{want} IS NULL OR\
+              (CASE WHEN json_extract(meta_json, '$.stale_after') IS NULL THEN 0 \
+              WHEN json_extract(meta_json, '$.stale_after') <= ?{today} THEN 1 \
+              ELSE 0 END) = ?{want})"
+        ),
+    ]
+    .concat();
+    (sql, params)
+}
+
 /// Index listing filters. Only meaningful with `source=index` at the API
 /// layer; the store source never reaches here.
 #[derive(Clone, Debug, Default)]
@@ -80,6 +148,7 @@ pub struct ListFilter {
     pub prefix: Option<String>,
     pub tags: Vec<String>,
     pub kind: Option<FileKind>,
+    pub meta: MetaFilter,
     pub include_deleted: bool,
     pub order: ListOrder,
 }
@@ -106,6 +175,7 @@ pub trait IndexStore {
         limit: usize,
         query: &str,
         tags: &[String],
+        meta: &MetaFilter,
     ) -> impl Future<Output = DomainResult<Vec<LiteralRow>>> + Send;
 
     /// Explicit engine-native full-text search. Invalid syntax is an error, not a fallback.
@@ -117,6 +187,7 @@ pub trait IndexStore {
         query: &str,
         prefix: Option<&str>,
         tags: &[String],
+        meta: &MetaFilter,
         offset: usize,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<(String, String, String)>>> + Send; // path, revision, snippet

@@ -102,6 +102,7 @@ where
             media_type: Some(content.media_type.clone()),
             kind: Some(kind),
             title,
+            meta_json: None,
         })
     }
 

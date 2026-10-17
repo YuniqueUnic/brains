@@ -75,14 +75,20 @@ fn resolve_target(source_path: &VaultPath, dest: &str) -> Option<ResolvedLink> {
         None => (dest, None),
     };
     // Resolve relative to the source file's directory: seed the stack with
-    // the source directory segments. `../` climbs toward the vault root;
+    // the source directory segments. A target starting with `/` is
+    // root-relative (OKF §6.1): it resolves from the vault root and survives
+    // the note moving between directories. `../` climbs toward the root;
     // climbing past it escapes the vault and is reported.
-    let mut segments: Vec<&str> = source_path
-        .parent()
-        .unwrap_or("")
-        .split('/')
-        .filter(|s| !s.is_empty())
-        .collect();
+    let mut segments: Vec<&str> = if target.starts_with('/') {
+        Vec::new()
+    } else {
+        source_path
+            .parent()
+            .unwrap_or("")
+            .split('/')
+            .filter(|s| !s.is_empty())
+            .collect()
+    };
     let mut escaped = false;
     for segment in target.split('/') {
         match segment {

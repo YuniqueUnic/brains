@@ -9,7 +9,8 @@ use std::future::Future;
 
 use brains_domain::{DomainError, DomainResult, FileKind};
 use brains_ports::{
-    FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow,
+    FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow, MetaFilter,
+    meta_filter_clause,
 };
 use wasm_bindgen::JsValue;
 use worker::D1Database;
@@ -55,6 +56,24 @@ fn js_opt(value: Option<&str>) -> JsValue {
 
 fn js_num(value: i64) -> JsValue {
     JsValue::from_f64(value as f64)
+}
+
+/// Meta-filter binding: an unset dimension is the empty string → SQL NULL.
+fn js_str_or_null(value: &str) -> JsValue {
+    if value.is_empty() {
+        JsValue::NULL
+    } else {
+        JsValue::from_str(value)
+    }
+}
+
+/// Meta-filter binding for the stale flag: `"0"`/`"1"` → number, else NULL.
+fn js_num_or_null(value: &str) -> JsValue {
+    match value {
+        "0" => JsValue::from_f64(0.0),
+        "1" => JsValue::from_f64(1.0),
+        _ => JsValue::NULL,
+    }
 }
 
 async fn run(db: &D1Database, what: &str, sql: &str, params: &[JsValue]) -> DomainResult<()> {
@@ -126,6 +145,8 @@ struct ListDbRow {
     sha256: Option<String>,
     media_type: String,
     updated_at: String,
+    #[serde(default)]
+    meta_json: String,
 }
 
 impl From<ListDbRow> for ListRow {
@@ -141,6 +162,7 @@ impl From<ListDbRow> for ListRow {
             sha256: row.sha256,
             media_type: row.media_type,
             updated_at: row.updated_at,
+            meta_json: row.meta_json,
         }
     }
 }
@@ -211,6 +233,7 @@ impl IndexStore for D1Index {
                     js_str(&projection.media_type),
                     js_str(&projection.tags_json),
                     js_str(&projection.links_json),
+                    js_str(&projection.meta_json),
                     js_num(projection.parser_version),
                     js_str(&projection.updated_at),
                     js_str(&brains_domain::timestamp::now_rfc3339()),
@@ -227,12 +250,16 @@ impl IndexStore for D1Index {
         limit: usize,
         query: &str,
         tags: &[String],
+        meta: &MetaFilter,
     ) -> impl Future<Output = DomainResult<Vec<LiteralRow>>> + Send {
         let db = &self.db;
         let prefix = normalize_prefix(prefix).map(str::to_owned);
         let after = after.to_owned();
         let query = query.to_owned();
         let tags = serde_json::to_string(tags).expect("string array");
+        // The meta filter is inlined in LITERAL_WINDOW_SQL (?6..?10); see
+        // brains_ports::meta_filter_clause for the value encoding.
+        let meta_params = meta_filter_clause(meta, 6).1;
         SendFuture::new(async move {
             if query.is_empty() {
                 return Err(DomainError::InvalidArgument(
@@ -249,6 +276,11 @@ impl IndexStore for D1Index {
                     js_num(limit as i64),
                     js_str(&query),
                     js_str(&tags),
+                    js_str_or_null(&meta_params[0]),
+                    js_str_or_null(&meta_params[1]),
+                    js_str_or_null(&meta_params[2]),
+                    js_num_or_null(&meta_params[3]),
+                    js_str_or_null(&meta_params[4]),
                 ],
             )
             .await?;
@@ -269,6 +301,7 @@ impl IndexStore for D1Index {
         query: &str,
         prefix: Option<&str>,
         tags: &[String],
+        meta: &MetaFilter,
         offset: usize,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<(String, String, String)>>> + Send {
@@ -276,19 +309,21 @@ impl IndexStore for D1Index {
         let query = query.to_owned();
         let prefix = normalize_prefix(prefix).map(str::to_owned);
         let tags = serde_json::to_string(tags).expect("string array");
+        let (meta_sql, meta_params) = meta_filter_clause(meta, 4);
         SendFuture::new(async move {
             // Path and tag bounds are explicit
             // SQL branches, and a bad MATCH is a 400 — never a fake-empty
             // fallback.
-            let mut sql = String::from(
+            let sql = format!(
                 "SELECT files_fts.path AS path, files.revision AS revision,
                         snippet(files_fts, 2, '', '', '…', 16) AS snip
                  FROM files_fts JOIN files ON files.rowid = files_fts.rowid
                  WHERE files_fts MATCH ?1 AND files.deleted = 0
-                 AND (?2 IS NULL OR files.path = ?2 OR (files.path >= ?2 || '/' AND files.path < ?2 || '0'))",
+                 AND (?2 IS NULL OR files.path = ?2 OR (files.path >= ?2 || '/' AND files.path < ?2 || '0'))
+                 AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value)){}
+                 ORDER BY rank LIMIT ?9 OFFSET ?10",
+                meta_sql
             );
-            sql.push_str(" AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value))");
-            sql.push_str(" ORDER BY rank LIMIT ?4 OFFSET ?5");
             let rows = query_rows::<FtsRow>(
                 db,
                 "fts search",
@@ -297,6 +332,11 @@ impl IndexStore for D1Index {
                     js_str(&query),
                     js_opt(prefix.as_deref()),
                     js_str(&tags),
+                    js_str_or_null(&meta_params[0]),
+                    js_str_or_null(&meta_params[1]),
+                    js_str_or_null(&meta_params[2]),
+                    js_num_or_null(&meta_params[3]),
+                    js_str_or_null(&meta_params[4]),
                     js_num(limit as i64),
                     js_num(offset as i64),
                 ],
@@ -327,17 +367,19 @@ impl IndexStore for D1Index {
             prefix: filter.prefix.clone(),
             tags: filter.tags.clone(),
             kind: filter.kind,
+            meta: filter.meta.clone(),
             include_deleted: filter.include_deleted,
             order: filter.order,
         };
         let after_path = after_path.map(str::to_owned);
         let after_updated = after_updated.map(str::to_owned);
+        let (meta_sql, meta_params) = meta_filter_clause(&filter.meta, 8);
         SendFuture::new(async move {
             let prefix = normalize_prefix(filter.prefix.as_deref());
             let order_desc = filter.order == ListOrder::UpdatedDesc;
 
             let mut sql = String::from(
-                "SELECT path, revision, generation, deleted, kind, title, size, sha256, media_type, updated_at \
+                "SELECT path, revision, generation, deleted, kind, title, size, sha256, media_type, updated_at, meta_json \
                  FROM files WHERE (?1 = 1 OR deleted = 0) \
                  AND (?2 IS NULL OR path = ?2 OR (path >= ?2 || '/' AND path < ?2 || '0'))",
             );
@@ -354,6 +396,7 @@ impl IndexStore for D1Index {
             } else {
                 sql.push_str(" AND (?6 IS NULL OR path > ?6)");
             }
+            sql.push_str(&meta_sql);
             if order_desc {
                 sql.push_str(" ORDER BY updated_at DESC, path LIMIT ?7");
             } else {
@@ -372,6 +415,11 @@ impl IndexStore for D1Index {
                     js_opt(after_updated.as_deref()),
                     js_opt(after_path.as_deref()),
                     js_num(limit as i64),
+                    js_str_or_null(&meta_params[0]),
+                    js_str_or_null(&meta_params[1]),
+                    js_str_or_null(&meta_params[2]),
+                    js_num_or_null(&meta_params[3]),
+                    js_str_or_null(&meta_params[4]),
                 ],
             )
             .await?;

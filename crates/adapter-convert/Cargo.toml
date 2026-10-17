@@ -1,0 +1,20 @@
+[package]
+name = "brains-adapter-convert"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+# The embedded Xberg converter (MIT): only its PDF backend in this build.
+# Office/Excel/HTML stay off — at xberg 1.0.0-rc.5 those feature gates
+# reference `zip` unconditionally and do not compile; re-enable
+# ("excel", "html") when the upstream cfg gating is fixed.
+xberg = ["dep:xberg"]
+
+[dependencies]
+brains-domain.workspace = true
+brains-ports.workspace = true
+xberg = { version = "=1.0.0-rc.5", default-features = false, features = ["pdf", "tokio-runtime"], optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

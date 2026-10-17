@@ -15,6 +15,9 @@ pub struct EntryInfo {
     pub media_type: Option<String>,
     pub kind: Option<FileKind>,
     pub title: Option<String>,
+    /// Lifecycle/trust projection JSON from the derived index; `None` on
+    /// paths that never touched the index (store listings, mutations).
+    pub meta_json: Option<String>,
 }
 
 impl EntryInfo {
@@ -37,6 +40,7 @@ impl EntryInfo {
             media_type: None,
             kind: None,
             title: None,
+            meta_json: None,
         }
     }
 }

@@ -13,6 +13,7 @@ local = ["dep:tower-http"]
 [dependencies]
 axum = { version = "0.8", default-features = false, features = ["json", "query", "macros"] }
 base64.workspace = true
+brains-api-types.workspace = true
 brains-application.workspace = true
 brains-domain.workspace = true
 brains-ports.workspace = true

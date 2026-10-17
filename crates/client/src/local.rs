@@ -64,6 +64,7 @@ fn mutation(value: MutationOutcome) -> MutationResult {
             media_type: Some(value.media_type),
             kind: Some(value.kind),
             title: None,
+            meta: None,
         },
         index_state: value.index_state.as_str().into(),
         operation_id: value.operation_id,
@@ -79,13 +80,29 @@ fn limit(value: usize, max: usize) -> ClientResult<()> {
 }
 impl Library for LocalClient {
     fn capabilities(&self) -> ClientResult<Capabilities> {
-        Ok(Capabilities::local(
+        // Mutated only by the optional convert integration below.
+        #[cfg_attr(not(feature = "convert"), allow(unused_mut))]
+        let mut capabilities = Capabilities::local(
             brains_build_info::VERSION,
             &self.vault.vault,
             self.vault.limits.max_text_bytes,
             self.vault.limits.max_attachment_bytes,
             brains_ports::IndexStore::full_text_search(&self.vault.index),
-        ))
+        );
+        #[cfg(feature = "convert")]
+        {
+            use brains_ports::DocumentConverter;
+            let converter = brains_adapter_convert::XbergConverter::new();
+            capabilities.document_conversion = Some(Capabilities::document_conversion(
+                converter.identity().0,
+                converter.identity().1,
+                converter.supported_media_types(),
+            ));
+            capabilities
+                .features
+                .insert("document_conversion".into(), true);
+        }
+        Ok(capabilities)
     }
     fn session(&self) -> ClientResult<Session> {
         Ok(Session {
@@ -226,6 +243,14 @@ impl Library for LocalClient {
                     path: h.path,
                     indexed_revision: h.indexed_revision,
                     snippet: h.snippet,
+                    retrieved_by: h
+                        .retrieved_by
+                        .into_iter()
+                        .map(|r| brains_api_types::Retrieval {
+                            retriever: r.retriever,
+                            rank: r.rank as u64,
+                        })
+                        .collect(),
                 })
                 .collect(),
             next_cursor: result.next_cursor,
@@ -237,6 +262,7 @@ impl Library for LocalClient {
                 "available"
             }
             .into(),
+            unavailable: result.unavailable,
         })
     }
     fn links(&self, path: &str, backlinks: bool, cursor: Option<&str>) -> ClientResult<LinkPage> {

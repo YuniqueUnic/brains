@@ -6,6 +6,7 @@ use brains_domain::{FileKind, Revision, VaultPath, detect_kind};
 use brains_ports::{FileProjection, PARSER_VERSION};
 
 use brains_format::{extract_links, extract_title, split_frontmatter};
+use serde_json::Value;
 
 pub fn build_projection(
     vault: &str,
@@ -35,6 +36,7 @@ pub fn build_projection(
         ),
         tags_json: "[]".into(),
         links_json: "[]".into(),
+        meta_json: "{}".into(),
         parser_version: PARSER_VERSION,
         updated_at: revision.created_at.clone(),
     };
@@ -62,6 +64,8 @@ pub fn build_projection(
         .map(brains_format::frontmatter::parse)
         .unwrap_or_default();
     projection.title = extract_title(fm.title.as_deref(), body).unwrap_or_default();
+    projection.meta_json =
+        serde_json::to_string(&meta_json(&fm)).expect("meta projection serializes");
     // Projections contain relationships, not every occurrence in the document.
     // Both indexes key tags by (path, tag) and links by (source, target, kind).
     let mut tags = fm.tags;
@@ -87,4 +91,75 @@ pub fn build_projection(
     projection.body = text.to_owned();
     let _ = vault; // vault is part of the blob key, not the index row
     projection
+}
+
+/// Lifecycle/trust/provenance projection derived from frontmatter (issue
+/// #13). `stale_after` is stored raw; staleness is computed at query time.
+fn meta_json(fm: &brains_format::Frontmatter) -> serde_json::Value {
+    use serde_json::json;
+    let mut meta = serde_json::Map::new();
+    if let Some(type_) = &fm.type_ {
+        meta.insert("type".into(), json!(type_));
+    }
+    if let Some(description) = &fm.description {
+        meta.insert("description".into(), json!(description));
+    }
+    // Status is always present so `status=stable` filters match; absence is
+    // never a filterable state.
+    meta.insert("status".into(), json!(fm.status.as_str()));
+    if let Some(stale_after) = &fm.stale_after {
+        meta.insert("stale_after".into(), json!(stale_after));
+    }
+    if let Some(by) = &fm.generated_by {
+        let mut generated = serde_json::Map::new();
+        generated.insert("by".into(), json!(by));
+        if let Some(at) = &fm.generated_at {
+            generated.insert("at".into(), json!(at));
+        }
+        meta.insert("generated".into(), Value::Object(generated));
+    }
+    if !fm.verified.is_empty() {
+        meta.insert(
+            "verified".into(),
+            Value::Array(
+                fm.verified
+                    .iter()
+                    .map(|v| {
+                        let mut entry = serde_json::Map::new();
+                        entry.insert("by".into(), json!(v.by));
+                        if let Some(at) = &v.at {
+                            entry.insert("at".into(), json!(at));
+                        }
+                        Value::Object(entry)
+                    })
+                    .collect(),
+            ),
+        );
+    }
+    if !fm.sources.is_empty() {
+        meta.insert(
+            "sources".into(),
+            Value::Array(
+                fm.sources
+                    .iter()
+                    .map(|s| {
+                        let mut entry = serde_json::Map::new();
+                        entry.insert("id".into(), json!(s.id));
+                        if let Some(resource) = &s.resource {
+                            entry.insert("resource".into(), json!(resource));
+                        }
+                        if let Some(title) = &s.title {
+                            entry.insert("title".into(), json!(title));
+                        }
+                        if let Some(last_modified) = &s.last_modified {
+                            entry.insert("last_modified".into(), json!(last_modified));
+                        }
+                        Value::Object(entry)
+                    })
+                    .collect(),
+            ),
+        );
+    }
+    meta.insert("trust".into(), json!(fm.trust_tier().as_str()));
+    Value::Object(meta)
 }

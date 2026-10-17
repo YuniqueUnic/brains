@@ -4,6 +4,7 @@
 //! it never names HTTP statuses.
 
 pub mod archive;
+pub mod checkpoint;
 pub mod commit;
 pub mod listing;
 pub mod patch;
@@ -207,4 +208,49 @@ fn normalize_tags(tags: &mut Vec<String>) {
     tags.retain(|tag| !tag.is_empty());
     tags.sort();
     tags.dedup();
+}
+
+/// Validate raw lifecycle/trust filter values into an index meta filter.
+/// Staleness is computed at query time, so `today` is bound here, never
+/// stored per note (issue #13).
+pub(crate) fn meta_filter(
+    status: Option<String>,
+    type_: Option<String>,
+    trust: Option<String>,
+    stale: Option<bool>,
+) -> DomainResult<brains_ports::MetaFilter> {
+    let status = match status {
+        None => None,
+        Some(raw) => match brains_format::NoteStatus::parse(&raw) {
+            Some(value) => Some(value.as_str().to_owned()),
+            None => {
+                return Err(DomainError::InvalidArgument(
+                    "status must be draft, stable or deprecated".into(),
+                ));
+            }
+        },
+    };
+    let trust = match trust {
+        None => None,
+        Some(raw) => match raw.as_str() {
+            "unverified" | "machine-confirmed" | "human-reviewed" => Some(raw),
+            other => {
+                return Err(DomainError::InvalidArgument(format!(
+                    "trust must be unverified, machine-confirmed or human-reviewed; got `{other}`"
+                )));
+            }
+        },
+    };
+    Ok(brains_ports::MetaFilter {
+        status,
+        type_,
+        trust,
+        stale,
+        today: stale.is_some().then(crate::today_utc),
+    })
+}
+
+/// Today's UTC date as `YYYY-MM-DD`, the staleness comparison point.
+pub(crate) fn today_utc() -> String {
+    brains_domain::timestamp::today_utc()
 }

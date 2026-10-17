@@ -32,6 +32,21 @@ pub(crate) struct LsArgs {
     pub(crate) kind: Option<String>,
     #[arg(long, default_value = "path")]
     pub(crate) sort: String,
+    /// draft | stable | deprecated (source=index only)
+    #[arg(long)]
+    pub(crate) status: Option<String>,
+    /// Note frontmatter type, exact match (source=index only)
+    #[arg(long)]
+    pub(crate) type_: Option<String>,
+    /// unverified | machine-confirmed | human-reviewed (source=index only)
+    #[arg(long)]
+    pub(crate) trust: Option<String>,
+    /// Only notes past their stale_after date
+    #[arg(long, conflicts_with = "fresh")]
+    pub(crate) stale: bool,
+    /// Only notes not past their stale_after date
+    #[arg(long)]
+    pub(crate) fresh: bool,
 }
 
 #[derive(Subcommand)]
@@ -129,6 +144,21 @@ enum Command {
         prefix: Option<String>,
         #[arg(long)]
         tag: Vec<String>,
+        /// draft | stable | deprecated
+        #[arg(long)]
+        status: Option<String>,
+        /// Note frontmatter type, exact match
+        #[arg(long)]
+        type_: Option<String>,
+        /// unverified | machine-confirmed | human-reviewed
+        #[arg(long)]
+        trust: Option<String>,
+        /// Only notes past their stale_after date
+        #[arg(long, conflicts_with = "fresh")]
+        stale: bool,
+        /// Only notes not past their stale_after date
+        #[arg(long)]
+        fresh: bool,
         #[arg(long)]
         json: bool,
         /// Stop after this many pages even if incomplete (exit code 7).
@@ -184,14 +214,31 @@ enum Command {
         #[arg(long, default_value_t = 5)]
         limit: usize,
     },
+    /// Regenerate `<prefix>/index.md` from the current listing (OKF §8), so
+    /// hand-written scope indexes stop drifting.
+    IndexScope {
+        #[arg(default_value = "")]
+        prefix: String,
+        /// Required when the index note already exists (create-only otherwise).
+        #[arg(long)]
+        if_revision: Option<String>,
+    },
     /// Push the built-in template notes into the target vault (existing files
     /// are skipped). Useful for cloud instances deployed without content.
-    Seed,
+    Seed {
+        /// Overwrite existing template paths whose content differs from the
+        /// built-in templates (local edits to those paths are replaced).
+        #[arg(long)]
+        refresh: bool,
+    },
     /// Export the current working tree to a new directory.
     Export {
         output: std::path::PathBuf,
         #[arg(long, value_enum, default_value_t = TransferFormat::WorkingTree)]
         format: TransferFormat,
+        /// OKF: also generate `log.md` from revision dates.
+        #[arg(long)]
+        with_log: bool,
     },
     /// Import a directory; differing live files require explicit --overwrite.
     Import {
@@ -219,6 +266,111 @@ enum Command {
         path: String,
         #[arg(long)]
         if_revision: String,
+    },
+    /// Report stale, unverified and malformed notes (read-only; exit 10 when
+    /// findings exist so CI or an agent's end-of-task routine can gate on it).
+    Check {
+        /// Limit the report to one directory subtree.
+        #[arg(long)]
+        prefix: Option<String>,
+        #[arg(long)]
+        json: bool,
+        /// OKF v0.2 conformance mode: frontmatter with non-empty `type` on
+        /// every non-reserved note, reserved files follow the spec.
+        #[arg(long)]
+        okf: bool,
+    },
+    /// Read or update the per-scope checkpoint note (`<scope>/checkpoint.md`,
+    /// an ordinary versioned file).
+    Checkpoint {
+        #[command(subcommand)]
+        command: CheckpointCommand,
+    },
+    /// Import a web page as a Markdown note through the fetch ladder
+    /// (markdown negotiation → static HTML → rendered → document), with
+    /// strict-by-default network policy.
+    ImportUrl {
+        url: String,
+        path: String,
+        /// Prefer the rendered step even when static HTML yields text.
+        #[arg(long)]
+        render: bool,
+        /// Also allow http:// (intranet / local development).
+        #[arg(long)]
+        allow_http: bool,
+        /// Exempt this host or IP from the private-target refusal (repeatable).
+        #[arg(long = "allow-host")]
+        allow_host: Vec<String>,
+        /// Ignore robots.txt for this fetch.
+        #[arg(long)]
+        ignore_robots: bool,
+        #[arg(long, default_value_t = 30)]
+        timeout_secs: u64,
+        /// Maximum response size in bytes.
+        #[arg(long, default_value_t = 10 * 1024 * 1024)]
+        max_bytes: usize,
+    },
+    /// Convert a document attachment into a Markdown companion note
+    /// (`<path>.md`) with provenance frontmatter; `status: draft` until
+    /// reviewed.
+    Convert {
+        path: String,
+        /// Companion note target (default `<path>.md`).
+        #[arg(long)]
+        to: Option<String>,
+    },
+    /// Write current files plus a base-revision manifest into a new directory.
+    Checkout {
+        directory: std::path::PathBuf,
+        /// Limit the copy to one directory subtree.
+        #[arg(long)]
+        prefix: Option<String>,
+    },
+    /// Show local and store changes since checkout (needs a working copy).
+    Status {
+        directory: std::path::PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Update unmodified files from the store; report both-sides conflicts.
+    Pull {
+        directory: std::path::PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
+    },
+    /// Write local changes with the manifest's CAS preconditions.
+    Push {
+        directory: std::path::PathBuf,
+        #[arg(long)]
+        dry_run: bool,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(clap::Subcommand)]
+pub(crate) enum CheckpointCommand {
+    /// Print the checkpoint body and its current revision.
+    Show {
+        /// Scope directory; empty means the vault root checkpoint.
+        #[arg(default_value = "")]
+        scope: String,
+    },
+    /// Write the checkpoint from a file or stdin with the usual CAS rules.
+    Update {
+        #[arg(default_value = "")]
+        scope: String,
+        /// Read the new body from this file (default: stdin).
+        #[arg(long)]
+        from: Option<String>,
+        /// Write only if the current revision matches (from `checkpoint show`).
+        #[arg(long)]
+        if_revision: Option<String>,
+        /// Create the checkpoint only if it does not exist yet.
+        #[arg(long, conflicts_with = "if_revision")]
+        create: bool,
     },
 }
 
@@ -414,9 +566,16 @@ pub(crate) fn run() -> i32 {
             mode,
             prefix,
             tag,
+            status,
+            type_,
+            trust,
+            stale,
+            fresh,
             json,
             max_pages,
-        } => commands::query::search(client, &query, &mode, prefix, tag, json, max_pages),
+        } => commands::query::search(
+            client, &query, &mode, prefix, tag, status, type_, trust, stale, fresh, json, max_pages,
+        ),
         Command::Links {
             path,
             backlinks,
@@ -443,8 +602,16 @@ pub(crate) fn run() -> i32 {
         Command::Reindex { all_pages, limit } => {
             commands::system::reindex(client, all_pages, limit)
         }
-        Command::Seed => commands::system::seed_template(client),
-        Command::Export { output, format } => commands::system::export(client, &output, format),
+        Command::IndexScope {
+            prefix,
+            if_revision,
+        } => commands::system::index_scope(client, &prefix, if_revision.as_deref()),
+        Command::Seed { refresh } => commands::system::seed_template(client, refresh),
+        Command::Export {
+            output,
+            format,
+            with_log,
+        } => commands::system::export(client, &output, format, with_log),
         Command::Import {
             input,
             format,
@@ -454,6 +621,61 @@ pub(crate) fn run() -> i32 {
         Command::Sync { .. } => unreachable!("sync is handled before single-profile resolution"),
         Command::Completion { .. } => unreachable!("completion is handled before config loading"),
         Command::Edit { path, if_revision } => commands::files::edit(client, &path, &if_revision),
+        Command::Check { prefix, json, okf } => {
+            commands::check::check(client, prefix.as_deref(), json, okf)
+        }
+        Command::Checkpoint { command } => match command {
+            CheckpointCommand::Show { scope } => commands::checkpoint::show(client, &scope),
+            CheckpointCommand::Update {
+                scope,
+                from,
+                if_revision,
+                create,
+            } => commands::checkpoint::update(
+                client,
+                &scope,
+                from.as_deref(),
+                if_revision.as_deref(),
+                create,
+            ),
+        },
+        Command::Convert { path, to } => commands::convert::convert(client, &path, to.as_deref()),
+        Command::ImportUrl {
+            url,
+            path,
+            render,
+            allow_http,
+            allow_host,
+            ignore_robots,
+            timeout_secs,
+            max_bytes,
+        } => commands::url_import::import_url_command(
+            client,
+            &url,
+            &path,
+            render,
+            allow_http,
+            allow_host,
+            ignore_robots,
+            timeout_secs,
+            max_bytes,
+        ),
+        Command::Checkout { directory, prefix } => {
+            commands::working_copy::checkout(client, &directory, prefix.as_deref())
+        }
+        Command::Status { directory, json } => {
+            commands::working_copy::status(client, &directory, json)
+        }
+        Command::Pull {
+            directory,
+            dry_run,
+            json,
+        } => commands::working_copy::pull(client, &directory, dry_run, json),
+        Command::Push {
+            directory,
+            dry_run,
+            json,
+        } => commands::working_copy::push(client, &directory, dry_run, json),
     };
 
     match result {
@@ -483,4 +705,7 @@ enum CompletionShell {
 pub(crate) enum TransferFormat {
     WorkingTree,
     Archive,
+    /// Open Knowledge Format v0.2 bundle: per-directory generated `index.md`,
+    /// optional `log.md`, concept files byte-identical.
+    Okf,
 }

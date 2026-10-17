@@ -17,6 +17,7 @@ brains-api-http.workspace = true
 brains-api-types.workspace = true
 brains-application.workspace = true
 brains-domain.workspace = true
+brains-ports.workspace = true
 hex.workspace = true
 hmac.workspace = true
 serde.workspace = true

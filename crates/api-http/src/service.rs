@@ -302,7 +302,37 @@ fn entry(info: &brains_domain::EntryInfo) -> contract::Entry {
         media_type: info.media_type.clone(),
         kind: info.kind.map(|k| k.as_str().to_owned()),
         title: info.title.clone(),
+        meta: note_meta(info.meta_json.as_deref()),
     }
+}
+
+fn note_meta(meta_json: Option<&str>) -> Option<contract::NoteMeta> {
+    brains_api_types::NoteMeta::from_projection(meta_json).map(|meta| contract::NoteMeta {
+        r#type: meta.r#type,
+        description: meta.description,
+        status: meta.status,
+        trust: meta.trust,
+        stale_after: meta.stale_after,
+        generated: meta.generated.map(|generated| contract::Generated {
+            by: generated.by,
+            at: generated.at,
+        }),
+        verified: meta
+            .verified
+            .into_iter()
+            .map(|v| contract::Verification { by: v.by, at: v.at })
+            .collect(),
+        sources: meta
+            .sources
+            .into_iter()
+            .map(|source| contract::SourceRef {
+                id: source.id,
+                resource: source.resource,
+                title: source.title,
+                last_modified: source.last_modified,
+            })
+            .collect(),
+    })
 }
 
 fn mutation_result(outcome: &brains_application::MutationOutcome) -> contract::MutationResult {
@@ -377,6 +407,22 @@ fn capabilities(
             max_attachment_bytes: caps.limits.max_attachment_bytes as u64,
         },
         features: caps.features.clone().into_iter().collect(),
+        semantic: caps
+            .semantic
+            .as_ref()
+            .map(|semantic| contract::SemanticCapability {
+                model_id: semantic.model_id.clone(),
+                dimensions: semantic.dimensions as u64,
+                vector_index_version: semantic.vector_index_version,
+                unavailable_reason: semantic.unavailable_reason.clone(),
+            }),
+        document_conversion: caps.document_conversion.as_ref().map(|conversion| {
+            contract::DocumentConversion {
+                converter: conversion.converter.clone(),
+                version: conversion.version.clone(),
+                media_types: conversion.media_types.clone(),
+            }
+        }),
         vault: caps.vault.clone(),
     }
 }
@@ -572,6 +618,10 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             kind,
             sort,
             include_deleted,
+            status,
+            r#type,
+            trust,
+            stale,
         } = body;
         let ctx = current();
         let rid = ctx.request_id.as_str();
@@ -591,6 +641,10 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             cursor,
             tags: tags.unwrap_or_default(),
             kind: kind.as_deref().and_then(brains_domain::FileKind::parse),
+            status,
+            type_: r#type,
+            trust,
+            stale,
             sort: if sort.as_deref() == Some("updated_desc") {
                 brains_ports::ListOrder::UpdatedDesc
             } else {
@@ -1001,6 +1055,10 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             mode,
             prefix,
             tags,
+            status,
+            r#type,
+            trust,
+            stale,
             scan_limit,
             cursor,
         } = body;
@@ -1009,6 +1067,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
         let mode = match mode.as_deref().unwrap_or("literal") {
             "literal" => brains_application::search::SearchMode::Literal,
             "fts" => brains_application::search::SearchMode::Fts,
+            "hybrid" => brains_application::search::SearchMode::Hybrid,
             other => {
                 return Err(search_error(
                     DomainError::InvalidArgument(format!("unknown search mode `{other}`")),
@@ -1032,6 +1091,10 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             mode,
             prefix,
             tags: tags.unwrap_or_default(),
+            status,
+            type_: r#type,
+            trust,
+            stale,
             cursor,
             scan_limit,
         };
@@ -1049,11 +1112,20 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
                     path: hit.path,
                     indexed_revision: hit.indexed_revision,
                     snippet: hit.snippet,
+                    retrieved_by: hit
+                        .retrieved_by
+                        .into_iter()
+                        .map(|retrieval| contract::Retrieval {
+                            retriever: retrieval.retriever,
+                            rank: retrieval.rank as u64,
+                        })
+                        .collect(),
                 })
                 .collect(),
             next_cursor: result.next_cursor,
             complete: result.complete,
             scanned: result.scanned as i64,
+            unavailable: result.unavailable,
             index_state: if result.building {
                 "building"
             } else {

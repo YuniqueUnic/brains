@@ -3,13 +3,19 @@
 //! behind the user's back (design §12.1).
 
 pub mod archive;
+pub mod check;
+pub mod convert;
 pub mod endpoint;
 pub mod export;
 pub mod import;
 pub mod library;
 pub mod local;
+pub mod okf;
 pub mod sync;
+#[cfg(feature = "url-import")]
+pub mod url_import;
 pub mod verify;
+pub mod working_copy;
 pub use library::Library;
 
 use brains_api_types::{
@@ -181,10 +187,33 @@ impl Library for BrainClient {
     }
 
     fn list_files(&self, query: &brains_application::listing::ListQuery) -> ClientResult<FilePage> {
+        // The request body speaks the generated wire contract, not the
+        // application struct: posting `ListQuery` directly silently dropped
+        // every field whose JSON name differs from its Rust name (`type_`).
+        let body = brains_sdk::ListFilesQuery {
+            source: Some(query.source.to_string()),
+            prefix: query.prefix.clone(),
+            limit: Some(query.limit as i64),
+            cursor: query.cursor.clone(),
+            tags: (!query.tags.is_empty()).then(|| query.tags.clone()),
+            kind: query.kind.map(|kind| kind.as_str().to_owned()),
+            sort: Some(
+                match query.sort {
+                    brains_ports::ListOrder::Path => "path",
+                    brains_ports::ListOrder::UpdatedDesc => "updated_desc",
+                }
+                .to_owned(),
+            ),
+            include_deleted: Some(query.include_deleted),
+            status: query.status.clone(),
+            r#type: query.type_.clone(),
+            trust: query.trust.clone(),
+            stale: query.stale,
+        };
         let response = self.send(
             self.http
                 .post(self.url("/api/v1/files/query", ""))
-                .json(query),
+                .json(&body),
         )?;
         self.expect_json(response)
     }
@@ -331,7 +360,27 @@ impl Library for BrainClient {
     }
 
     fn search(&self, query: &brains_application::search::SearchQuery) -> ClientResult<SearchPage> {
-        let response = self.send(self.http.post(self.url("/api/v1/search", "")).json(query))?;
+        // Same wire-contract rule as `list_files` above.
+        let body = brains_sdk::SearchQuery {
+            q: query.q.clone(),
+            mode: Some(
+                match query.mode {
+                    brains_application::search::SearchMode::Literal => "literal",
+                    brains_application::search::SearchMode::Fts => "fts",
+                    brains_application::search::SearchMode::Hybrid => "hybrid",
+                }
+                .to_owned(),
+            ),
+            prefix: query.prefix.clone(),
+            tags: (!query.tags.is_empty()).then(|| query.tags.clone()),
+            status: query.status.clone(),
+            r#type: query.type_.clone(),
+            trust: query.trust.clone(),
+            stale: query.stale,
+            scan_limit: Some(query.scan_limit as i64),
+            cursor: query.cursor.clone(),
+        };
+        let response = self.send(self.http.post(self.url("/api/v1/search", "")).json(&body))?;
         self.expect_json(response)
     }
 

@@ -15,6 +15,28 @@ import { xjson } from "xidl-typescript-codec";
         });
     export const RuntimeSchema = z.enum(["local-rust", "cloudflare-rust", "cloudflare-typescript"]);
 
+        export const SemanticCapabilitySchema = z.object({
+
+                model_id: z.coerce.string(),
+
+                dimensions: z.coerce.number().int().nonnegative(),
+
+                vector_index_version: z.coerce.number().int(),
+
+                unavailable_reason: z.coerce.string().optional()
+
+        });
+
+        export const DocumentConversionSchema = z.object({
+
+                converter: z.coerce.string(),
+
+                version: z.coerce.string(),
+
+                media_types: z.array(z.coerce.string())
+
+        });
+
         export const CapabilitiesSchema = z.object({
 
                 build_version: z.coerce.string(),
@@ -29,7 +51,59 @@ import { xjson } from "xidl-typescript-codec";
 
                 features: z.record(z.string(), z.coerce.boolean()),
 
+                semantic: SemanticCapabilitySchema.optional(),
+
+                document_conversion: DocumentConversionSchema.optional(),
+
                 vault: z.coerce.string().optional()
+
+        });
+
+        export const GeneratedSchema = z.object({
+
+                by: z.coerce.string(),
+
+                at: z.coerce.string().optional()
+
+        });
+
+        export const VerificationSchema = z.object({
+
+                by: z.coerce.string(),
+
+                at: z.coerce.string().optional()
+
+        });
+
+        export const SourceRefSchema = z.object({
+
+                id: z.coerce.string(),
+
+                resource: z.coerce.string().optional(),
+
+                title: z.coerce.string().optional(),
+
+                last_modified: z.coerce.string().optional()
+
+        });
+
+        export const NoteMetaSchema = z.object({
+
+                "type": xjson(z.coerce.string().optional(), {"name":"type"}),
+
+                description: z.coerce.string().optional(),
+
+                status: z.coerce.string(),
+
+                trust: z.coerce.string(),
+
+                stale_after: z.coerce.string().optional(),
+
+                generated: GeneratedSchema.optional(),
+
+                verified: z.array(VerificationSchema),
+
+                sources: z.array(SourceRefSchema)
 
         });
 
@@ -53,7 +127,9 @@ import { xjson } from "xidl-typescript-codec";
 
                 kind: z.coerce.string().optional(),
 
-                title: z.coerce.string().optional()
+                title: z.coerce.string().optional(),
+
+                meta: NoteMetaSchema.optional()
 
         });
 
@@ -241,13 +317,23 @@ import { xjson } from "xidl-typescript-codec";
 
         });
 
+        export const RetrievalSchema = z.object({
+
+                retriever: z.coerce.string(),
+
+                rank: z.coerce.number().int().nonnegative()
+
+        });
+
         export const SearchHitSchema = z.object({
 
                 path: z.coerce.string(),
 
                 indexed_revision: z.coerce.string(),
 
-                snippet: z.coerce.string()
+                snippet: z.coerce.string(),
+
+                retrieved_by: z.array(RetrievalSchema)
 
         });
 
@@ -261,7 +347,9 @@ import { xjson } from "xidl-typescript-codec";
 
                 scanned: z.coerce.number().int(),
 
-                index_state: z.coerce.string()
+                index_state: z.coerce.string(),
+
+                unavailable: z.array(z.coerce.string())
 
         });
 
@@ -573,7 +661,15 @@ import { xjson } from "xidl-typescript-codec";
 
                 sort: z.coerce.string().optional(),
 
-                include_deleted: z.coerce.boolean().optional()
+                include_deleted: z.coerce.boolean().optional(),
+
+                status: z.coerce.string().optional(),
+
+                "type": xjson(z.coerce.string().optional(), {"name":"type"}),
+
+                trust: z.coerce.string().optional(),
+
+                stale: z.coerce.boolean().optional()
 
         });
 
@@ -586,6 +682,14 @@ import { xjson } from "xidl-typescript-codec";
                 prefix: z.coerce.string().optional(),
 
                 tags: z.array(z.coerce.string()).optional(),
+
+                status: z.coerce.string().optional(),
+
+                "type": xjson(z.coerce.string().optional(), {"name":"type"}),
+
+                trust: z.coerce.string().optional(),
+
+                stale: z.coerce.boolean().optional(),
 
                 scan_limit: z.coerce.number().int().optional(),
 
