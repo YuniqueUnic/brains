@@ -94,7 +94,7 @@ export default function Workspace({
     setPaletteTags([tag]);
     setPaletteOpen(true);
   }, []);
-  const [searchMode, setSearchMode] = useState<"literal" | "fts">("literal");
+  const [searchMode, setSearchMode] = useState<"literal" | "fts" | "hybrid">("literal");
   const [dialog, setDialog] = useState<DialogState>(null);
   const [selecting, setSelecting] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);

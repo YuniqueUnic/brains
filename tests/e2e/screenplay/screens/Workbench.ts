@@ -33,6 +33,10 @@ export const Workbench = {
     ).describedAs(`restore button for ${path}`),
   searchResults: () =>
     PageElement.located(By.css('[data-testid="search-results"]')).describedAs("search results"),
+  searchUnavailable: () =>
+    PageElement.located(By.css('[data-testid="search-unavailable"]')).describedAs(
+      "unavailable retrievers notice",
+    ),
   searchHitPaths: () =>
     PageElements.located(
       By.css('[data-testid="search-results"] [data-testid="search-hit"]'),

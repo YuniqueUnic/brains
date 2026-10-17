@@ -7,6 +7,7 @@ pub(crate) mod files;
 pub(crate) mod query;
 pub(crate) mod sync;
 pub(crate) mod system;
+pub(crate) mod update;
 pub(crate) mod url_import;
 pub(crate) mod working_copy;
 

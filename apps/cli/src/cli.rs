@@ -173,7 +173,7 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
-    /// Exact-text edit (P1).
+    /// Edit a note by exact text replacement.
     Patch {
         path: String,
         #[arg(long)]
@@ -185,21 +185,21 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Copy a file (P1).
+    /// Copy a file.
     Cp {
         source: String,
         target: String,
         #[arg(long)]
         if_revision: String,
     },
-    /// Move a file (P1): copy create-only, then conditionally trash.
+    /// Move a file: copy create-only, then conditionally trash.
     Mv {
         source: String,
         target: String,
         #[arg(long)]
         if_revision: String,
     },
-    /// Unified diff between two revisions (P1).
+    /// Unified diff between two revisions.
     Diff {
         path: String,
         #[arg(long)]
@@ -230,6 +230,11 @@ enum Command {
         /// built-in templates (local edits to those paths are replaced).
         #[arg(long)]
         refresh: bool,
+    },
+    /// Upgrade bsx (and a sibling brains-server) from GitHub releases.
+    Update {
+        #[command(flatten)]
+        args: commands::update::UpdateArgs,
     },
     /// Export the current working tree to a new directory.
     Export {
@@ -451,6 +456,17 @@ pub(crate) fn run() -> i32 {
         }
         return 0;
     }
+    // Self-upgrade needs no profile, vault or config: it works on a machine
+    // that has never run bsx before.
+    if let Command::Update { args } = cli.command {
+        return match commands::update::update(args) {
+            Ok(code) => code,
+            Err(e) => {
+                eprintln!("bsx: {e}");
+                e.exit_code()
+            }
+        };
+    }
     let mut config = match Config::load() {
         Ok(config) => config,
         Err(error) => {
@@ -527,7 +543,7 @@ pub(crate) fn run() -> i32 {
         Command::Capabilities { json } => commands::system::capabilities(client, json),
         Command::Whoami { json } => commands::system::whoami(client, json),
         Command::Profile { command } => commands::system::profile_command(&mut config, command),
-        Command::Login { .. } | Command::Init { .. } => {
+        Command::Login { .. } | Command::Init { .. } | Command::Update { .. } => {
             unreachable!("handled before opening the library")
         }
         Command::Ls(args) => commands::query::ls(client, args),
