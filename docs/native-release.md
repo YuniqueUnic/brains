@@ -7,7 +7,7 @@ ranking, document conversion (PDF/DOCX/XLSX/PPTX/HTML/CSV/plain text via the
 embedded Xberg backend), URL import, `check`, working copy, archive and
 sync. See [capabilities](capabilities.md) for the per-runtime matrix.
 
-This guide describes the current source. Unified version reporting was added after v0.3.0; upgrade the CLI and server/Worker together to a release containing it. The older server does not return the `build_version` field required by the new CLI. Rebuilding the old tag does not add this feature.
+Upgrade the CLI and the server/Worker it connects to together: the remote side must return the `build_version` field that `bsx capabilities --json` reports for the connected instance. Servers from before unified version reporting cannot serve a current CLI, and rebuilding an old tag does not add the field.
 
 ## Install and upgrade without compiling
 

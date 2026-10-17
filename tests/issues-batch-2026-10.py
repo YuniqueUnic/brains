@@ -224,13 +224,24 @@ tags: [cache]
         companion = cli("local", "cat", "docs/report.pdf.md")
         check("#19 companion frontmatter type/status/source", b"type: Converted Document" in companion and b"status: draft" in companion and b"id: original" in companion)
         check("#19 正文含 PDF 文本", b"APPLE INC." in companion)
-        # re-convert writes a new revision of the same path
+        # re-convert of an unchanged original writes nothing; a changed
+        # original produces a new companion revision on the same path
         gen_before = cli.stat("local", "docs/report.pdf.md")["generation"]
         cli("local", "convert", "docs/report.pdf")
-        gen_after = cli.stat("local", "docs/report.pdf.md")["generation"]
-        check("#19 重转换产生新修订同路径", gen_after == gen_before + 1)
+        gen_same = cli.stat("local", "docs/report.pdf.md")["generation"]
+        check("#19 重转换无变化不产生新修订", gen_same == gen_before)
         original = cli.stat("local", "docs/report.pdf")
         check("#19 原始附件未改", original["size"] == len(PDF.read_bytes()))
+        cli("local", "put", "docs/data.csv", "--create", data=b"a,b\n1,2\n")
+        cli("local", "convert", "docs/data.csv")
+        gen_csv = cli.stat("local", "docs/data.csv.md")["generation"]
+        rev = cli.stat("local", "docs/data.csv")["revision"]
+        cli("local", "put", "docs/data.csv", "--if-revision", rev, data=b"a,b\n1,2\n3,4\n")
+        cli("local", "convert", "docs/data.csv")
+        check(
+            "#19 原始变更后重转换出新修订",
+            cli.stat("local", "docs/data.csv.md")["generation"] == gen_csv + 1,
+        )
 
         # ---- #22: import-url ladder against a local fixture ----
         # NOTE: http is refused by default; --allow-http allows this localhost fixture,

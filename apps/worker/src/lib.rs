@@ -13,7 +13,6 @@ use brains_api_http::auth::Security;
 use brains_api_http::state::AppState;
 use brains_application::Vault;
 use brains_domain::{Capabilities, CursorSigner, Limits};
-use brains_ports::VECTOR_INDEX_VERSION;
 
 use axum::response::IntoResponse;
 use security::EnvSecurity;
@@ -103,14 +102,6 @@ fn build_state(env: &Env) -> StateResult {
             limits.max_attachment_bytes,
         );
         capabilities.semantic = Some(worker_semantics(env));
-        if capabilities
-            .semantic
-            .as_ref()
-            .and_then(|semantic| semantic.unavailable_reason.as_ref())
-            .is_none()
-        {
-            capabilities.features.insert("semantic_search".into(), true);
-        }
         capabilities
     };
     Ok(Arc::new(AppState {
@@ -139,41 +130,21 @@ fn build_state(env: &Env) -> StateResult {
     }))
 }
 
-/// Semantic capability of this deployment (issue #17): on when the `AI`
-/// binding exists and SEMANTIC_SEARCH is not "off", with the model identity
-/// from vars. A missing binding reports the reason instead of failing the
-/// deploy — capabilities degrade honestly, never silently.
+/// Semantic capability of this deployment: declared unavailable, like the
+/// native runtime, because no embedding retriever is mounted yet (search
+/// serves literal + FTS only). Advertisement never runs ahead of
+/// execution; `SEMANTIC_SEARCH=off` records an explicit operator decision
+/// as the reason instead.
 fn worker_semantics(env: &Env) -> brains_domain::SemanticCapability {
-    let disabled = || {
-        let mut cap = Capabilities::semantic_unavailable("SEMANTIC_SEARCH=off on this deployment");
-        cap.vector_index_version = VECTOR_INDEX_VERSION;
-        cap
-    };
-    if str_var(env, "SEMANTIC_SEARCH")
+    let off = str_var(env, "SEMANTIC_SEARCH")
         .unwrap_or_else(|_| "on".into())
-        .eq_ignore_ascii_case("off")
-    {
-        return disabled();
-    }
-    if env.ai("AI").is_err() {
-        let mut cap = Capabilities::semantic_unavailable(
-            "AI binding missing; add the [ai] binding to enable semantic search",
-        );
-        cap.vector_index_version = VECTOR_INDEX_VERSION;
-        return cap;
-    }
-    let model_id =
-        str_var(env, "EMBEDDING_MODEL").unwrap_or_else(|_| "@cf/baai/bge-small-en-v1.5".into());
-    let dimensions = str_var(env, "EMBEDDING_DIMENSIONS")
-        .ok()
-        .and_then(|raw| raw.parse().ok())
-        .unwrap_or(384);
-    brains_domain::SemanticCapability {
-        model_id,
-        dimensions,
-        vector_index_version: VECTOR_INDEX_VERSION,
-        unavailable_reason: None,
-    }
+        .eq_ignore_ascii_case("off");
+    let reason = if off {
+        "SEMANTIC_SEARCH=off on this deployment"
+    } else {
+        "no embedding retriever in the Worker runtime yet"
+    };
+    Capabilities::semantic_unavailable(reason)
 }
 
 #[worker::event(fetch)]

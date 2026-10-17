@@ -14,11 +14,14 @@ pub struct ConvertReport {
     pub companion_revision: String,
     pub converter: String,
     pub created: bool,
+    /// Regeneration produced the identical companion; nothing was written.
+    pub unchanged: bool,
 }
 
 /// Convert `<path>` into a companion note. Re-converting (new original
 /// revision or new converter output) writes a NEW revision of the SAME
-/// companion path, never a new path.
+/// companion path, never a new path; an unchanged regeneration reports the
+/// existing revision and writes nothing.
 pub async fn convert_attachment<C: DocumentConverter>(
     client: &dyn Library,
     converter: &C,
@@ -26,10 +29,13 @@ pub async fn convert_attachment<C: DocumentConverter>(
     to: Option<&str>,
 ) -> ClientResult<ConvertReport> {
     let meta = client.get_meta(path)?;
-    let media_type = meta
+    // Stored media types carry parameters (`text/plain; charset=utf-8`);
+    // converters declare bare essences, so compare and forward the essence.
+    let stored = meta
         .media_type
         .clone()
         .unwrap_or_else(|| brains_domain::media_type_for(path).to_owned());
+    let media_type = brains_domain::media_type_essence(&stored);
     if !converter
         .supported_media_types()
         .contains(&media_type.as_str())
@@ -100,7 +106,22 @@ pub async fn convert_attachment<C: DocumentConverter>(
 
     // Re-conversion targets the same companion path with the usual CAS rules.
     let precondition = match client.get_meta(&companion) {
-        Ok(existing) => Precondition::IfRevision(existing.revision),
+        Ok(existing) => {
+            // An unchanged original under the same converter regenerates the
+            // identical companion (modulo the generation timestamp); rewriting
+            // it would churn revisions.
+            let (raw, _) = client.get_raw(&companion)?;
+            if stable_companion(&String::from_utf8_lossy(&raw)) == stable_companion(&body) {
+                return Ok(ConvertReport {
+                    companion_path: companion,
+                    companion_revision: existing.revision,
+                    converter: format!("{converter_id}/{converter_version}"),
+                    created: false,
+                    unchanged: true,
+                });
+            }
+            Precondition::IfRevision(existing.revision)
+        }
         Err(ClientError { status: 404, .. }) => Precondition::Create,
         Err(ClientError { status: 410, .. }) => {
             return Err(ClientError {
@@ -125,6 +146,7 @@ pub async fn convert_attachment<C: DocumentConverter>(
         companion_revision: result.entry.revision,
         converter: format!("{converter_id}/{converter_version}"),
         created: result.entry.generation == 1,
+        unchanged: false,
     })
 }
 
@@ -134,6 +156,25 @@ pub async fn convert_attachment<C: DocumentConverter>(
 /// breaking the frontmatter. Shared with the URL importer.
 pub(crate) fn yaml_scalar(value: &str) -> String {
     serde_json::to_string(value).expect("string serializes")
+}
+
+/// The companion with the volatile `generated.at` stamp of its frontmatter
+/// removed, so an unchanged regeneration is recognized. The filter only
+/// covers the frontmatter this module wrote; note bodies compare byte-exact.
+fn stable_companion(body: &str) -> String {
+    let Some(rest) = body.strip_prefix("---\n") else {
+        return body.to_owned();
+    };
+    let Some(end) = rest.find("\n---\n\n") else {
+        return body.to_owned();
+    };
+    let (front, after) = rest.split_at(end);
+    let stable = front
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("at: "))
+        .collect::<Vec<_>>()
+        .join("\n");
+    format!("---\n{stable}{after}")
 }
 
 use sha2::Digest;

@@ -160,5 +160,5 @@ responses, and per-response dynamic Content-Type on `GET /file`.
 | HTTP layer | `brains-api-http::build_router` | the same `build_router` |
 
 Because both runtimes serve one router, the HTTP contract, error mapping, and
-auth semantics cannot drift between them. The full 12-scenario browser e2e
+auth semantics cannot drift between them. The full browser e2e
 suite runs against both.

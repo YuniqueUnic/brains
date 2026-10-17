@@ -45,7 +45,8 @@ pub struct Capabilities {
 
 /// The semantic projection as reported by capabilities: model identity,
 /// dimensions and the disposable index's version. `unavailable_reason` is
-/// set when semantic search is off (no provider, binding missing, disabled).
+/// set whenever the runtime cannot serve semantic search (no provider
+/// mounted, or disabled).
 /// Document conversion of this instance (issue #19).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct DocumentConversion {
@@ -113,7 +114,7 @@ impl Capabilities {
             ("export".into(), true),
             ("archive".into(), true),
             ("reindex".into(), true),
-            ("semantic_search".into(), false), // Noop locally; the Worker enables it via bindings
+            ("semantic_search".into(), false), // no runtime mounts an embedding provider yet
         ]);
         Self {
             build_version: build_version.to_owned(),

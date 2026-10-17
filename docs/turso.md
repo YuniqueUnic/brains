@@ -1,6 +1,6 @@
 # 原生 Turso 索引与可选全文检索
 
-原生 bsx 和 Rust server 使用 Turso 0.8.2 派生索引；Cloudflare Worker 继续使用 D1 的 SQLite。正文、文件当前版本和历史仍保存在原来的 FS/R2 中，导入、导出与同步不搬运数据库文件。数据库不是第二份正文来源。
+原生 bsx 和 Rust server 使用 Turso 0.8.3 派生索引；Cloudflare Worker 继续使用 D1 的 SQLite。正文、文件当前版本和历史仍保存在原来的 FS/R2 中，导入、导出与同步不搬运数据库文件。数据库不是第二份正文来源。
 
 ## 按构建选择
 
@@ -49,4 +49,4 @@ mbx build -p brains-cli -p brains-server --no-default-features --features fts
 
 这些能力的部分开关属于运行时 Builder 设置，不是同名 Cargo feature。`semantic` 是正确拼写；它需要明确模型身份、维度、分块、正文 revision、过期向量处理和查询权限。模型下载与缓存应由统一资源管理边界负责，不能在搜索模块另建一套下载逻辑。
 
-官方依据：[0.8.2 Rust features](https://github.com/tursodatabase/turso/blob/v0.8.2/bindings/rust/Cargo.toml)、[Builder API](https://github.com/tursodatabase/turso/blob/v0.8.2/bindings/rust/src/lib.rs)、[FTS兼容范围](https://github.com/tursodatabase/turso/blob/v0.8.2/COMPAT.md#full-text-search-fts)、[功能与路线图](https://github.com/tursodatabase/turso/blob/v0.8.2/README.md#features-and-roadmap)。Turso这些扩展仍含实验能力，独立探针成功不能替代完整库业务验收。
+官方依据：[0.8.3 Rust features](https://github.com/tursodatabase/turso/blob/v0.8.3/bindings/rust/Cargo.toml)、[Builder API](https://github.com/tursodatabase/turso/blob/v0.8.3/bindings/rust/src/lib.rs)、[FTS兼容范围](https://github.com/tursodatabase/turso/blob/v0.8.3/COMPAT.md#full-text-search-fts)、[功能与路线图](https://github.com/tursodatabase/turso/blob/v0.8.3/README.md#features-and-roadmap)。Turso这些扩展仍含实验能力，独立探针成功不能替代完整库业务验收。

@@ -22,7 +22,9 @@ pub use entry::EntryInfo;
 pub use error::{DomainError, DomainResult};
 pub use head::{Head, HeadState};
 pub use id::HexId;
-pub use kind::{FileKind, declares_text, detect_kind, is_text_media, media_type_for};
+pub use kind::{
+    FileKind, declares_text, detect_kind, is_text_media, media_type_essence, media_type_for,
+};
 pub use limits::Limits;
 pub use path::VaultPath;
 pub use revision::{ContentRef, CopyProvenance, Revision, RevisionAction, blob_key};
