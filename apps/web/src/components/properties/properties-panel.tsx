@@ -135,8 +135,9 @@ export function PropertiesPanel({
     setLinksError(false);
     // The workspace listing already owns metadata for live and trashed
     // files, but store listings carry no lifecycle projection (issue #13):
-    // fetch whenever the entry has no meta, not only when it is missing.
-    if (!entry || !entry.meta) {
+    // fetch whenever the entry has no meta — except trashed paths, whose
+    // metadata read is a 410 by design (the tombstone owns the path).
+    if ((!entry || !entry.meta) && entry?.state !== "trashed") {
       api.readMeta(path).then(
         (entry) => alive && setFetchedMeta(entry),
         () => {
