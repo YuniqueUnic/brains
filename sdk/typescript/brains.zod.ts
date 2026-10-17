@@ -15,28 +15,6 @@ import { xjson } from "xidl-typescript-codec";
         });
     export const RuntimeSchema = z.enum(["local-rust", "cloudflare-rust", "cloudflare-typescript"]);
 
-        export const CapabilitiesSchema = z.object({
-
-                build_version: z.coerce.string(),
-
-                api_version: z.coerce.string(),
-
-                store_format: z.coerce.number().int().nonnegative(),
-
-                runtime: RuntimeSchema,
-
-                limits: CapabilityLimitsSchema,
-
-                features: z.record(z.string(), z.coerce.boolean()),
-
-                semantic: SemanticCapabilitySchema.optional(),
-
-                document_conversion: DocumentConversionSchema.optional(),
-
-                vault: z.coerce.string().optional()
-
-        });
-
         export const SemanticCapabilitySchema = z.object({
 
                 model_id: z.coerce.string(),
@@ -59,49 +37,25 @@ import { xjson } from "xidl-typescript-codec";
 
         });
 
-        export const EntrySchema = z.object({
+        export const CapabilitiesSchema = z.object({
 
-                path: z.coerce.string(),
+                build_version: z.coerce.string(),
 
-                revision: z.coerce.string(),
+                api_version: z.coerce.string(),
 
-                generation: z.coerce.number().int(),
+                store_format: z.coerce.number().int().nonnegative(),
 
-                state: z.coerce.string(),
+                runtime: RuntimeSchema,
 
-                updated_at: z.coerce.string().optional(),
+                limits: CapabilityLimitsSchema,
 
-                size: z.coerce.number().int().optional(),
+                features: z.record(z.string(), z.coerce.boolean()),
 
-                sha256: z.coerce.string().optional(),
+                semantic: SemanticCapabilitySchema.optional(),
 
-                media_type: z.coerce.string().optional(),
+                document_conversion: DocumentConversionSchema.optional(),
 
-                kind: z.coerce.string().optional(),
-
-                title: z.coerce.string().optional(),
-
-                meta: NoteMetaSchema.optional()
-
-        });
-
-        export const NoteMetaSchema = z.object({
-
-                "type": xjson(z.coerce.string().optional(), {"name":"type"}),
-
-                description: z.coerce.string().optional(),
-
-                status: z.coerce.string(),
-
-                trust: z.coerce.string(),
-
-                stale_after: z.coerce.string().optional(),
-
-                generated: GeneratedSchema.optional(),
-
-                verified: z.array(VerificationSchema),
-
-                sources: z.array(SourceRefSchema)
+                vault: z.coerce.string().optional()
 
         });
 
@@ -130,6 +84,52 @@ import { xjson } from "xidl-typescript-codec";
                 title: z.coerce.string().optional(),
 
                 last_modified: z.coerce.string().optional()
+
+        });
+
+        export const NoteMetaSchema = z.object({
+
+                "type": xjson(z.coerce.string().optional(), {"name":"type"}),
+
+                description: z.coerce.string().optional(),
+
+                status: z.coerce.string(),
+
+                trust: z.coerce.string(),
+
+                stale_after: z.coerce.string().optional(),
+
+                generated: GeneratedSchema.optional(),
+
+                verified: z.array(VerificationSchema),
+
+                sources: z.array(SourceRefSchema)
+
+        });
+
+        export const EntrySchema = z.object({
+
+                path: z.coerce.string(),
+
+                revision: z.coerce.string(),
+
+                generation: z.coerce.number().int(),
+
+                state: z.coerce.string(),
+
+                updated_at: z.coerce.string().optional(),
+
+                size: z.coerce.number().int().optional(),
+
+                sha256: z.coerce.string().optional(),
+
+                media_type: z.coerce.string().optional(),
+
+                kind: z.coerce.string().optional(),
+
+                title: z.coerce.string().optional(),
+
+                meta: NoteMetaSchema.optional()
 
         });
 
@@ -317,6 +317,14 @@ import { xjson } from "xidl-typescript-codec";
 
         });
 
+        export const RetrievalSchema = z.object({
+
+                retriever: z.coerce.string(),
+
+                rank: z.coerce.number().int().nonnegative()
+
+        });
+
         export const SearchHitSchema = z.object({
 
                 path: z.coerce.string(),
@@ -326,14 +334,6 @@ import { xjson } from "xidl-typescript-codec";
                 snippet: z.coerce.string(),
 
                 retrieved_by: z.array(RetrievalSchema)
-
-        });
-
-        export const RetrievalSchema = z.object({
-
-                retriever: z.coerce.string(),
-
-                rank: z.coerce.number().int().nonnegative()
 
         });
 

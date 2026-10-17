@@ -43,22 +43,6 @@ enum Runtime {
     CloudflareTypescript,
 };
 
-struct Capabilities {
-    // Product version and Git metadata of the running instance, not the client.
-    string build_version;
-    string api_version;
-    uint64 store_format;
-    Runtime runtime;
-    CapabilityLimits limits;
-    map<string, boolean> features;
-    // Semantic search projection state (issue #17): active model, dimensions
-    // and index version, or an explicit reason when unavailable.
-    @optional SemanticCapability semantic;
-    // Document conversion (issue #19); absent = unavailable.
-    @optional DocumentConversion document_conversion;
-    @optional string vault;
-};
-
 struct SemanticCapability {
     string model_id;
     uint64 dimensions;
@@ -74,34 +58,20 @@ struct SemanticCapability {
     sequence<string> media_types;
 };
 
-struct Entry {
-    string path;
-    string revision;
-    int64 generation;
-    string state;
-    @optional string updated_at;
-    @optional int64 size;
-    @optional string sha256;
-    @optional string media_type;
-    @optional string kind;
-    @optional string title;
-    // Lifecycle/trust projection (index source and metadata reads; absent
-    // when the serving path has none).
-    @optional NoteMeta meta;
-};
-
-// Derived, never authoritative: parsed frontmatter fields plus the computed
-// trust tier. `stale_after` stays a date; staleness is computed at query
-// time against the server's clock.
-struct NoteMeta {
-    @optional string type;
-    @optional string description;
-    string status;            // draft | stable | deprecated
-    string trust;             // unverified | machine-confirmed | human-reviewed
-    @optional string stale_after;
-    @optional Generated generated;
-    sequence<Verification> verified;
-    sequence<SourceRef> sources;
+struct Capabilities {
+    // Product version and Git metadata of the running instance, not the client.
+    string build_version;
+    string api_version;
+    uint64 store_format;
+    Runtime runtime;
+    CapabilityLimits limits;
+    map<string, boolean> features;
+    // Semantic search projection state (issue #17): active model, dimensions
+    // and index version, or an explicit reason when unavailable.
+    @optional SemanticCapability semantic;
+    // Document conversion (issue #19); absent = unavailable.
+    @optional DocumentConversion document_conversion;
+    @optional string vault;
 };
 
 struct Generated {
@@ -119,6 +89,36 @@ struct SourceRef {
     @optional string resource;
     @optional string title;
     @optional string last_modified;
+};
+
+// Derived, never authoritative: parsed frontmatter fields plus the computed
+// trust tier. `stale_after` stays a date; staleness is computed at query
+// time against the server's clock.
+struct NoteMeta {
+    @optional string type;
+    @optional string description;
+    string status;            // draft | stable | deprecated
+    string trust;             // unverified | machine-confirmed | human-reviewed
+    @optional string stale_after;
+    @optional Generated generated;
+    sequence<Verification> verified;
+    sequence<SourceRef> sources;
+};
+
+struct Entry {
+    string path;
+    string revision;
+    int64 generation;
+    string state;
+    @optional string updated_at;
+    @optional int64 size;
+    @optional string sha256;
+    @optional string media_type;
+    @optional string kind;
+    @optional string title;
+    // Lifecycle/trust projection (index source and metadata reads; absent
+    // when the serving path has none).
+    @optional NoteMeta meta;
 };
 
 struct PurgeResult {
@@ -223,18 +223,18 @@ struct HistoryPage {
     @optional string next_cursor;
 };
 
+// One retriever's view of a hybrid hit (issue #18): name and 1-based rank.
+struct Retrieval {
+    string retriever;
+    uint64 rank;
+};
+
 struct SearchHit {
     string path;
     string indexed_revision;
     string snippet;
     // Hybrid mode only: which retrievers matched, with the rank in each.
     sequence<Retrieval> retrieved_by;
-};
-
-// One retriever's view of a hybrid hit (issue #18): name and 1-based rank.
-struct Retrieval {
-    string retriever;
-    uint64 rank;
 };
 
 struct SearchPage {

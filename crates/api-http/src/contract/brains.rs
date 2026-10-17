@@ -23,22 +23,6 @@ pub mod brains {
         CloudflareTypescript,
     }
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
-    pub struct Capabilities {
-        pub build_version: String,
-        pub api_version: String,
-        pub store_format: u64,
-        pub runtime: Runtime,
-        pub limits: CapabilityLimits,
-        pub features: ::std::collections::BTreeMap<String, bool>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub semantic: Option<SemanticCapability>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub document_conversion: Option<DocumentConversion>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub vault: Option<String>,
-    }
-    impl Capabilities {}
-    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct SemanticCapability {
         pub model_id: String,
         pub dimensions: u64,
@@ -55,43 +39,21 @@ pub mod brains {
     }
     impl DocumentConversion {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
-    pub struct Entry {
-        pub path: String,
-        pub revision: String,
-        pub generation: i64,
-        pub state: String,
+    pub struct Capabilities {
+        pub build_version: String,
+        pub api_version: String,
+        pub store_format: u64,
+        pub runtime: Runtime,
+        pub limits: CapabilityLimits,
+        pub features: ::std::collections::BTreeMap<String, bool>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub updated_at: Option<String>,
+        pub semantic: Option<SemanticCapability>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub size: Option<i64>,
+        pub document_conversion: Option<DocumentConversion>,
         #[serde(skip_serializing_if = "Option::is_none")]
-        pub sha256: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub media_type: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub kind: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub title: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub meta: Option<NoteMeta>,
+        pub vault: Option<String>,
     }
-    impl Entry {}
-    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
-    pub struct NoteMeta {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub r#type: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub description: Option<String>,
-        pub status: String,
-        pub trust: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub stale_after: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub generated: Option<Generated>,
-        pub verified: Vec<Verification>,
-        pub sources: Vec<SourceRef>,
-    }
-    impl NoteMeta {}
+    impl Capabilities {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct Generated {
         pub by: String,
@@ -117,6 +79,44 @@ pub mod brains {
         pub last_modified: Option<String>,
     }
     impl SourceRef {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct NoteMeta {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub r#type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub description: Option<String>,
+        pub status: String,
+        pub trust: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub stale_after: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub generated: Option<Generated>,
+        pub verified: Vec<Verification>,
+        pub sources: Vec<SourceRef>,
+    }
+    impl NoteMeta {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct Entry {
+        pub path: String,
+        pub revision: String,
+        pub generation: i64,
+        pub state: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub updated_at: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub size: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub sha256: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub media_type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub kind: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub meta: Option<NoteMeta>,
+    }
+    impl Entry {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct PurgeResult {
         pub path: String,
@@ -254,6 +254,12 @@ pub mod brains {
     }
     impl HistoryPage {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct Retrieval {
+        pub retriever: String,
+        pub rank: u64,
+    }
+    impl Retrieval {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct SearchHit {
         pub path: String,
         pub indexed_revision: String,
@@ -261,12 +267,6 @@ pub mod brains {
         pub retrieved_by: Vec<Retrieval>,
     }
     impl SearchHit {}
-    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
-    pub struct Retrieval {
-        pub retriever: String,
-        pub rank: u64,
-    }
-    impl Retrieval {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct SearchPage {
         pub items: Vec<SearchHit>,

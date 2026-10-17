@@ -13,20 +13,6 @@
     export type Runtime = "local-rust" | "cloudflare-rust" | "cloudflare-typescript";
 
 
-    export interface Capabilities {
-
-                build_version: string;
-                    api_version: string;
-                    store_format: number;
-                    runtime: Runtime;
-                    limits: CapabilityLimits;
-                    features: Record<string, boolean>;
-                    semantic?: SemanticCapability;
-                    document_conversion?: DocumentConversion;
-                    vault?: string;
-                }
-
-
     export interface SemanticCapability {
 
                 model_id: string;
@@ -44,32 +30,17 @@
                 }
 
 
-    export interface Entry {
+    export interface Capabilities {
 
-                path: string;
-                    revision: string;
-                    generation: number;
-                    state: string;
-                    updated_at?: string;
-                    size?: number;
-                    sha256?: string;
-                    media_type?: string;
-                    kind?: string;
-                    title?: string;
-                    meta?: NoteMeta;
-                }
-
-
-    export interface NoteMeta {
-
-                "type"?: string;
-                    description?: string;
-                    status: string;
-                    trust: string;
-                    stale_after?: string;
-                    generated?: Generated;
-                    verified: Array<Verification>;
-                    sources: Array<SourceRef>;
+                build_version: string;
+                    api_version: string;
+                    store_format: number;
+                    runtime: Runtime;
+                    limits: CapabilityLimits;
+                    features: Record<string, boolean>;
+                    semantic?: SemanticCapability;
+                    document_conversion?: DocumentConversion;
+                    vault?: string;
                 }
 
 
@@ -93,6 +64,35 @@
                     resource?: string;
                     title?: string;
                     last_modified?: string;
+                }
+
+
+    export interface NoteMeta {
+
+                "type"?: string;
+                    description?: string;
+                    status: string;
+                    trust: string;
+                    stale_after?: string;
+                    generated?: Generated;
+                    verified: Array<Verification>;
+                    sources: Array<SourceRef>;
+                }
+
+
+    export interface Entry {
+
+                path: string;
+                    revision: string;
+                    generation: number;
+                    state: string;
+                    updated_at?: string;
+                    size?: number;
+                    sha256?: string;
+                    media_type?: string;
+                    kind?: string;
+                    title?: string;
+                    meta?: NoteMeta;
                 }
 
 
@@ -224,19 +224,19 @@
                 }
 
 
+    export interface Retrieval {
+
+                retriever: string;
+                    rank: number;
+                }
+
+
     export interface SearchHit {
 
                 path: string;
                     indexed_revision: string;
                     snippet: string;
                     retrieved_by: Array<Retrieval>;
-                }
-
-
-    export interface Retrieval {
-
-                retriever: string;
-                    rank: number;
                 }
 
 
