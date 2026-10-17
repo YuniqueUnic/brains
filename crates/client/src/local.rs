@@ -90,18 +90,12 @@ impl Library for LocalClient {
             brains_ports::IndexStore::full_text_search(&self.vault.index),
         );
         #[cfg(feature = "convert")]
-        {
+        let capabilities = {
             use brains_ports::DocumentConverter;
             let converter = brains_adapter_convert::XbergConverter::new();
-            capabilities.document_conversion = Some(Capabilities::document_conversion(
-                converter.identity().0,
-                converter.identity().1,
-                converter.supported_media_types(),
-            ));
             capabilities
-                .features
-                .insert("document_conversion".into(), true);
-        }
+                .with_document_conversion(converter.identity(), converter.supported_media_types())
+        };
         Ok(capabilities)
     }
     fn session(&self) -> ClientResult<Session> {

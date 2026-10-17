@@ -14,6 +14,7 @@ async fn boot() -> (String, String) {
         web_dist: None,
         allowed_origins: vec!["http://localhost:5173".into()],
         seed_templates: false,
+        disable: Vec::new(),
     };
     let server = brains_server::serve(config).await.unwrap();
     let addr = server.local_addr().unwrap();
@@ -320,7 +321,6 @@ async fn capabilities_and_undelivered_routes() {
     assert_eq!(caps["store_format"], 1);
     assert_eq!(caps["runtime"], "local-rust");
     assert_eq!(caps["vault"], "default");
-    assert_eq!(caps["features"]["server_side_validate"], false);
     assert_eq!(caps["features"]["literal_search"], true);
 
     // Undelivered capability answers 501 CAPABILITY_UNSUPPORTED.

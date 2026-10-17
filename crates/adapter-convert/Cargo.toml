@@ -5,9 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-# The embedded Xberg converter (MIT). 1.0.0-rc.5 shipped broken office/
-# excel/html feature gates (they referenced `zip` unconditionally); the
-# 1.3.x line is based on zip 9 and compiles with the full set re-enabled.
+# The embedded Xberg converter (MIT), all format gates enabled.
 xberg = ["dep:xberg"]
 
 [dependencies]

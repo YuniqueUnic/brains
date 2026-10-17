@@ -28,6 +28,8 @@ pub struct ServerConfig {
     /// Lay down the template notes when the vault is completely empty.
     /// Contract tests that need a pristine corpus turn this off.
     pub seed_templates: bool,
+    /// Capabilities to stop advertising (empty = everything the build has).
+    pub disable: Vec<String>,
 }
 
 impl ServerConfig {
@@ -41,6 +43,7 @@ impl ServerConfig {
             web_dist: None,
             allowed_origins: Vec::new(),
             seed_templates: true,
+            disable: Vec::new(),
         }
     }
 }
@@ -61,28 +64,32 @@ pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool),
         .ensure_root_token(config.token.as_deref())
         .map_err(|e| format!("token bootstrap failed: {e}"))?;
 
-    let mut capabilities = brains_domain::Capabilities::local(
-        brains_build_info::VERSION,
-        &config.vault,
-        limits.max_text_bytes,
-        limits.max_attachment_bytes,
-        brains_ports::IndexStore::full_text_search(&vault.index),
-    );
-    // The embedded converter ships in the default build (issue #19); a
-    // --no-default-features build reports conversion as absent.
-    #[cfg(feature = "convert")]
-    {
-        use brains_ports::DocumentConverter;
-        let converter = brains_adapter_convert::XbergConverter::new();
-        capabilities.document_conversion = Some(brains_domain::Capabilities::document_conversion(
-            converter.identity().0,
-            converter.identity().1,
-            converter.supported_media_types(),
-        ));
+    let capabilities = {
+        let capabilities = brains_domain::Capabilities::local(
+            brains_build_info::VERSION,
+            &config.vault,
+            limits.max_text_bytes,
+            limits.max_attachment_bytes,
+            brains_ports::IndexStore::full_text_search(&vault.index),
+        );
+        // The embedded converter ships in the default build (issue #19); a
+        // --no-default-features build reports conversion as absent.
+        #[cfg(feature = "convert")]
+        let capabilities = {
+            use brains_ports::DocumentConverter;
+            let converter = brains_adapter_convert::XbergConverter::new();
+            capabilities
+                .with_document_conversion(converter.identity(), converter.supported_media_types())
+        };
         capabilities
-            .features
-            .insert("document_conversion".into(), true);
-    }
+    };
+    let capabilities = capabilities
+        .without_advertised(&config.disable)
+        .map_err(|name| {
+            format!(
+                "unknown capability `{name}` for --disable; supported: document_conversion, semantic"
+            )
+        })?;
     let state: SharedState = Arc::new(AppState {
         session_cookie_policy: if config
             .bind

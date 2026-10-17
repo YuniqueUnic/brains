@@ -26,6 +26,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
 async fn generated_client_talks_to_generated_server() {
     let dir = tempfile::tempdir().unwrap();
     let config = ServerConfig {
+        disable: Vec::new(),
         data_dir: dir.path().to_path_buf(),
         vault: "default".into(),
         bind: "127.0.0.1".into(),
@@ -270,6 +271,7 @@ async fn generated_client_preserves_permission_and_size_failures() {
     }]});
     std::fs::write(dir.path().join("auth.json"), registry.to_string()).unwrap();
     let server = brains_server::serve(ServerConfig {
+        disable: Vec::new(),
         data_dir: dir.path().to_path_buf(),
         vault: "default".into(),
         bind: "127.0.0.1".into(),
