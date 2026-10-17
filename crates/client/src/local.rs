@@ -93,12 +93,11 @@ impl Library for LocalClient {
         {
             use brains_ports::DocumentConverter;
             let converter = brains_adapter_convert::XbergConverter::new();
-            capabilities.document_conversion =
-                Some(Capabilities::document_conversion(
-                    converter.identity().0,
-                    converter.identity().1,
-                    converter.supported_media_types(),
-                ));
+            capabilities.document_conversion = Some(Capabilities::document_conversion(
+                converter.identity().0,
+                converter.identity().1,
+                converter.supported_media_types(),
+            ));
             capabilities
                 .features
                 .insert("document_conversion".into(), true);

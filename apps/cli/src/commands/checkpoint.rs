@@ -32,7 +32,11 @@ fn refresh_generated_block(mut body: Vec<u8>, actor: &str, now: &str) -> Vec<u8>
         let after = &text[start + "generated:".len()..];
         let end = after
             .find("\n  at:")
-            .and_then(|at| after[at..].find('\n').map(|nl| start + "generated:".len() + at + nl))
+            .and_then(|at| {
+                after[at..]
+                    .find('\n')
+                    .map(|nl| start + "generated:".len() + at + nl)
+            })
             .unwrap_or(start + "generated:".len());
         let replacement = format!("\ngenerated:\n  by: {actor}\n  at: {now}");
         let mut refreshed = String::with_capacity(text.len());

@@ -187,13 +187,7 @@ pub fn import_url(
                 current_revision: None,
             });
         }
-        return store_document(
-            client,
-            input.path,
-            &bytes,
-            &content_type,
-            &final_url,
-        );
+        return store_document(client, input.path, &bytes, &content_type, &final_url);
     }
 
     // Ladder steps 1–3 for pages.
@@ -286,22 +280,20 @@ fn check_url_host(
                 current_revision: None,
             });
         }
-            if is_private_target(&address)
-                && !policy.allow_hosts.contains(&host)
-            {
-                return Err(ClientError {
-                    status: 403,
-                    code: Some("FORBIDDEN_TARGET".into()),
-                    message: format!(
-                        "{host} resolves to a private, loopback or link-local address ({address}); allowlist the host explicitly to fetch it"
-                    ),
-                    current_revision: None,
-                });
-            }
-            pins.push((host.clone(), socket));
+        if is_private_target(&address) && !policy.allow_hosts.contains(&host) {
+            return Err(ClientError {
+                status: 403,
+                code: Some("FORBIDDEN_TARGET".into()),
+                message: format!(
+                    "{host} resolves to a private, loopback or link-local address ({address}); allowlist the host explicitly to fetch it"
+                ),
+                current_revision: None,
+            });
         }
-        Ok(pins)
+        pins.push((host.clone(), socket));
     }
+    Ok(pins)
+}
 
 /// Cloud metadata endpoints are never fetchable, on any policy (issue #22).
 /// AWS/Azure/GCP/Alibaba well-known addresses; IPv4-mapped IPv6 forms are
@@ -653,6 +645,5 @@ fn put_precondition(client: &dyn Library, path: &str) -> ClientResult<Preconditi
         Err(error) => Err(error),
     }
 }
-
 
 use crate::convert::yaml_scalar as yaml_quote;

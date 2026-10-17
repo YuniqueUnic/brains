@@ -32,7 +32,10 @@ async fn monotonic_upsert_rejects_older_generation() {
     idx.upsert(&projection("a.md", "rev1", 1, "旧的缓存策略"))
         .await
         .unwrap();
-    let rows = idx.scan_literal(None, "", 10, "缓存", &[], &MetaFilter::default()).await.unwrap();
+    let rows = idx
+        .scan_literal(None, "", 10, "缓存", &[], &MetaFilter::default())
+        .await
+        .unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].revision, "rev2");
 }
@@ -46,7 +49,10 @@ async fn literal_window_returns_nonmatches_for_cursor() {
     idx.upsert(&projection("b.md", "r1", 1, "没有那个词"))
         .await
         .unwrap();
-    let rows = idx.scan_literal(None, "", 10, "缓存", &[], &MetaFilter::default()).await.unwrap();
+    let rows = idx
+        .scan_literal(None, "", 10, "缓存", &[], &MetaFilter::default())
+        .await
+        .unwrap();
     // Both candidates come back so the caller advances the cursor reliably.
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].path, "a.md");
@@ -62,14 +68,18 @@ async fn fts_matches_and_rejects_bad_syntax() {
         .unwrap();
     if !cfg!(feature = "fts") {
         assert!(matches!(
-            idx.search_fts("cache", None, &[], &MetaFilter::default(), 0, 10).await,
+            idx.search_fts("cache", None, &[], &MetaFilter::default(), 0, 10)
+                .await,
             Err(brains_domain::DomainError::CapabilityUnsupported(
                 "fts_search"
             ))
         ));
         return;
     }
-    let hits = idx.search_fts("cache", None, &[], &MetaFilter::default(), 0, 10).await.unwrap();
+    let hits = idx
+        .search_fts("cache", None, &[], &MetaFilter::default(), 0, 10)
+        .await
+        .unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].0, "a.md");
     assert!(
@@ -88,7 +98,10 @@ async fn tombstone_row_stays_but_leaves_search_and_links() {
     let mut tombstone = projection("a.md", "r2", 2, "");
     tombstone.deleted = true;
     idx.upsert(&tombstone).await.unwrap();
-    let rows = idx.scan_literal(None, "", 10, "缓存", &[], &MetaFilter::default()).await.unwrap();
+    let rows = idx
+        .scan_literal(None, "", 10, "缓存", &[], &MetaFilter::default())
+        .await
+        .unwrap();
     assert!(rows.is_empty(), "trashed files leave literal search");
     let count = idx.files_count().await.unwrap();
     assert_eq!(count, 1, "tombstone rows persist with generation");
@@ -131,13 +144,22 @@ async fn full_text_preview_and_mutations_follow_current_projection() {
         .await
         .unwrap();
     let hits = index
-        .search_fts("needle", None, &["rust".into()], &MetaFilter::default(), 0, 10)
+        .search_fts(
+            "needle",
+            None,
+            &["rust".into()],
+            &MetaFilter::default(),
+            0,
+            10,
+        )
         .await
         .unwrap();
     assert_eq!(hits[0].2.chars().count(), 240);
     assert_eq!(hits[0].2, body.chars().take(240).collect::<String>());
     assert!(matches!(
-        index.search_fts("\"bad", None, &[], &MetaFilter::default(), 0, 10).await,
+        index
+            .search_fts("\"bad", None, &[], &MetaFilter::default(), 0, 10)
+            .await,
         Err(brains_domain::DomainError::InvalidArgument(_))
     ));
     index

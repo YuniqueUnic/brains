@@ -10,8 +10,8 @@ use std::collections::BTreeSet;
 use brains_format::markdown::{LinkKind, ResolvedLink, extract_links};
 use brains_format::{Frontmatter, NoteStatus, split_frontmatter};
 
-use crate::endpoint::FileEndpoint;
 use crate::ClientResult;
+use crate::endpoint::FileEndpoint;
 
 /// One finding: the rule that fired, where, and a short fix hint.
 #[derive(Clone, Debug, Serialize)]
@@ -108,10 +108,7 @@ pub fn run_check(
                         report.findings.push(CheckFinding {
                             rule: "link-unresolved".into(),
                             path: note.path.as_str().to_owned(),
-                            hint: format!(
-                                "internal target `{}` does not exist (yet)",
-                                link.target
-                            ),
+                            hint: format!("internal target `{}` does not exist (yet)", link.target),
                         });
                     }
                 }
@@ -137,10 +134,9 @@ pub fn run_check(
             .filter(|other| {
                 other.path.as_str() != note.path.as_str()
                     && other.fm.status != NoteStatus::Deprecated
-                    && other
-                        .links
-                        .iter()
-                        .any(|link| link.kind == LinkKind::Internal && link.target == note.path.as_str())
+                    && other.links.iter().any(|link| {
+                        link.kind == LinkKind::Internal && link.target == note.path.as_str()
+                    })
             })
             .map(|other| other.path.as_str())
             .collect();
@@ -261,9 +257,7 @@ fn analyze_note(report: &mut CheckReport, note: &ScannedNote, today: &str) {
             report.findings.push(CheckFinding {
                 rule: "footnote-without-source".into(),
                 path: path.as_str().to_owned(),
-                hint: format!(
-                    "footnote `[^{footnote}]` has no sources entry with id `{footnote}`"
-                ),
+                hint: format!("footnote `[^{footnote}]` has no sources entry with id `{footnote}`"),
             });
         }
     }
@@ -282,11 +276,7 @@ fn footnote_ids(body: &str) -> Vec<String> {
         };
         let id = &body[start..start + close];
         let after = body[start + close + 1..].strip_prefix(':');
-        let at_line_start = body[..marker]
-            .rfind('\n')
-            .map(|at| at + 1)
-            .unwrap_or(0)
-            == marker;
+        let at_line_start = body[..marker].rfind('\n').map(|at| at + 1).unwrap_or(0) == marker;
         let is_definition = at_line_start && after.is_some();
         if !id.is_empty() && !is_definition && !ids.iter().any(|seen| seen == id) {
             ids.push(id.to_owned());
