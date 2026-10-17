@@ -133,29 +133,26 @@ importers:
         specifier: 1.64.1
         version: 1.64.1
       '@serenity-js/assertions':
-        specifier: ^3.31.0
-        version: 3.48.0
+        specifier: 3.49.0
+        version: 3.49.0
       '@serenity-js/core':
-        specifier: ^3.31.0
-        version: 3.48.0
+        specifier: 3.49.0
+        version: 3.49.0
       '@serenity-js/playwright':
-        specifier: ^3.48.0
-        version: 3.48.0
+        specifier: 3.49.0
+        version: 3.49.0(playwright-core@1.64.1)
       '@serenity-js/playwright-test':
         specifier: 3.49.0
-        version: 3.49.0(@playwright/test@1.64.1)
+        version: 3.49.0(@playwright/test@1.64.1)(playwright-core@1.64.1)
       '@serenity-js/rest':
-        specifier: ^3.31.0
-        version: 3.48.0
+        specifier: 3.49.0
+        version: 3.49.0
       '@serenity-js/web':
-        specifier: ^3.48.0
-        version: 3.48.0
+        specifier: 3.49.0
+        version: 3.49.0
       '@types/node':
         specifier: ^26.6.4
         version: 26.6.4
-      playwright:
-        specifier: ^1.52.0
-        version: 1.63.0
       typescript:
         specifier: ~7.0.2
         version: 7.0.2
@@ -1174,16 +1171,8 @@ packages:
   '@rolldown/pluginutils@1.0.1':
     resolution: {integrity: sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw==}
 
-  '@serenity-js/assertions@3.48.0':
-    resolution: {integrity: sha512-mAZExeo8qelF+++/JNXz5GWaE6J2ai3IpukGxxTKj5uNHPTf/JFfXx/eg1G1v4RERB9EnvlHDMgNKNP1bk1uGw==}
-    engines: {node: ^22.22.2 || ^24.15.0}
-
   '@serenity-js/assertions@3.49.0':
     resolution: {integrity: sha512-vKkx7Ff/sV70/JJ9paWSZiPaaBA1Po+Kdqep/T6P8H3DyyrCI5nHzzNTbM/Znq5fh+EKh1Oj+cP3yARHStP6uw==}
-    engines: {node: ^22.22.2 || ^24.15.0}
-
-  '@serenity-js/core@3.48.0':
-    resolution: {integrity: sha512-6S0nWThzZAXfY6IJBQnS61YCbXkhrJWdFCC1upvAQWxaxH4yz9mUfl2QUth7mzYh+jFUzlb1fJ/rDf1W6RQCKw==}
     engines: {node: ^22.22.2 || ^24.15.0}
 
   '@serenity-js/core@3.49.0':
@@ -1196,28 +1185,14 @@ packages:
     peerDependencies:
       '@playwright/test': ~1.64.0
 
-  '@serenity-js/playwright@3.48.0':
-    resolution: {integrity: sha512-ZkDGyuFJVLGvDRz4/vmf0mlRWFKtuZDxWi+ZKrMkxthkPw2CKmf78acNWXFlSOAxMuGKeDv8jnGZbLLfvK9nXg==}
-    engines: {node: ^22.22.2 || ^24.15.0}
-    peerDependencies:
-      playwright-core: ~1.63.0
-
   '@serenity-js/playwright@3.49.0':
     resolution: {integrity: sha512-UzrE6KsPh2DyIc23wVuHV+uIF5G2nbH/M9YuIRTvWR7FRp8xU9JAelZzJULn3o12AQiaQtCvpwUa1Y4nB4f1pg==}
     engines: {node: ^22.22.2 || ^24.15.0}
     peerDependencies:
       playwright-core: ~1.64.0
 
-  '@serenity-js/rest@3.48.0':
-    resolution: {integrity: sha512-Pnn91mqmsRALpk9sYAehq+NasbX0X1Q3E1LX1ZaNwUlZH81yuxLnRUyi7EaiVmFm6FtGnnZnUwsemryAeiwQAA==}
-    engines: {node: ^22.22.2 || ^24.15.0}
-
   '@serenity-js/rest@3.49.0':
     resolution: {integrity: sha512-GK9od8iYb8CFfVDRVPGRYUf92zcIcX1CrNBh+Kr7GJYmgjw312IclOS/mP5t+B/4U1F/l5DxZWaIvVfMPQcOGw==}
-    engines: {node: ^22.22.2 || ^24.15.0}
-
-  '@serenity-js/web@3.48.0':
-    resolution: {integrity: sha512-ZQ9MDuJm9Ui+sMRldJaaXvx8NCRc7varoYQ/kMAhcdvRYs1Wx7KFpW396jmI7/3+xkFMMKm11msg/VdyOduzQQ==}
     engines: {node: ^22.22.2 || ^24.15.0}
 
   '@serenity-js/web@3.49.0':
@@ -1901,10 +1876,6 @@ packages:
     resolution: {integrity: sha512-WkUDrojuJs0xkgGf2udWxa3yGBRxPtxUkB79i6aCZLRgc7PM8fZe9TosfPDcvEpQZbuFASnHYmRLBLUbmLOIIA==}
     engines: {node: '>= 12.0.0'}
 
-  lru-cache@11.5.2:
-    resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}
-    engines: {node: 20 || >=22}
-
   lru-cache@11.5.3:
     resolution: {integrity: sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==}
     engines: {node: 20 || >=22}
@@ -1988,18 +1959,8 @@ packages:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
 
-  playwright-core@1.63.0:
-    resolution: {integrity: sha512-rYCsBF/M5HjUch52bbtVONEFjv6Xu8sm8h72dNlR5bzIE1fvC/bxgspzkjSfU+MweEMmPM8KJebG6nnyxo5mCg==}
-    engines: {node: '>=20'}
-    hasBin: true
-
   playwright-core@1.64.1:
     resolution: {integrity: sha512-BC4s8y6SEVA6Q1rSxZTto8hI1KUI3xXlHGZgvGqP4IqPdI/a6FX9H29IDNz7vKo9l21b6LfYosScPL6M3xxyDQ==}
-    engines: {node: '>=20'}
-    hasBin: true
-
-  playwright@1.63.0:
-    resolution: {integrity: sha512-+7ziBLidS4NaNCdt57SUDT+wYmmd5fmiQejUic/kb+YsYSCPyOOE9sebzMjNmQrsnNpDJqd4WHvV/8lfKfUDUg==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -3266,29 +3227,10 @@ snapshots:
 
   '@rolldown/pluginutils@1.0.1': {}
 
-  '@serenity-js/assertions@3.48.0':
-    dependencies:
-      '@serenity-js/core': 3.48.0
-      tiny-types: 2.0.5
-
   '@serenity-js/assertions@3.49.0':
     dependencies:
       '@serenity-js/core': 3.49.0
       tiny-types: 2.0.5
-
-  '@serenity-js/core@3.48.0':
-    dependencies:
-      '@paralleldrive/cuid2': 2.3.1
-      chalk: 4.1.2
-      diff: 8.0.4
-      error-stack-parser: 2.1.4
-      fast-glob: 3.3.3
-      filenamify: 4.3.0
-      graceful-fs: 4.2.11
-      semver: 7.8.5
-      tiny-types: 2.0.5
-      upath: 3.0.8
-      validate-npm-package-name: 8.0.0
 
   '@serenity-js/core@3.49.0':
     dependencies:
@@ -3304,11 +3246,11 @@ snapshots:
       upath: 3.0.8
       validate-npm-package-name: 8.0.0
 
-  '@serenity-js/playwright-test@3.49.0(@playwright/test@1.64.1)':
+  '@serenity-js/playwright-test@3.49.0(@playwright/test@1.64.1)(playwright-core@1.64.1)':
     dependencies:
       '@playwright/test': 1.64.1
       '@serenity-js/core': 3.49.0
-      '@serenity-js/playwright': 3.49.0
+      '@serenity-js/playwright': 3.49.0(playwright-core@1.64.1)
       '@serenity-js/rest': 3.49.0
       '@serenity-js/web': 3.49.0
       axios: 1.20.0
@@ -3319,30 +3261,12 @@ snapshots:
       - playwright-core
       - supports-color
 
-  '@serenity-js/playwright@3.48.0':
-    dependencies:
-      '@serenity-js/core': 3.48.0
-      '@serenity-js/web': 3.48.0
-      tiny-types: 2.0.5
-
-  '@serenity-js/playwright@3.49.0':
+  '@serenity-js/playwright@3.49.0(playwright-core@1.64.1)':
     dependencies:
       '@serenity-js/core': 3.49.0
       '@serenity-js/web': 3.49.0
+      playwright-core: 1.64.1
       tiny-types: 2.0.5
-
-  '@serenity-js/rest@3.48.0':
-    dependencies:
-      '@serenity-js/core': 3.48.0
-      agent-base: 7.1.4
-      axios: 1.20.0
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
-      lru-cache: 11.5.2
-      tiny-types: 2.0.5
-    transitivePeerDependencies:
-      - debug
-      - supports-color
 
   '@serenity-js/rest@3.49.0':
     dependencies:
@@ -3356,12 +3280,6 @@ snapshots:
     transitivePeerDependencies:
       - debug
       - supports-color
-
-  '@serenity-js/web@3.48.0':
-    dependencies:
-      '@serenity-js/assertions': 3.48.0
-      '@serenity-js/core': 3.48.0
-      tiny-types: 2.0.5
 
   '@serenity-js/web@3.49.0':
     dependencies:
@@ -3906,8 +3824,6 @@ snapshots:
       lightningcss-win32-arm64-msvc: 1.33.0
       lightningcss-win32-x64-msvc: 1.33.0
 
-  lru-cache@11.5.2: {}
-
   lru-cache@11.5.3: {}
 
   lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0):
@@ -3986,13 +3902,7 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  playwright-core@1.63.0: {}
-
   playwright-core@1.64.1: {}
-
-  playwright@1.63.0:
-    dependencies:
-      playwright-core: 1.63.0
 
   playwright@1.64.1:
     dependencies:

@@ -1,4 +1,4 @@
-import type { Config } from "playwright/test";
+import type { Config } from "@playwright/test";
 
 const PORT = 18799;
 const BASE_URL = process.env.BRAINS_BASE_URL ?? `http://127.0.0.1:${PORT}`;
