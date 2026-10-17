@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+* **format:** resolve root-relative Markdown links from the vault root (#12); root-relative targets are the recommended OKF link form. A reindex (`bsx reindex --all-pages`) is needed to correct existing edges (parser version bumped to 4).
+* **format/index:** parse and index lifecycle, trust and provenance frontmatter (#13): `status`, `stale_after`, `generated`, `verified`, `sources`, `description`; derived trust tiers; `meta_json` projection on Turso and D1 (D1 migration `0002_meta_json.sql`); `status`/`type`/`trust`/`stale` filters in `POST /files/query`, `POST /search` and the CLI.
+* **cli:** `bsx check [--prefix] [--json] [--okf]` (#14, #20): read-only report of stale, unconfirmed, unsupported-inferred notes, unresolved and escaping links, footnote/source mismatches and frontmatter problems; exit 10 when findings exist; OKF conformance mode.
+* **cli:** `bsx checkpoint show|update` (#15): conventional `<scope>/checkpoint.md` continuity note, ordinary versioned file, CAS rules.
+* **guides:** seeded `ai-guide.md` and `memory-writing.md` teach when to recall, record and skip memory plus the lifecycle/trust fields (#16); mirrored in `docs/ai-integration.md`.
+* **cli:** tracked working copy `bsx checkout|status|pull|push` (#21): manifest-based base revisions, three-way text merges on pull, CAS-guarded push, conflicts never overwritten.
+* **cli:** OKF v0.2 interop (#20): `bsx export --format okf [--with-log]`, `bsx import --format okf`, `bsx index-scope`, OKF conformance in `bsx check --okf`.
+* **ports:** embedding provider port (#17): `EmbeddingProvider`/`VectorIndex` with a `NoopEmbeddingProvider` locally; capabilities report the `semantic` block; Worker declares semantic state from its bindings (explicitly unavailable until the Workers AI adapter is attached).
+* **search:** `mode=hybrid` weighted reciprocal rank fusion (#18) over the available retrievers, with per-hit `retrieved_by` ranks and honest `unavailable` reporting.
+* **convert:** embedded Xberg PDF converter behind the `convert` feature (#19): `bsx convert <attachment>` writes a versioned companion note with provenance frontmatter; capabilities report `document_conversion`. Office/Excel/HTML stay off at xberg 1.0.0-rc.5 (upstream cfg/zip breakage tracked for re-enable).
+* **cli:** `bsx import-url` (#22): fetch-and-render ladder (markdown negotiation, Readability static HTML, optional `moli` render, document storage) with strict-by-default network policy (https only, private/metadata targets refused, robots respected, bounded size/redirects) and provenance frontmatter.
+* **cli:** `bsx seed --refresh`: replace existing template paths whose content differs from the built-in templates (sha256 no-op detection, CAS-guarded against concurrent edits); trashed paths stay trashed — old vaults pick up new guides explicitly.
+* **client:** remote requests speak the IDL-generated wire contract: the CLI's HTTP store now posts `ListFilesQuery`/`SearchQuery` instead of raw application structs, so a Rust-side field rename (`type_`) can never again silently drop a filter (`type`) on the wire.
+
+### Bug Fixes
+
+* import-url pins every request to the DNS addresses validated by the SSRF check (`ClientBuilder::resolve`), closing the check-to-connect rebinding window; redirect hops and the robots probe share the same per-host pins.
+* literal scans keep lifecycle filters inside the candidate window so paging stays exact.
+* `bsx checkpoint update --create` and `--if-revision` are now rejected as mutually exclusive instead of silently ignoring the revision precondition.
+
 ## [0.4.0](https://github.com/YuniqueUnic/brains/compare/v0.3.0...v0.4.0) (2026-10-11)
 
 
