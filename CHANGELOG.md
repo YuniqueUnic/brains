@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.5.0](https://github.com/YuniqueUnic/brains/compare/v0.4.0...v0.5.0) (2026-10-17)
 
 ### Features
 
