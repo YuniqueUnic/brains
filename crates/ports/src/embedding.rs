@@ -1,9 +1,8 @@
 //! Embedding provider port (issue #17): the single abstraction for producing
 //! and storing embeddings. One port, different implementations per runtime —
-//! native ships a Noop provider (semantic search explicitly unavailable);
-//! the Cloudflare Worker implements it with Workers AI + Vectorize bindings.
-//! The vector index is a disposable projection: rebuilding it never touches
-//! the source of truth (HEAD/revisions/blobs).
+//! no runtime mounts a provider yet, so every runtime declares semantic
+//! search unavailable. The vector index is a disposable projection: rebuilding
+//! it never touches the source of truth (HEAD/revisions/blobs).
 
 use std::future::Future;
 

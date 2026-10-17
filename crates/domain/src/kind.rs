@@ -97,6 +97,9 @@ pub fn media_type_for(path: &str) -> &'static str {
         "gif" => "image/gif",
         "webp" => "image/webp",
         "pdf" => "application/pdf",
+        "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         "sh" | "bash" => "text/x-shellscript; charset=utf-8",
         "py" => "text/x-python; charset=utf-8",
         "rs" => "text/x-rust; charset=utf-8",
@@ -120,14 +123,26 @@ pub fn declares_text(path: &str) -> bool {
         || TEXT_EXTS.contains(&ext.as_str())
 }
 
+/// The case-insensitive `type/subtype` of a media type with any parameters
+/// removed: the identity that capability lists, storage classes and
+/// converters compare by (`text/plain; charset=utf-8` → `text/plain`).
+pub fn media_type_essence(media_type: &str) -> String {
+    media_type
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase()
+}
+
 /// Media types whose bodies are human-readable text: they never require the
 /// `X-Content-SHA256` digest header; everything else counts as binary for
 /// upload validation (design §22.3).
 pub fn is_text_media(media_type: &str) -> bool {
-    let base = media_type.split(';').next().unwrap_or("").trim();
+    let base = media_type_essence(media_type);
     base.starts_with("text/")
         || matches!(
-            base,
+            base.as_str(),
             "application/json" | "application/yaml" | "application/toml"
         )
 }

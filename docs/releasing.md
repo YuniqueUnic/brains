@@ -16,7 +16,7 @@ Brains 的产品版本统一管理，Rust、Web、Worker、SDK 和验收工具�
 Release 已创建而构建或分发失败时，在仓库目录手动重跑资产工作流。`--ref main` 选择最新构建脚本，`version` 选择已有发布标签：
 
 ```bash
-gh workflow run release.yml --ref main -f version=v0.3.0 -f publish_docker=false
+gh workflow run release.yml --ref main -f version=v0.6.0 -f publish_docker=false
 ```
 
 构建脚本位于默认分支，产品源码始终来自输入标签，后续 job 使用首次解析出的同一提交。上传前会再次核对远端标签，标签发生变化就拒绝发布。修复构建脚本后可以重新构建已有版本，不需要移动标签。重跑 release-please 不保证再次分发资产构建。如果资产只上传了一部分，先核对已有文件，再手动上传缺失文件；同名资产不会被静默覆盖。
@@ -33,7 +33,7 @@ pnpm install --frozen-lockfile
 
 ## 构建身份
 
-`brains-build-info` 集中采集并格式化整个 workspace 的构建身份，CLI、原生服务器和 Worker 读取同一个版本常量。`bsx --version` 与 `brains-server --version` 在版本前加各自的程序名；实例的 `capabilities.build_version` 返回版本正文，例如 `0.3.0 (git 123456789abc-dirty)`。该字段由被查询的实例提供，`api_version` 仍单独表示协议版本。
+`brains-build-info` 集中采集并格式化整个 workspace 的构建身份，CLI、原生服务器和 Worker 读取同一个版本常量。`bsx --version` 与 `brains-server --version` 在版本前加各自的程序名；实例的 `capabilities.build_version` 返回版本正文，例如 `0.6.0 (git 123456789abc-dirty)`。该字段由被查询的实例提供，`api_version` 仍单独表示协议版本。
 
 默认规则：
 

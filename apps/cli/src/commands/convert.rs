@@ -25,6 +25,8 @@ pub(crate) fn convert(client: &dyn Library, path: &str, to: Option<&str>) -> Cli
             report.companion_revision,
             if report.created {
                 "created"
+            } else if report.unchanged {
+                "unchanged"
             } else {
                 "new revision"
             }

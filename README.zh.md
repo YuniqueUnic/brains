@@ -70,7 +70,7 @@ bsx search "关键词" --mode hybrid
 | `bsx ls --status draft --type Decision --stale` | 基于索引投影的生命周期/信任过滤（`status`、`type`、`trust`、`stale_after`） |
 | `bsx check` | 质量报告：过期笔记、未确认的 agent 结论、断链、脚注缺口（`--okf` 为 OKF v0.2 一致性检查） |
 | `bsx checkpoint show/update <scope>` | 按 scope 的连续性检查点笔记，CAS 写入 |
-| `bsx convert <attachment>` | PDF/DOCX/XLSX/PPTX/HTML → Markdown 伴随笔记（离线内嵌转换器） |
+| `bsx convert <attachment>` | PDF/DOCX/XLSX/PPTX/HTML/CSV/TXT → Markdown 伴随笔记（离线内嵌转换器） |
 | `bsx import-url <url> <path>` | 网页 → Markdown，严格抓取阶梯（SSRF 防护、robots 遵循） |
 | `bsx checkout/status/pull/push` | 受跟踪工作副本，三方合并与冲突上报 |
 | `bsx seed --refresh` | 向老库补种模板笔记（内容比对、CAS 保护） |
@@ -134,10 +134,10 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## 测试
 
-Rust 构建配置统一在 workspace 根目录：`dev` 保留源码位置与增量编译，`release` 使用体积优化、Thin LTO 和符号裁剪。CI 的原生端到端任务使用 release 二进制验证功能组合、CLI 操作和浏览器流程。构建命令及调试取舍见[开发与发布构建](docs/releasing.md#开发与发布构建)。
+Rust 构建配置统一在 workspace 根目录：`dev` 保留源码位置与增量编译，`release` 使用体积优化、Thin LTO 和符号裁剪。CI 的原生端到端任务使用 release 二进制验证功能组合、CLI 操作和浏览器流程。构建命令及调试取舍见[开发与发布构建](docs/releasing.md#开发与发布构建)。原生检索基于 Turso，可选启用 Tantivy——见[构建开关与搜索规则](docs/turso.md)。
 
 - **Rust 测试**——domain、format、适配器、应用层业务测试（真实 fs+Turso，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
-- **24 项网页验收（22 项浏览器流程 + 2 项解析规则）**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
+- **浏览器 E2E（SerenityJS screenplay）**——对真实服务器与 workerd：登录、创作、CAS 冲突与再冲突、字面/FTS/混合检索、回收站/恢复、历史恢复。
 - **独立 CLI 业务验收与快照**——离线导入、编辑、历史、分页、服务器接管与多端协作，见 `tests/local-workflows.py`；local/remote 两类来源分别与 Worker 验证归档和同步。
 - **Worker 业务冒烟**——同一验收清单对 workerd 执行（`tests/worker-smoke.sh`）。
 
@@ -172,8 +172,6 @@ bash tests/worker-smoke.sh                                               # 对�
 ## 许可
 
 [MIT](LICENSE)
-
-原生索引使用 Turso 0.8.2，可通过 `fts` 选择是否构建 Tantivy；见[构建开关与搜索规则](docs/turso.md)。
 
 ## Docker 部署
 

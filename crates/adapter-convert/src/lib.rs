@@ -8,8 +8,8 @@
 use brains_domain::{DomainError, DomainResult};
 use brains_ports::{ConvertedDocument, DocumentConverter};
 
-/// Xberg-backed converter. `convert` never loads ML runtimes: the build
-/// enables only the pure-Rust PDF path.
+/// Xberg-backed converter. The build enables only the pure-Rust format
+/// gates (pdf, office, excel, html); no ML runtimes are loaded.
 pub struct XbergConverter;
 
 impl XbergConverter {
@@ -43,12 +43,15 @@ impl DocumentConverter for XbergConverter {
     }
 
     async fn convert(&self, bytes: &[u8], media_type: &str) -> DomainResult<ConvertedDocument> {
-        if !self.supported_media_types().contains(&media_type) {
+        // Callers may forward stored types with parameters; xberg matches on
+        // the bare essence.
+        let media_type = brains_domain::media_type_essence(media_type);
+        if !self.supported_media_types().contains(&media_type.as_str()) {
             return Err(DomainError::CapabilityUnsupported("document_conversion"));
         }
         let (converter_id, converter_version) = self.identity();
         let config = xberg::ExtractionConfig::default();
-        let input = xberg::ExtractInput::from_bytes(&*bytes.to_vec(), media_type.to_owned(), None);
+        let input = xberg::ExtractInput::from_bytes(&*bytes.to_vec(), media_type, None);
         let output = xberg::extract(input, &config)
             .await
             .map_err(|error| DomainError::InvalidFormat(format!("conversion failed: {error}")))?;

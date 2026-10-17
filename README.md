@@ -73,7 +73,7 @@ What a shipped `bsx` can do (full matrix in [docs/capabilities.md](docs/capabili
 | `bsx ls --status draft --type Decision --stale` | lifecycle/trust filters over the indexed projection (`status`, `type`, `trust`, `stale_after`) |
 | `bsx check` | quality report: stale notes, unconfirmed agent claims, broken links, footnote gaps (`--okf` for OKF v0.2 conformance) |
 | `bsx checkpoint show/update <scope>` | per-scope continuity note with CAS rules |
-| `bsx convert <attachment>` | PDF/DOCX/XLSX/PPTX/HTML → Markdown companion note (offline, embedded converter) |
+| `bsx convert <attachment>` | PDF/DOCX/XLSX/PPTX/HTML/CSV/TXT → Markdown companion note (offline, embedded converter) |
 | `bsx import-url <url> <path>` | web page → Markdown through a strict fetch ladder (SSRF-guarded, robots-aware) |
 | `bsx checkout/status/pull/push` | tracked working copy with three-way merges and conflict reporting |
 | `bsx seed --refresh` | re-seed template notes into older vaults (content-diffed, CAS-guarded) |
@@ -140,7 +140,7 @@ remote CLI / curl ──/api/v1/*──┐
 
 ## Testing
 
-Rust build profiles are shared at the workspace root: `dev` keeps source locations and incremental compilation; `release` optimizes size with Thin LTO and symbol stripping. The native E2E job runs its feature combinations, CLI workflows and browser scenarios against release binaries. See [build commands and debugging trade-offs](docs/releasing.md#开发与发布构建).
+Rust build profiles are shared at the workspace root: `dev` keeps source locations and incremental compilation; `release` optimizes size with Thin LTO and symbol stripping. The native E2E job runs its feature combinations, CLI workflows and browser scenarios against release binaries. See [build commands and debugging trade-offs](docs/releasing.md#开发与发布构建). Native search runs on Turso with optional Tantivy — see [build features and search semantics](docs/turso.md).
 
 - **Rust tests** — domain, format, adapters, application business tests (real fs+Turso, injected CAS/index failures), HTTP + CLI contract tests.
 - **Browser E2E (SerenityJS screenplay)** — against a real server and against workerd: login, authoring, CAS conflict + re-conflict, literal/FTS/hybrid search, trash/restore, history restore.
@@ -179,8 +179,6 @@ bash tests/worker-smoke.sh                                               # again
 
 [MIT](LICENSE)
 
-Native search now uses Turso 0.8.2 with optional Tantivy. See [build features and search semantics](docs/turso.md).
-
 ## Docker
 
-Run the server and bundled web app with persistent storage using `docker compose up -d`. Linux AMD64 and ARM64 images are published with releases; the image ships the full capability build, and `BRAINS_DISABLE=document_conversion,semantic` stops advertising selected capabilities. See [Docker deployment](docs/docker.md) for volumes, bind mounts, non-root permissions, secrets, HTTPS and source builds, and [capabilities](docs/capabilities.md) for the control model. The existing v0.3.0 release predates this Docker support.
+Run the server and bundled web app with persistent storage using `docker compose up -d`. Linux AMD64 and ARM64 images are published with releases; the image ships the full capability build, and `BRAINS_DISABLE=document_conversion,semantic` stops advertising selected capabilities. See [Docker deployment](docs/docker.md) for volumes, bind mounts, non-root permissions, secrets, HTTPS and source builds, and [capabilities](docs/capabilities.md) for the control model.

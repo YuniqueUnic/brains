@@ -12,7 +12,7 @@ instance, and `bsx capabilities --json` prints it for any profile.
 | Literal search | yes | yes | yes | yes |
 | Full-text search (FTS) | yes (Tantivy-backed, opt-in) | yes (Tantivy-backed, default on) | yes | yes (SQLite FTS5 on D1) |
 | Hybrid ranked search | yes | yes | yes | yes, degraded: semantic explicitly unavailable |
-| Semantic search | declared unavailable (no embedding provider yet) | declared unavailable | declared unavailable | ready for the AI binding; see the roadmap issue |
+| Semantic search | declared unavailable (no embedding provider yet) | declared unavailable | declared unavailable | declared unavailable ([roadmap issue](https://github.com/YuniqueUnic/brains/issues/40)) |
 | Document conversion (`bsx convert`) | yes | advertised (conversion runs client-side) | advertised | not advertised (the Worker build has no converter; `bsx convert` still works against it) |
 | URL import (`bsx import-url`) | yes | n/a (client-side) | n/a | n/a |
 | `bsx check`, `bsx checkpoint` | yes | yes (against a remote profile too) | yes | yes |
@@ -45,10 +45,11 @@ Three layers, in order of authority:
    and pretending otherwise would be a lie. Note that disabling only removes
    the advertisement — capability-respecting clients (the web app, agents
    that read `/capabilities`) stop offering the flow.
-3. **Runtime environment (Worker only).** `SEMANTIC_SEARCH=off`, or a
-   missing `AI` binding, makes the Worker report semantic search as
-   explicitly unavailable, with the reason in `capabilities.semantic.
-   unavailable_reason`.
+3. **Runtime environment (Worker only).** `SEMANTIC_SEARCH=off` records an
+   explicit operator decision in `capabilities.semantic.
+   unavailable_reason`; without it the Worker reports the same declared
+   unavailability as the native runtime until the embedding retriever
+   ships (roadmap issue above).
 
 ## How state actually changes (and why there is no event bus)
 

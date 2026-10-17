@@ -3,7 +3,7 @@
 //! operations.
 
 use brains_application::Precondition;
-use brains_domain::{DomainError, HexId, VaultPath};
+use brains_domain::{DomainError, HexId, VaultPath, media_type_essence};
 use sha2::{Digest, Sha256};
 
 // -- Precondition / conditional-read helpers --------------------------------
@@ -69,9 +69,10 @@ pub(crate) fn parse_strong_etag(value: &str) -> Option<HexId> {
 /// Content-Disposition policy (§13.3, §15.3): HTML/SVG and PDF download;
 /// everything else may render inline.
 pub(crate) fn content_disposition(media_type: &str, file_name: &str) -> Option<String> {
-    let force_download = media_type.starts_with("text/html")
-        || media_type.starts_with("image/svg+xml")
-        || media_type == "application/pdf";
+    let essence = media_type_essence(media_type);
+    let force_download = essence.starts_with("text/html")
+        || essence.starts_with("image/svg+xml")
+        || essence == "application/pdf";
     if !force_download {
         return None;
     }
