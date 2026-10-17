@@ -13,6 +13,13 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.6.0](https://github.com/YuniqueUnic/brains/compare/v0.5.0...v0.6.0) (2026-10-17)
+
+
+### Features
+
+* bsx self-update, cargo-binstall support, web hybrid/meta integration ([#26](https://github.com/YuniqueUnic/brains/issues/26)) ([b4ea863](https://github.com/YuniqueUnic/brains/commit/b4ea8632f0066134c58fada9ab226197177fd892))
+
 ## [0.5.0](https://github.com/YuniqueUnic/brains/compare/v0.4.0...v0.5.0) (2026-10-17)
 
 ### Features
