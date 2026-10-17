@@ -140,10 +140,10 @@ importers:
         version: 3.48.0
       '@serenity-js/playwright':
         specifier: ^3.48.0
-        version: 3.48.0(playwright-core@1.63.0)
+        version: 3.48.0
       '@serenity-js/playwright-test':
-        specifier: ^3.31.0
-        version: 3.48.0(@playwright/test@1.63.0)(playwright-core@1.63.0)
+        specifier: ^3.49.0
+        version: 3.49.0(@playwright/test@1.63.0)
       '@serenity-js/rest':
         specifier: ^3.31.0
         version: 3.48.0
@@ -1178,15 +1178,23 @@ packages:
     resolution: {integrity: sha512-mAZExeo8qelF+++/JNXz5GWaE6J2ai3IpukGxxTKj5uNHPTf/JFfXx/eg1G1v4RERB9EnvlHDMgNKNP1bk1uGw==}
     engines: {node: ^22.22.2 || ^24.15.0}
 
+  '@serenity-js/assertions@3.49.0':
+    resolution: {integrity: sha512-vKkx7Ff/sV70/JJ9paWSZiPaaBA1Po+Kdqep/T6P8H3DyyrCI5nHzzNTbM/Znq5fh+EKh1Oj+cP3yARHStP6uw==}
+    engines: {node: ^22.22.2 || ^24.15.0}
+
   '@serenity-js/core@3.48.0':
     resolution: {integrity: sha512-6S0nWThzZAXfY6IJBQnS61YCbXkhrJWdFCC1upvAQWxaxH4yz9mUfl2QUth7mzYh+jFUzlb1fJ/rDf1W6RQCKw==}
     engines: {node: ^22.22.2 || ^24.15.0}
 
-  '@serenity-js/playwright-test@3.48.0':
-    resolution: {integrity: sha512-bVLOiOvuEgniyARDze/4HjzpFH/A1x7EAqR1ouARX3Xe95W5RkzJSYzRxzL+ylnmOpi2C71KW7rLJ/Xb+B0PzQ==}
+  '@serenity-js/core@3.49.0':
+    resolution: {integrity: sha512-kA2n2VL/EE+o3xfF38vbhILOKm6urhx57/kPouwJ2jqyCqkCw7hf47y7dfthCYxxsrnjBZchrNio3UW9O9B81Q==}
+    engines: {node: ^22.22.2 || ^24.15.0}
+
+  '@serenity-js/playwright-test@3.49.0':
+    resolution: {integrity: sha512-+5SIjh+HWI6YQxJYOCvr9DLupb8/HYpCGHn9NlxkZZHDLQbEW84HzjUGFx1P5xpgVu65VDCynKPOAQx/AQDs1Q==}
     engines: {node: ^22.22.2 || ^24.15.0}
     peerDependencies:
-      '@playwright/test': ~1.63.0
+      '@playwright/test': ~1.64.0
 
   '@serenity-js/playwright@3.48.0':
     resolution: {integrity: sha512-ZkDGyuFJVLGvDRz4/vmf0mlRWFKtuZDxWi+ZKrMkxthkPw2CKmf78acNWXFlSOAxMuGKeDv8jnGZbLLfvK9nXg==}
@@ -1194,12 +1202,26 @@ packages:
     peerDependencies:
       playwright-core: ~1.63.0
 
+  '@serenity-js/playwright@3.49.0':
+    resolution: {integrity: sha512-UzrE6KsPh2DyIc23wVuHV+uIF5G2nbH/M9YuIRTvWR7FRp8xU9JAelZzJULn3o12AQiaQtCvpwUa1Y4nB4f1pg==}
+    engines: {node: ^22.22.2 || ^24.15.0}
+    peerDependencies:
+      playwright-core: ~1.64.0
+
   '@serenity-js/rest@3.48.0':
     resolution: {integrity: sha512-Pnn91mqmsRALpk9sYAehq+NasbX0X1Q3E1LX1ZaNwUlZH81yuxLnRUyi7EaiVmFm6FtGnnZnUwsemryAeiwQAA==}
     engines: {node: ^22.22.2 || ^24.15.0}
 
+  '@serenity-js/rest@3.49.0':
+    resolution: {integrity: sha512-GK9od8iYb8CFfVDRVPGRYUf92zcIcX1CrNBh+Kr7GJYmgjw312IclOS/mP5t+B/4U1F/l5DxZWaIvVfMPQcOGw==}
+    engines: {node: ^22.22.2 || ^24.15.0}
+
   '@serenity-js/web@3.48.0':
     resolution: {integrity: sha512-ZQ9MDuJm9Ui+sMRldJaaXvx8NCRc7varoYQ/kMAhcdvRYs1Wx7KFpW396jmI7/3+xkFMMKm11msg/VdyOduzQQ==}
+    engines: {node: ^22.22.2 || ^24.15.0}
+
+  '@serenity-js/web@3.49.0':
+    resolution: {integrity: sha512-p38wE8GxJsPqN+F0W6f8+MVI1C79xpKThQxe75ECS9Cs9W22LJwDrt6LZGjVGKMwEsiAru+YctkVuSTXaNwUZg==}
     engines: {node: ^22.22.2 || ^24.15.0}
 
   '@sindresorhus/is@7.2.0':
@@ -1881,6 +1903,10 @@ packages:
 
   lru-cache@11.5.2:
     resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}
+    engines: {node: 20 || >=22}
+
+  lru-cache@11.5.3:
+    resolution: {integrity: sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==}
     engines: {node: 20 || >=22}
 
   lucide-react@1.52.0:
@@ -3235,6 +3261,11 @@ snapshots:
       '@serenity-js/core': 3.48.0
       tiny-types: 2.0.5
 
+  '@serenity-js/assertions@3.49.0':
+    dependencies:
+      '@serenity-js/core': 3.49.0
+      tiny-types: 2.0.5
+
   '@serenity-js/core@3.48.0':
     dependencies:
       '@paralleldrive/cuid2': 2.3.1
@@ -3249,13 +3280,27 @@ snapshots:
       upath: 3.0.8
       validate-npm-package-name: 8.0.0
 
-  '@serenity-js/playwright-test@3.48.0(@playwright/test@1.63.0)(playwright-core@1.63.0)':
+  '@serenity-js/core@3.49.0':
+    dependencies:
+      '@paralleldrive/cuid2': 2.3.1
+      chalk: 4.1.2
+      diff: 8.0.4
+      error-stack-parser: 2.1.4
+      fast-glob: 3.3.3
+      filenamify: 4.3.0
+      graceful-fs: 4.2.11
+      semver: 7.8.5
+      tiny-types: 2.0.5
+      upath: 3.0.8
+      validate-npm-package-name: 8.0.0
+
+  '@serenity-js/playwright-test@3.49.0(@playwright/test@1.63.0)':
     dependencies:
       '@playwright/test': 1.63.0
-      '@serenity-js/core': 3.48.0
-      '@serenity-js/playwright': 3.48.0(playwright-core@1.63.0)
-      '@serenity-js/rest': 3.48.0
-      '@serenity-js/web': 3.48.0
+      '@serenity-js/core': 3.49.0
+      '@serenity-js/playwright': 3.49.0
+      '@serenity-js/rest': 3.49.0
+      '@serenity-js/web': 3.49.0
       axios: 1.20.0
       deepmerge: 4.3.1
       tiny-types: 2.0.5
@@ -3264,11 +3309,16 @@ snapshots:
       - playwright-core
       - supports-color
 
-  '@serenity-js/playwright@3.48.0(playwright-core@1.63.0)':
+  '@serenity-js/playwright@3.48.0':
     dependencies:
       '@serenity-js/core': 3.48.0
       '@serenity-js/web': 3.48.0
-      playwright-core: 1.63.0
+      tiny-types: 2.0.5
+
+  '@serenity-js/playwright@3.49.0':
+    dependencies:
+      '@serenity-js/core': 3.49.0
+      '@serenity-js/web': 3.49.0
       tiny-types: 2.0.5
 
   '@serenity-js/rest@3.48.0':
@@ -3284,10 +3334,29 @@ snapshots:
       - debug
       - supports-color
 
+  '@serenity-js/rest@3.49.0':
+    dependencies:
+      '@serenity-js/core': 3.49.0
+      agent-base: 7.1.4
+      axios: 1.20.0
+      http-proxy-agent: 7.0.2
+      https-proxy-agent: 7.0.6
+      lru-cache: 11.5.3
+      tiny-types: 2.0.5
+    transitivePeerDependencies:
+      - debug
+      - supports-color
+
   '@serenity-js/web@3.48.0':
     dependencies:
       '@serenity-js/assertions': 3.48.0
       '@serenity-js/core': 3.48.0
+      tiny-types: 2.0.5
+
+  '@serenity-js/web@3.49.0':
+    dependencies:
+      '@serenity-js/assertions': 3.49.0
+      '@serenity-js/core': 3.49.0
       tiny-types: 2.0.5
 
   '@sindresorhus/is@7.2.0': {}
@@ -3828,6 +3897,8 @@ snapshots:
       lightningcss-win32-x64-msvc: 1.33.0
 
   lru-cache@11.5.2: {}
+
+  lru-cache@11.5.3: {}
 
   lucide-react@1.52.0(@types/react@19.3.0)(react@19.3.0):
     dependencies:
