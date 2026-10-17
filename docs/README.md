@@ -10,6 +10,7 @@ Documentation for the Brains repository, written against the code as it is
 | [ai-integration.md](ai-integration.md) | Agent-facing API reference and write etiquette |
 | [editor-search.md](editor-search.md) | Source tags, search commands, and editor width |
 | [releasing.md](releasing.md) | Unified versions and release workflows |
+| [capabilities.md](capabilities.md) | Capability matrix per runtime, compile features, `BRAINS_DISABLE`, how state changes propagate |
 
 ## Documentation standards
 

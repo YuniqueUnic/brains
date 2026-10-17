@@ -44,8 +44,16 @@ Try the [browser demo](https://YuniqueUnic.github.io/brains/). No account or ser
 
 ## Quickstart: standalone bsx
 
+Install without compiling (prebuilt release binaries, kept current with
+`bsx update --check`), or build from source with cargo:
+
 ```bash
-mbx install --path apps/cli --locked --force
+cargo binstall --git https://github.com/YuniqueUnic/brains brains-cli
+bsx update            # later: self-upgrade from GitHub releases (SHA-256 verified)
+# or: cargo install --locked --git https://github.com/YuniqueUnic/brains brains-cli
+```
+
+```bash
 bsx init "$HOME/.brains/my-library" --profile laptop
 bsx import ./notes --dry-run
 bsx import ./notes
@@ -56,6 +64,20 @@ bsx search "hello"
 This is `local` mode: bsx opens the native stores directly, without a server,
 listener or token. `init` creates an empty library and selects its profile;
 run `bsx seed` if you want the template notes.
+
+What a shipped `bsx` can do (full matrix in [docs/capabilities.md](docs/capabilities.md)):
+
+| Command | What it does |
+|---|---|
+| `bsx search --mode hybrid` | weighted reciprocal-rank fusion over literal + FTS; per-hit provenance; semantic joins when a provider exists |
+| `bsx ls --status draft --type Decision --stale` | lifecycle/trust filters over the indexed projection (`status`, `type`, `trust`, `stale_after`) |
+| `bsx check` | quality report: stale notes, unconfirmed agent claims, broken links, footnote gaps (`--okf` for OKF v0.2 conformance) |
+| `bsx checkpoint show/update <scope>` | per-scope continuity note with CAS rules |
+| `bsx convert <attachment>` | PDF/DOCX/XLSX/PPTX/HTML → Markdown companion note (offline, embedded converter) |
+| `bsx import-url <url> <path>` | web page → Markdown through a strict fetch ladder (SSRF-guarded, robots-aware) |
+| `bsx checkout/status/pull/push` | tracked working copy with three-way merges and conflict reporting |
+| `bsx seed --refresh` | re-seed template notes into older vaults (content-diffed, CAS-guarded) |
+| `bsx update` | self-upgrade from GitHub releases (SHA-256 verified, atomic replace) |
 
 Add a `remote` profile when you want a Web UI or shared server. Loopback and
 public servers use the same commands:
@@ -120,8 +142,8 @@ remote CLI / curl ──/api/v1/*──┐
 
 Rust build profiles are shared at the workspace root: `dev` keeps source locations and incremental compilation; `release` optimizes size with Thin LTO and symbol stripping. The native E2E job runs its feature combinations, CLI workflows and browser scenarios against release binaries. See [build commands and debugging trade-offs](docs/releasing.md#开发与发布构建).
 
-- **91 Rust tests** — domain, format, adapters, 31 application business tests (real fs+Turso, injected CAS/index failures), HTTP + CLI contract tests.
-- **24 Web checks (22 browser E2E + 2 parsing checks)** — SerenityJS screenplay pattern against the real server: login, authoring, CAS conflict + re-conflict, literal/FTS search, trash/restore, history restore.
+- **Rust tests** — domain, format, adapters, application business tests (real fs+Turso, injected CAS/index failures), HTTP + CLI contract tests.
+- **Browser E2E (SerenityJS screenplay)** — against a real server and against workerd: login, authoring, CAS conflict + re-conflict, literal/FTS/hybrid search, trash/restore, history restore.
 - **Standalone CLI business scenarios and snapshot** — offline edits/history, pagination, directory ownership, and multi-server collaboration (`tests/local-workflows.py`); both local/remote sources exercise archive and sync against Worker.
 - **Worker business smoke** — the same acceptance list executed against workerd (`tests/worker-smoke.sh`).
 
@@ -149,7 +171,7 @@ bash tests/worker-smoke.sh                                               # again
 
 ## Status & honest limits
 
-- local-rust profile: **complete and verified** (P0 + patch/copy/move/diff/export; the four unsupported capabilities answer `501` and report `false`).
+- local-rust profile: **complete and verified** (P0 + patch/copy/move/diff/export, lifecycle metadata, hybrid search, document conversion, URL import, quality checks, working copy).
 - cloudflare-rust profile: **implemented and verified under local workerd**; real-account deployment, real R2/D1 behavior and the free-tier CPU budget remain to be validated with credentials.
 - Windows and non-Chromium browsers are untested; no long-running concurrency soak yet.
 
@@ -161,4 +183,4 @@ Native search now uses Turso 0.8.2 with optional Tantivy. See [build features an
 
 ## Docker
 
-Run the server and bundled web app with persistent storage using `docker compose up -d`. Linux AMD64 and ARM64 images are published with releases. See [Docker deployment](docs/docker.md) for volumes, bind mounts, non-root permissions, secrets, HTTPS and source builds. The existing v0.3.0 release predates this Docker support.
+Run the server and bundled web app with persistent storage using `docker compose up -d`. Linux AMD64 and ARM64 images are published with releases; the image ships the full capability build, and `BRAINS_DISABLE=document_conversion,semantic` stops advertising selected capabilities. See [Docker deployment](docs/docker.md) for volumes, bind mounts, non-root permissions, secrets, HTTPS and source builds, and [capabilities](docs/capabilities.md) for the control model. The existing v0.3.0 release predates this Docker support.

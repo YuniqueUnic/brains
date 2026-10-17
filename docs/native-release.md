@@ -2,7 +2,28 @@
 
 This archive contains `bsx` (CLI), `brains-server` (FS + SQLite runtime), this guide and `VERSION`. Choose the archive matching your operating system and CPU. Verify the adjacent SHA-256 file before extracting; macOS builds are not signed or notarized by this workflow. `bsx --version` and `brains-server --version` report the package version and Git commit in the same format; published artifacts must not carry `-dirty`. An authenticated `bsx capabilities --json` reports the connected instance’s `build_version`, which can differ from the CLI version.
 
+The release `bsx` ships the full local capability set: FTS search, hybrid
+ranking, document conversion (PDF/DOCX/XLSX/PPTX/HTML/CSV/plain text via the
+embedded Xberg backend), URL import, `check`, working copy, archive and
+sync. See [capabilities](capabilities.md) for the per-runtime matrix.
+
 This guide describes the current source. Unified version reporting was added after v0.3.0; upgrade the CLI and server/Worker together to a release containing it. The older server does not return the `build_version` field required by the new CLI. Rebuilding the old tag does not add this feature.
+
+## Install and upgrade without compiling
+
+[cargo-binstall](https://github.com/cargo-bins/cargo-binstall) installs the
+release binaries straight from GitHub releases, for either package:
+
+```bash
+cargo binstall --git https://github.com/YuniqueUnic/brains brains-cli
+cargo binstall --git https://github.com/YuniqueUnic/brains brains-server
+```
+
+An installed `bsx` upgrades itself the same way: `bsx update --check`
+reports the newest release, `bsx update` downloads the platform archive,
+verifies the published SHA-256, replaces the running binary (and a sibling
+`brains-server`, if one sits next to it) atomically. Non-interactive runs
+must pass `--yes`.
 
 ## Run a local instance
 

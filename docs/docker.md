@@ -76,6 +76,16 @@ services:
 
 优先使用 `--mount` 或上面的长语法，源目录不存在时直接报错，避免拼错路径后悄悄创建另一个空目录。SELinux 主机可能还需为 bind 目录设置允许容器访问的标签；rootless Docker 的用户映射也要按宿主环境配置。不要用 `chmod -R 777` 解决权限问题。
 
+## 能力开关
+
+镜像内的 `brains-server` 是完整能力构建：全文检索、混合排序、文档转换声明、模板播种都默认开启。需要在启动时**停止声明**某项能力（例如不希望 agent 看到文档转换入口）：
+
+```bash
+BRAINS_DISABLE=document_conversion,semantic docker compose up -d
+```
+
+只接受 `document_conversion` 与 `semantic` 两个名字——它们能被诚实地收回（转换在 CLI 侧执行，服务器只做声明）；`fts` 这类编译期能力不允许伪装关闭，传入未知名字会启动失败。能力矩阵见 [capabilities.md](capabilities.md)。
+
 ## 参数、环境变量和文件 secret
 
 命令行参数优先于对应环境变量，随后才使用默认值。镜像默认值和原生程序默认值有三处区别：`/data`、`0.0.0.0`、`/app/web`。

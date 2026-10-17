@@ -82,7 +82,7 @@ impl Library for LocalClient {
     fn capabilities(&self) -> ClientResult<Capabilities> {
         // Mutated only by the optional convert integration below.
         #[cfg_attr(not(feature = "convert"), allow(unused_mut))]
-        let mut capabilities = Capabilities::local(
+        let capabilities = Capabilities::local(
             brains_build_info::VERSION,
             &self.vault.vault,
             self.vault.limits.max_text_bytes,
