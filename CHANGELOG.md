@@ -23,6 +23,13 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.6.1](https://github.com/YuniqueUnic/brains/compare/v0.6.0...v0.6.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* honest capability advertisements and reachable document conversion ([#42](https://github.com/YuniqueUnic/brains/issues/42)) ([b790853](https://github.com/YuniqueUnic/brains/commit/b7908534611891d7d483df966d98bc0f776438a7))
+
 ## [0.6.0](https://github.com/YuniqueUnic/brains/compare/v0.5.0...v0.6.0) (2026-10-17)
 
 
