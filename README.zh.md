@@ -44,16 +44,37 @@ Web 界面内置 **暗色 / 亮色 / 跟随系统** 三档主题与 **命名空�
 
 ## 快速开始：先用一个 bsx
 
+免编译安装（直接取 GitHub Release 预编译产物，后续用 `bsx update --check` 跟进新版本），或用 cargo 从源码构建：
+
 ```bash
-mbx install --path apps/cli --locked --force
+cargo binstall --git https://github.com/YuniqueUnic/brains brains-cli
+bsx update            # 之后随时：自升级（SHA-256 校验、原子替换）
+# 或者：cargo install --locked --git https://github.com/YuniqueUnic/brains brains-cli
+```
+
+```bash
 bsx init "$HOME/.brains/my-library" --profile laptop
 bsx import ./notes --dry-run
 bsx import ./notes
 bsx ls
-bsx search "关键词"
+bsx search "关键词" --mode hybrid
 ```
 
 这是 `local` 模式：bsx 直接管理本地文件存储与索引，无需服务、端口或 token。`init` 创建空库并设为默认 profile；需要模板时执行 `bsx seed`。
+
+正式发布的 `bsx` 自带完整本地能力（完整矩阵见 [docs/capabilities.md](docs/capabilities.md)）：
+
+| 命令 | 作用 |
+|---|---|
+| `bsx search --mode hybrid` | 字面 + FTS 加权倒数排名融合；逐命中检索溯源；语义检索槽位已预留（尚未接入任何 provider，如实报告） |
+| `bsx ls --status draft --type Decision --stale` | 基于索引投影的生命周期/信任过滤（`status`、`type`、`trust`、`stale_after`） |
+| `bsx check` | 质量报告：过期笔记、未确认的 agent 结论、断链、脚注缺口（`--okf` 为 OKF v0.2 一致性检查） |
+| `bsx checkpoint show/update <scope>` | 按 scope 的连续性检查点笔记，CAS 写入 |
+| `bsx convert <attachment>` | PDF/DOCX/XLSX/PPTX/HTML → Markdown 伴随笔记（离线内嵌转换器） |
+| `bsx import-url <url> <path>` | 网页 → Markdown，严格抓取阶梯（SSRF 防护、robots 遵循） |
+| `bsx checkout/status/pull/push` | 受跟踪工作副本，三方合并与冲突上报 |
+| `bsx seed --refresh` | 向老库补种模板笔记（内容比对、CAS 保护） |
+| `bsx update` | 从 GitHub Release 自升级（SHA-256 校验、原子替换） |
 
 需要 Web 或多人协作时，再启动服务器并添加 `remote` profile。服务器在本机还是公网，用法相同：
 
@@ -115,7 +136,7 @@ remote CLI / curl ──/api/v1/*──┐
 
 Rust 构建配置统一在 workspace 根目录：`dev` 保留源码位置与增量编译，`release` 使用体积优化、Thin LTO 和符号裁剪。CI 的原生端到端任务使用 release 二进制验证功能组合、CLI 操作和浏览器流程。构建命令及调试取舍见[开发与发布构建](docs/releasing.md#开发与发布构建)。
 
-- **91 个 Rust 测试**——domain、format、适配器、31 个业务测试（真实 fs+Turso，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
+- **Rust 测试**——domain、format、适配器、应用层业务测试（真实 fs+Turso，注入 CAS/索引故障）、HTTP 与 CLI 契约测试。
 - **24 项网页验收（22 项浏览器流程 + 2 项解析规则）**——SerenityJS screenplay pattern 对真实服务器：登录、创作、CAS 冲突与再冲突、字面/FTS 搜索、回收站/恢复、历史恢复。
 - **独立 CLI 业务验收与快照**——离线导入、编辑、历史、分页、服务器接管与多端协作，见 `tests/local-workflows.py`；local/remote 两类来源分别与 Worker 验证归档和同步。
 - **Worker 业务冒烟**——同一验收清单对 workerd 执行（`tests/worker-smoke.sh`）。
@@ -144,7 +165,7 @@ bash tests/worker-smoke.sh                                               # 对�
 
 ## 状态与如实声明
 
-- local-rust profile：**已完成并验证**（P0 全量 + patch/copy/move/diff/export；四项未交付能力路由返回 `501`、capabilities 报 `false`）。
+- local-rust profile：**已完成并验证**（P0 全量 + patch/copy/move/diff/export、生命周期元数据、混合检索、文档转换、URL 导入、质量检查、工作副本）。
 - cloudflare-rust profile：**已实现并经本地 workerd 验证**；真实账户部署、真实 R2/D1 行为与免费额度 CPU 预算待凭据后验证。
 - Windows 与非 Chromium 浏览器未测试；尚未做长时间并发压测。
 
@@ -156,4 +177,4 @@ bash tests/worker-smoke.sh                                               # 对�
 
 ## Docker 部署
 
-使用 `docker compose up -d` 启动服务端和内置 Web，数据保存在持久化卷中。后续正式发布提供 Linux AMD64、ARM64 镜像；已有 v0.3.0 不含这套 Docker 支持。命名卷、宿主目录挂载、非 root 权限、文件 secret、HTTPS 与源码构建见 [Docker 部署说明](docs/docker.md)。
+使用 `docker compose up -d` 启动服务端和内置 Web，数据保存在持久化卷中。正式发布提供 Linux AMD64、ARM64 镜像；镜像默认携带完整能力构建，`BRAINS_DISABLE=document_conversion,semantic` 可在启动时停止声明所选能力。命名卷、宿主目录挂载、非 root 权限、文件 secret、HTTPS 与源码构建见 [Docker 部署说明](docs/docker.md)；能力控制模型见 [capabilities](docs/capabilities.md)。

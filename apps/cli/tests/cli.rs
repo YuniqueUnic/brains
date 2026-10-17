@@ -23,6 +23,7 @@ fn boot_server() -> TestServer {
             .build()
             .unwrap();
         let config = brains_server::ServerConfig {
+            disable: Vec::new(),
             data_dir,
             vault: "default".into(),
             bind: "127.0.0.1".into(),

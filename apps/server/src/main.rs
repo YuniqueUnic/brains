@@ -37,6 +37,10 @@ struct Args {
     /// Extra allowed origins for cookie flows; default is same-origin only.
     #[arg(long, env = "BRAINS_ALLOWED_ORIGINS", value_delimiter = ',')]
     origin: Vec<String>,
+    /// Stop advertising these capabilities (comma-separated: only
+    /// `document_conversion` and `semantic` can be withheld honestly).
+    #[arg(long, env = "BRAINS_DISABLE", value_delimiter = ',')]
+    disable: Vec<String>,
 }
 
 fn main() {
@@ -63,6 +67,7 @@ fn main() {
         web_dist: args.web_dist,
         allowed_origins: args.origin,
         seed_templates: !args.no_seed,
+        disable: args.disable,
     };
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

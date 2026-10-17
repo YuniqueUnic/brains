@@ -103,7 +103,6 @@ impl Capabilities {
             ("literal_search".into(), true),
             ("fts_search".into(), full_text != FullTextSearch::Disabled),
             ("fts_tantivy".into(), full_text == FullTextSearch::Tantivy),
-            ("regex_search".into(), false), // checkout-local rg only (design §10.3)
             ("history".into(), true),
             ("restore".into(), true),
             ("trash".into(), true),
@@ -114,10 +113,6 @@ impl Capabilities {
             ("export".into(), true),
             ("archive".into(), true),
             ("reindex".into(), true),
-            ("server_side_validate".into(), false), // P1 `brain doctor`
-            ("checkout_push_pull".into(), false), // server-side sync endpoint; the CLI composes existing APIs
-            ("git_mirror".into(), false),         // manual export only
-            ("presigned_attachment_upload".into(), false),
             ("semantic_search".into(), false), // Noop locally; the Worker enables it via bindings
         ]);
         Self {
@@ -152,6 +147,39 @@ impl Capabilities {
             version: version.to_owned(),
             media_types: media_types.iter().map(|t| (*t).to_owned()).collect(),
         }
+    }
+
+    /// Advertise the embedded document converter on this capability set:
+    /// sets the block and flips the feature flag in one place, so the three
+    /// runtimes (CLI, server, future) cannot drift.
+    pub fn with_document_conversion(
+        mut self,
+        (converter, version): (&str, &str),
+        media_types: &[&str],
+    ) -> Self {
+        self.document_conversion = Some(Self::document_conversion(converter, version, media_types));
+        self.features.insert("document_conversion".into(), true);
+        self
+    }
+
+    /// Drop advertised capabilities by name (the server's BRAINS_DISABLE).
+    /// Only honest names are accepted: a capability that cannot actually be
+    /// withheld at runtime must not be advertised off (fts is compile-time).
+    pub fn without_advertised(mut self, names: &[String]) -> Result<Self, String> {
+        for name in names {
+            match name.as_str() {
+                "document_conversion" => {
+                    self.document_conversion = None;
+                    self.features.insert(name.clone(), false);
+                }
+                "semantic" | "semantic_search" => {
+                    self.semantic = None;
+                    self.features.insert("semantic_search".into(), false);
+                }
+                other => return Err(other.to_owned()),
+            }
+        }
+        Ok(self)
     }
 
     /// The explicit-off semantic report: no model, no projection.

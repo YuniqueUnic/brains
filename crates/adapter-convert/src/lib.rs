@@ -1,8 +1,7 @@
 //! Embedded document converter (issue #19): the Xberg backend behind the
 //! `DocumentConverter` port. Pure Rust, fully offline, no system libraries.
-//! OCR, layout models, URL ingestion and transcription stay off. At xberg
-//! 1.0.0-rc.5 only PDF compiled (the office/excel/html gates referenced
-//! `zip` unconditionally); the zip-9-based 1.3.x line restored the full set.
+//! Formats: PDF, DOCX, XLSX, PPTX, HTML, CSV and plain text. OCR, layout
+//! models, URL ingestion and transcription stay off.
 
 #![cfg(feature = "xberg")]
 

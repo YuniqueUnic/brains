@@ -25,8 +25,15 @@ tags: [meta, guide]
 ## 搜索
 
 - **字面**模式：大小写敏感的 UTF-8 子串匹配，结果标注是否完整；扫描预算耗尽时必须继续处理明确的不完整结果，不能声称全库无匹配。
-- **FTS** 模式：英文按词元、中文按字的显式分词搜索，速度快但依赖索引。
+- **FTS** 模式：英文按词元切分；**中文不做分词**（整段视作单个词元），中文内容检索优先用字面（literal）模式。速度快但依赖索引。
+- **hybrid** 模式：字面 + FTS 加权倒数排名融合（`bsx search --mode hybrid`），每条命中带检索溯源（`literal#1,fts#2`）；语义检索槽位已预留，未接入时如实声明不可用。
+- **元数据过滤**：`bsx ls --status draft --type Decision --stale` 与搜索同参数可过滤 `status`/`type`/`trust`/`stale_after`（配合 frontmatter 生命周期字段，见 memory-writing）。
 - 索引只是投影：需要重建时使用 `bsx reindex --all-pages`，检查失败项；不要为日常操作主动删除真实索引。
+
+## 质量与检查点
+
+- `bsx check`：只读质量报告——过期（stale_after）、机器生成未确认、推断缺出处、断链、脚注无来源；`--json` 供 agent 消费，发现问题时退出码 10。
+- `bsx checkpoint show/update <scope>`：按目录约定维护 `<scope>/checkpoint.md`（目标/进行中/已交付/下一步），普通版本化文件、CAS 写入；任务开始先 show，里程碑后 update。
 
 ## 备份与恢复
 

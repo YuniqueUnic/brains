@@ -4,6 +4,16 @@
 
 ### Features
 
+* **server:** `--disable` / `BRAINS_DISABLE=document_conversion,semantic` stops advertising selected capabilities; only the two honestly-withholdable names are accepted and unknown names fail startup. The image and release builds ship the full capability set by default.
+* **docs:** new capability matrix ([docs/capabilities.md](docs/capabilities.md)); README (en/zh) gains the binstall + self-update install path and a shipped-command overview; docker/native-release docs cover the knobs.
+
+### Refactoring
+
+* **domain:** capability assembly single-sourced (`Capabilities::with_document_conversion`); the permanently-false speculative feature flags (regex_search, server_side_validate, checkout_push_pull, git_mirror, presigned_attachment_upload) are removed from `capabilities.features`.
+* **api-http:** `service.rs` (1445 lines) split into `service/{error,dto,conditional,files,transfer,session}` — every file under the 800-line budget — deduplicating the copy/move conflict arms, six quoted-ETag constructions, two media-type fallbacks and extracting upload digest validation.
+
+### Features
+
 * **convert:** xberg 1.0.0-rc.5 → 1.3.10 with the full format set re-enabled: DOCX, XLSX, PPTX and HTML join PDF/CSV/plain text (`bsx convert`, capabilities `media_types`). The rc.5 lock existed only because its office/excel/html feature gates referenced `zip` unconditionally; the zip-9-based 1.3.x line fixed that. Every format verified by real conversion.
 * **cli:** `bsx update [--check] [--version <tag>] [--yes]`: self-upgrade from GitHub releases — platform-matched tarball, published-sha256 verification, atomic in-place replacement of bsx (and a sibling brains-server); non-interactive runs require `--yes`.
 * **cli:** cargo-binstall metadata on `brains-cli`/`brains-server`: `cargo binstall --git <repo>` installs release binaries without compiling, matched per rust target.

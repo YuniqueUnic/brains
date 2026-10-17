@@ -9,7 +9,7 @@ tags: [meta]
 
 这是一个刚初始化的空库，里面已经放好了几篇入门文档：
 
-- [docs/brains-guide.md](docs/brains-guide.md) —— 日常使用规则（路径、保存/冲突、回收站、搜索、备份）
+- [docs/brains-guide.md](docs/brains-guide.md) —— 日常使用规则（路径、保存/冲突、回收站、搜索与元数据过滤、质量检查、检查点、备份）
 - [docs/ai-guide.md](docs/ai-guide.md) —— AI 协作守则（给 AI agent 的操作约定）
 - [docs/memory-writing.md](docs/memory-writing.md) —— 自包含记忆、来源摘录、自己的解释与可复用整理提示词
 - [inbox/README.md](inbox/README.md) —— 收件箱用法
