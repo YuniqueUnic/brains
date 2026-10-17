@@ -9,7 +9,9 @@ use crate::Vault;
 use brains_adapter_fs::{FsBlobStore, FsHeadStore, FsRevisionStore, FsStore};
 use brains_adapter_turso::TursoIndex;
 use brains_domain::{CursorSigner, Limits, Principal, Scope};
-use brains_ports::{FileProjection, IndexStore, LinkRow, ListFilter, ListRow, LiteralRow};
+use brains_ports::{
+    FileProjection, IndexStore, LinkRow, ListFilter, ListRow, LiteralRow, MetaFilter,
+};
 
 /// A real vault backed by real adapters, in a temp directory.
 pub struct TestVault {
@@ -101,6 +103,7 @@ impl IndexStore for FlakyIndex {
         _limit: usize,
         _query: &str,
         _tags: &[String],
+        _meta: &MetaFilter,
     ) -> brains_domain::DomainResult<Vec<LiteralRow>> {
         Err(brains_domain::DomainError::IndexUnavailable(
             "index unavailable".into(),
@@ -112,6 +115,7 @@ impl IndexStore for FlakyIndex {
         _query: &str,
         _prefix: Option<&str>,
         _tags: &[String],
+        _meta: &MetaFilter,
         _offset: usize,
         _limit: usize,
     ) -> brains_domain::DomainResult<Vec<(String, String, String)>> {
