@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS files (
     media_type TEXT NOT NULL DEFAULT 'application/octet-stream',
     tags_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(tags_json)),
     links_json TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(links_json)),
+    meta_json TEXT NOT NULL DEFAULT '{}' CHECK (json_valid(meta_json)),
     parser_version INTEGER NOT NULL DEFAULT 1 CHECK (parser_version > 0),
     updated_at TEXT NOT NULL,
     indexed_at TEXT NOT NULL

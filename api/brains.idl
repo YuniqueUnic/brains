@@ -51,7 +51,27 @@ struct Capabilities {
     Runtime runtime;
     CapabilityLimits limits;
     map<string, boolean> features;
+    // Semantic search projection state (issue #17): active model, dimensions
+    // and index version, or an explicit reason when unavailable.
+    @optional SemanticCapability semantic;
+    // Document conversion (issue #19); absent = unavailable.
+    @optional DocumentConversion document_conversion;
     @optional string vault;
+};
+
+struct SemanticCapability {
+    string model_id;
+    uint64 dimensions;
+    int64 vector_index_version;
+    @optional string unavailable_reason;
+};
+
+// Document conversion of this instance (issue #19): absent when the build
+// ships no converter; otherwise converter identity and supported types.
+@optional struct DocumentConversion {
+    string converter;
+    string version;
+    sequence<string> media_types;
 };
 
 struct Entry {
@@ -65,6 +85,40 @@ struct Entry {
     @optional string media_type;
     @optional string kind;
     @optional string title;
+    // Lifecycle/trust projection (index source and metadata reads; absent
+    // when the serving path has none).
+    @optional NoteMeta meta;
+};
+
+// Derived, never authoritative: parsed frontmatter fields plus the computed
+// trust tier. `stale_after` stays a date; staleness is computed at query
+// time against the server's clock.
+struct NoteMeta {
+    @optional string type;
+    @optional string description;
+    string status;            // draft | stable | deprecated
+    string trust;             // unverified | machine-confirmed | human-reviewed
+    @optional string stale_after;
+    @optional Generated generated;
+    sequence<Verification> verified;
+    sequence<SourceRef> sources;
+};
+
+struct Generated {
+    string by;
+    @optional string at;
+};
+
+struct Verification {
+    string by;
+    @optional string at;
+};
+
+struct SourceRef {
+    string id;
+    @optional string resource;
+    @optional string title;
+    @optional string last_modified;
 };
 
 struct PurgeResult {
@@ -173,6 +227,14 @@ struct SearchHit {
     string path;
     string indexed_revision;
     string snippet;
+    // Hybrid mode only: which retrievers matched, with the rank in each.
+    sequence<Retrieval> retrieved_by;
+};
+
+// One retriever's view of a hybrid hit (issue #18): name and 1-based rank.
+struct Retrieval {
+    string retriever;
+    uint64 rank;
 };
 
 struct SearchPage {
@@ -181,6 +243,9 @@ struct SearchPage {
     boolean complete;
     int64 scanned;
     string index_state;
+    // Hybrid mode only: retrievers that did not contribute and why
+    // ("fts", "semantic", …) — reported instead of pretending completeness.
+    sequence<string> unavailable;
 };
 
 struct LinkItem {
@@ -421,12 +486,22 @@ struct ListFilesQuery {
     @optional string kind;
     @optional string sort;
     @optional boolean include_deleted;
+    // Lifecycle/trust filters (index source only, issue #13).
+    @optional string status;   // draft | stable | deprecated
+    @optional string type;
+    @optional string trust;    // unverified | machine-confirmed | human-reviewed
+    @optional boolean stale;   // true = only stale, false = only fresh
 };
 struct SearchQuery {
     string q;
     @optional string mode;
     @optional string prefix;
     @optional sequence<string> tags;
+    // Lifecycle/trust filters, applied to literal and fts alike (issue #13).
+    @optional string status;
+    @optional string type;
+    @optional string trust;
+    @optional boolean stale;
     @optional int64 scan_limit;
     @optional string cursor;
 };

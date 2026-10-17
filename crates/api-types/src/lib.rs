@@ -56,6 +56,138 @@ pub struct Entry {
     pub kind: Option<FileKind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    /// Lifecycle/trust projection (issue #13); absent when the serving path
+    /// has none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meta: Option<NoteMeta>,
+}
+
+/// The lifecycle/trust wire shape (mirrors `api/brains.idl`).
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct NoteMeta {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub status: String,
+    pub trust: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stale_after: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub generated: Option<Generated>,
+    #[serde(default)]
+    pub verified: Vec<Verification>,
+    #[serde(default)]
+    pub sources: Vec<SourceRef>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Generated {
+    pub by: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Verification {
+    pub by: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub at: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SourceRef {
+    pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_modified: Option<String>,
+}
+
+impl NoteMeta {
+    /// Decode the index's `meta_json` projection. Empty or unparseable
+    /// projections yield `None`: reads never fail because a projection is
+    /// behind. Shared by the HTTP service and the embedded client.
+    pub fn from_projection(meta_json: Option<&str>) -> Option<Self> {
+        let value: serde_json::Value = serde_json::from_str(meta_json?).ok()?;
+        if value.as_object().is_none_or(|map| map.is_empty()) {
+            return None;
+        }
+        let string_at = |key: &str| {
+            value
+                .get(key)
+                .and_then(|v| v.as_str())
+                .filter(|text| !text.is_empty())
+                .map(str::to_owned)
+        };
+        let actors = |key: &str| -> Vec<Verification> {
+            value
+                .get(key)
+                .and_then(|v| v.as_array())
+                .map(|items| {
+                    items
+                        .iter()
+                        .map(|item| Verification {
+                            by: item
+                                .get("by")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_owned(),
+                            at: item.get("at").and_then(|v| v.as_str()).map(str::to_owned),
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        Some(Self {
+            r#type: string_at("type"),
+            description: string_at("description"),
+            status: string_at("status").unwrap_or_else(|| "stable".to_owned()),
+            trust: string_at("trust").unwrap_or_else(|| "unverified".to_owned()),
+            stale_after: string_at("stale_after"),
+            generated: value.get("generated").map(|generated| Generated {
+                by: generated
+                    .get("by")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_owned(),
+                at: generated
+                    .get("at")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned),
+            }),
+            verified: actors("verified"),
+            sources: value
+                .get("sources")
+                .and_then(|v| v.as_array())
+                .map(|items| {
+                    items
+                        .iter()
+                        .map(|item| {
+                            let text = |key: &str| {
+                                item.get(key)
+                                    .and_then(|v| v.as_str())
+                                    .filter(|text| !text.is_empty())
+                                    .map(str::to_owned)
+                            };
+                            SourceRef {
+                                id: item
+                                    .get("id")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or_default()
+                                    .to_owned(),
+                                resource: text("resource"),
+                                title: text("title"),
+                                last_modified: text("last_modified"),
+                            }
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+        })
+    }
 }
 
 impl Entry {
@@ -71,6 +203,7 @@ impl Entry {
             media_type: info.media_type.clone(),
             kind: info.kind,
             title: info.title.clone(),
+            meta: NoteMeta::from_projection(info.meta_json.as_deref()),
         }
     }
 }
@@ -188,6 +321,16 @@ pub struct SearchHit {
     pub path: String,
     pub indexed_revision: String,
     pub snippet: String,
+    /// Hybrid mode only: which retrievers matched, with the rank in each.
+    #[serde(default)]
+    pub retrieved_by: Vec<Retrieval>,
+}
+
+/// One retriever's view of a hybrid hit (issue #18).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Retrieval {
+    pub retriever: String,
+    pub rank: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -197,6 +340,9 @@ pub struct SearchPage {
     pub complete: bool,
     pub scanned: i64,
     pub index_state: String, // available | building
+    /// Hybrid mode only: retrievers that did not contribute and why.
+    #[serde(default)]
+    pub unavailable: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

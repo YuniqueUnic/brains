@@ -180,6 +180,9 @@
           "build_version": {
             "type": "string"
           },
+          "document_conversion": {
+            "$ref": "#/components/schemas/brains.DocumentConversion"
+          },
           "features": {
             "additionalProperties": {
               "type": "boolean"
@@ -191,6 +194,9 @@
           },
           "runtime": {
             "$ref": "#/components/schemas/brains.Runtime"
+          },
+          "semantic": {
+            "$ref": "#/components/schemas/brains.SemanticCapability"
           },
           "store_format": {
             "format": "int64",
@@ -291,6 +297,28 @@
         ],
         "type": "object"
       },
+      "brains.DocumentConversion": {
+        "properties": {
+          "converter": {
+            "type": "string"
+          },
+          "media_types": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "converter",
+          "version",
+          "media_types"
+        ],
+        "type": "object"
+      },
       "brains.Entry": {
         "properties": {
           "generation": {
@@ -302,6 +330,9 @@
           },
           "media_type": {
             "type": "string"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/brains.NoteMeta"
           },
           "path": {
             "type": "string"
@@ -423,6 +454,20 @@
         },
         "required": [
           "error"
+        ],
+        "type": "object"
+      },
+      "brains.Generated": {
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by"
         ],
         "type": "object"
       },
@@ -550,11 +595,23 @@
           "source": {
             "type": "string"
           },
+          "stale": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
           "tags": {
             "items": {
               "type": "string"
             },
             "type": "array"
+          },
+          "trust": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
           }
         },
         "type": "object"
@@ -636,6 +693,47 @@
         "type": "object"
       },
       "brains.NotModified": {
+        "type": "object"
+      },
+      "brains.NoteMeta": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "generated": {
+            "$ref": "#/components/schemas/brains.Generated"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/brains.SourceRef"
+            },
+            "type": "array"
+          },
+          "stale_after": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "trust": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "verified": {
+            "items": {
+              "$ref": "#/components/schemas/brains.Verification"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "trust",
+          "verified",
+          "sources"
+        ],
         "type": "object"
       },
       "brains.OkResult": {
@@ -824,6 +922,23 @@
         ],
         "type": "object"
       },
+      "brains.Retrieval": {
+        "properties": {
+          "rank": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "retriever": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "retriever",
+          "rank"
+        ],
+        "type": "object"
+      },
       "brains.Revision": {
         "properties": {
           "action": {
@@ -920,6 +1035,12 @@
           "path": {
             "type": "string"
           },
+          "retrieved_by": {
+            "items": {
+              "$ref": "#/components/schemas/brains.Retrieval"
+            },
+            "type": "array"
+          },
           "snippet": {
             "type": "string"
           }
@@ -927,7 +1048,8 @@
         "required": [
           "path",
           "indexed_revision",
-          "snippet"
+          "snippet",
+          "retrieved_by"
         ],
         "type": "object"
       },
@@ -951,13 +1073,20 @@
           "scanned": {
             "format": "int64",
             "type": "integer"
+          },
+          "unavailable": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           }
         },
         "required": [
           "items",
           "complete",
           "scanned",
-          "index_state"
+          "index_state",
+          "unavailable"
         ],
         "type": "object"
       },
@@ -979,15 +1108,52 @@
             "format": "int64",
             "type": "integer"
           },
+          "stale": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
           "tags": {
             "items": {
               "type": "string"
             },
             "type": "array"
+          },
+          "trust": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
           }
         },
         "required": [
           "q"
+        ],
+        "type": "object"
+      },
+      "brains.SemanticCapability": {
+        "properties": {
+          "dimensions": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "model_id": {
+            "type": "string"
+          },
+          "unavailable_reason": {
+            "type": "string"
+          },
+          "vector_index_version": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model_id",
+          "dimensions",
+          "vector_index_version"
         ],
         "type": "object"
       },
@@ -1023,6 +1189,26 @@
         "required": [
           "actor",
           "scopes"
+        ],
+        "type": "object"
+      },
+      "brains.SourceRef": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "last_modified": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
         ],
         "type": "object"
       },
@@ -1121,6 +1307,20 @@
         },
         "required": [
           "error"
+        ],
+        "type": "object"
+      },
+      "brains.Verification": {
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "by"
         ],
         "type": "object"
       }

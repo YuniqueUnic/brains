@@ -3,6 +3,15 @@
 use crate::cli::LsArgs;
 use brains_client::{ClientError, ClientResult, Library};
 
+/// `--stale`/`--fresh` share one dimension: at most one may be requested.
+fn stale_flag(stale: bool, fresh: bool) -> Option<bool> {
+    match (stale, fresh) {
+        (true, _) => Some(true),
+        (_, true) => Some(false),
+        _ => None,
+    }
+}
+
 pub(crate) fn ls(client: &dyn Library, args: LsArgs) -> ClientResult<i32> {
     let LsArgs {
         mut prefix,
@@ -12,6 +21,11 @@ pub(crate) fn ls(client: &dyn Library, args: LsArgs) -> ClientResult<i32> {
         tag,
         kind,
         sort,
+        status,
+        type_,
+        trust,
+        stale,
+        fresh,
     } = args;
     // `bsx ls /` reads as "the whole vault" (§6.1): paths are vault-relative
     // and never start with a slash.
@@ -33,6 +47,10 @@ pub(crate) fn ls(client: &dyn Library, args: LsArgs) -> ClientResult<i32> {
             cursor: cursor.clone(),
             tags: tag.clone(),
             kind: kind.as_deref().and_then(brains_domain::FileKind::parse),
+            status: status.clone(),
+            type_: type_.clone(),
+            trust: trust.clone(),
+            stale: stale_flag(stale, fresh),
             sort: if sort == "updated_desc" {
                 brains_ports::ListOrder::UpdatedDesc
             } else {
@@ -67,12 +85,18 @@ pub(crate) fn ls(client: &dyn Library, args: LsArgs) -> ClientResult<i32> {
     Ok(0)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn search(
     client: &dyn Library,
     query: &str,
     mode: &str,
     prefix: Option<String>,
     tag: Vec<String>,
+    status: Option<String>,
+    type_: Option<String>,
+    trust: Option<String>,
+    stale: bool,
+    fresh: bool,
     json: bool,
     max_pages: Option<usize>,
 ) -> ClientResult<i32> {
@@ -86,6 +110,7 @@ pub(crate) fn search(
             mode: match mode {
                 "literal" => brains_application::search::SearchMode::Literal,
                 "fts" => brains_application::search::SearchMode::Fts,
+                "hybrid" => brains_application::search::SearchMode::Hybrid,
                 _ => {
                     return Err(ClientError {
                         status: 400,
@@ -97,6 +122,10 @@ pub(crate) fn search(
             },
             prefix: prefix.clone(),
             tags: tag.clone(),
+            status: status.clone(),
+            type_: type_.clone(),
+            trust: trust.clone(),
+            stale: stale_flag(stale, fresh),
             cursor: cursor.clone(),
             scan_limit: brains_domain::Limits::default().scan_window_max,
         };
@@ -112,10 +141,28 @@ pub(crate) fn search(
                 );
             } else {
                 let snippet: String = hit.snippet.chars().take(120).collect();
-                println!("{}\t{}", hit.path, snippet.replace('\n', " "));
+                let retrievers = if hit.retrieved_by.is_empty() {
+                    String::new()
+                } else {
+                    format!(
+                        "\t{}",
+                        hit.retrieved_by
+                            .iter()
+                            .map(|r| format!("{}#{}", r.retriever, r.rank))
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    )
+                };
+                println!("{}\t{}{}", hit.path, snippet.replace('\n', " "), retrievers);
             }
         }
         complete = page.complete;
+        if !page.unavailable.is_empty() {
+            eprintln!(
+                "bsx: hybrid retrievers unavailable: {}",
+                page.unavailable.join(", ")
+            );
+        }
         match page.next_cursor.clone() {
             Some(next) if max_pages.is_none_or(|max| pages < max) => cursor = Some(next),
             _ => break,

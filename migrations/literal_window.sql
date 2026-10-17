@@ -5,6 +5,9 @@
 -- ?3 scan_limit, application-clamped to 1..100
 -- ?4 nonempty case-sensitive literal query
 -- ?5 JSON array of exact tags, empty array means no tag filter
+-- ?6..?10 lifecycle/trust filter (brains_ports::meta_filter_clause):
+--    ?6 status, ?7 type, ?8 trust, ?9 stale(0/1), ?10 comparison date;
+--    an unset dimension binds NULL and its clause short-circuits.
 -- The service authorizes the complete requested subtree before querying.
 -- A subtree is the exact path or descendants in [prefix+'/', prefix+'0').
 -- This works with UTF-8 without incrementing bytes of the prefix itself.
@@ -13,12 +16,21 @@
 -- When row count == limit, advertise a next page even if it later proves empty.
 -- Exact total completion then needs one extra page; do not guess from hit count.
 -- This statement relies on a MATERIALIZED CTE: verify support in real D1 in M0.
+-- Meta filtering happens INSIDE the candidate window: a filtered-out note
+-- never consumes scan budget, so paging stays exact.
 WITH candidates AS MATERIALIZED (
     SELECT path, revision, title, body
     FROM files
     WHERE deleted = 0 AND searchable = 1
       AND (?1 IS NULL OR path = ?1 OR (path >= ?1 || '/' AND path < ?1 || '0')) AND path > ?2
       AND NOT EXISTS (SELECT 1 FROM json_each(?5) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value))
+      AND (?6 IS NULL OR json_extract(meta_json, '$.status') = ?6)
+      AND (?7 IS NULL OR json_extract(meta_json, '$.type') = ?7)
+      AND (?8 IS NULL OR json_extract(meta_json, '$.trust') = ?8)
+      AND (?9 IS NULL OR
+           (CASE WHEN json_extract(meta_json, '$.stale_after') IS NULL THEN 0
+                 WHEN json_extract(meta_json, '$.stale_after') <= ?10 THEN 1
+                 ELSE 0 END) = ?9)
     ORDER BY path
     LIMIT ?3
 ), matched AS (

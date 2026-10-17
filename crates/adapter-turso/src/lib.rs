@@ -6,7 +6,8 @@ use turso::{Connection, IntoParams, Row, params};
 
 use brains_domain::{DomainError, DomainResult, FileKind, FullTextSearch};
 use brains_ports::{
-    FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow,
+    FileProjection, IndexStore, LinkRow, ListFilter, ListOrder, ListRow, LiteralRow, MetaFilter,
+    meta_filter_clause,
 };
 
 const SCHEMA_SQL: &str = include_str!("schema.sql");
@@ -52,6 +53,15 @@ impl TursoIndex {
             .map_err(index_err)?;
         let conn = database.connect().map_err(index_err)?;
         conn.execute_batch(SCHEMA_SQL).await.map_err(index_err)?;
+        // Existing local index databases predate the meta projection; the
+        // column is a rebuildable projection, so an idempotent ALTER closes
+        // old files and a reindex refreshes their rows.
+        let _ = conn
+            .execute(
+                "ALTER TABLE files ADD COLUMN meta_json TEXT NOT NULL DEFAULT '{}'",
+                (),
+            )
+            .await;
         if cfg!(feature = "fts") {
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS files_full_text ON files USING fts (title, body)",
@@ -90,6 +100,20 @@ impl TursoIndex {
 }
 fn index_err(error: turso::Error) -> DomainError {
     DomainError::IndexUnavailable(error.to_string())
+}
+
+/// Meta-filter binding: an unset dimension is the empty string → SQL NULL.
+fn opt_str(value: &str) -> Option<&str> {
+    (!value.is_empty()).then_some(value)
+}
+
+/// Meta-filter binding for the stale flag: `"0"`/`"1"` → number, else NULL.
+fn opt_num(value: &str) -> Option<i64> {
+    match value {
+        "0" => Some(0),
+        "1" => Some(1),
+        _ => None,
+    }
 }
 fn search_err(error: turso::Error) -> DomainError {
     // The public SDK erases the parser's error type. Classify only the
@@ -152,6 +176,7 @@ impl IndexStore for TursoIndex {
                     projection.media_type.as_str(),
                     projection.tags_json.as_str(),
                     projection.links_json.as_str(),
+                    projection.meta_json.as_str(),
                     projection.parser_version,
                     projection.updated_at.as_str(),
                     brains_domain::timestamp::now_rfc3339(),
@@ -168,12 +193,16 @@ impl IndexStore for TursoIndex {
         limit: usize,
         text: &str,
         tags: &[String],
+        meta: &MetaFilter,
     ) -> DomainResult<Vec<LiteralRow>> {
         if text.is_empty() {
             return Err(DomainError::InvalidArgument(
                 "literal query must not be empty".into(),
             ));
         }
+        // The meta filter is inlined in LITERAL_WINDOW_SQL (?6..?10); see
+        // brains_ports::meta_filter_clause for the value encoding.
+        let meta_params = meta_filter_clause(meta, 6).1;
         let conn = self.conn.lock().await;
         query(
             &conn,
@@ -183,7 +212,12 @@ impl IndexStore for TursoIndex {
                 after,
                 limit as i64,
                 text,
-                serde_json::to_string(tags).expect("string array")
+                serde_json::to_string(tags).expect("string array"),
+                opt_str(&meta_params[0]),
+                opt_str(&meta_params[1]),
+                opt_str(&meta_params[2]),
+                opt_num(&meta_params[3]),
+                opt_str(&meta_params[4]),
             ],
             |row| {
                 Ok(LiteralRow {
@@ -202,23 +236,42 @@ impl IndexStore for TursoIndex {
         text: &str,
         prefix: Option<&str>,
         tags: &[String],
+        meta: &MetaFilter,
         offset: usize,
         limit: usize,
     ) -> DomainResult<Vec<(String, String, String)>> {
         if self.full_text_search() == FullTextSearch::Disabled {
             return Err(DomainError::CapabilityUnsupported("fts_search"));
         }
+        // Parameters 4..8 are the meta filter; see meta_filter_clause.
+        let (meta_sql, meta_params) = meta_filter_clause(meta, 4);
+        let sql = format!("SELECT path, revision, substr(body, 1, 240) FROM files
+            WHERE fts_match(title, body, ?1) AND deleted=0 AND searchable=1
+              AND (?2 IS NULL OR path = ?2 OR (path >= ?2 || '/' AND path < ?2 || '0'))
+              AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value)){meta_sql}
+            ORDER BY fts_score(title, body, ?1) DESC, path LIMIT ?9 OFFSET ?10");
         let conn = self.conn.lock().await;
         // Native FTS uses Tantivy grammar, BM25 ranking and a bounded plain
         // preview. It never translates FTS5 syntax or returns unbounded HTML.
-        query(&conn, "SELECT path, revision, substr(body, 1, 240) FROM files
-            WHERE fts_match(title, body, ?1) AND deleted=0 AND searchable=1
-              AND (?2 IS NULL OR path = ?2 OR (path >= ?2 || '/' AND path < ?2 || '0'))
-              AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value))
-            ORDER BY fts_score(title, body, ?1) DESC, path LIMIT ?4 OFFSET ?5",
-            params![text, normalize_prefix(prefix), serde_json::to_string(tags).expect("string array"), limit as i64, offset as i64],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-            .await.map_err(search_err)
+        query(
+            &conn,
+            &sql,
+            params![
+                text,
+                normalize_prefix(prefix),
+                serde_json::to_string(tags).expect("string array"),
+                opt_str(&meta_params[0]),
+                opt_str(&meta_params[1]),
+                opt_str(&meta_params[2]),
+                opt_num(&meta_params[3]),
+                opt_str(&meta_params[4]),
+                limit as i64,
+                offset as i64
+            ],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .await
+        .map_err(search_err)
     }
     async fn list_files(
         &self,
@@ -229,15 +282,23 @@ impl IndexStore for TursoIndex {
     ) -> DomainResult<Vec<ListRow>> {
         let prefix = normalize_prefix(filter.prefix.as_deref());
         let order_desc = filter.order == ListOrder::UpdatedDesc;
-        let mut sql = String::from("SELECT path, revision, generation, deleted, kind, title, size, sha256, media_type, updated_at
+        // Parameters 8..12 are the meta filter; see meta_filter_clause.
+        let (meta_sql, meta_params) = meta_filter_clause(&filter.meta, 8);
+        let mut sql = String::from("SELECT path, revision, generation, deleted, kind, title, size, sha256, media_type, updated_at, meta_json
             FROM files WHERE (?1 = 1 OR deleted = 0) AND (?2 IS NULL OR path = ?2 OR (path >= ?2 || '/' AND path < ?2 || '0'))
             AND NOT EXISTS (SELECT 1 FROM json_each(?3) AS wanted WHERE NOT EXISTS (SELECT 1 FROM tags WHERE tags.path = files.path AND tags.tag = wanted.value))
             AND (?4 IS NULL OR kind=?4)");
         if order_desc {
-            sql.push_str(" AND (?5 IS NULL OR updated_at < ?5 OR (updated_at = ?5 AND path > ?6)) ORDER BY updated_at DESC, path LIMIT ?7");
+            sql.push_str(" AND (?5 IS NULL OR updated_at < ?5 OR (updated_at = ?5 AND path > ?6))");
         } else {
-            sql.push_str(" AND (?6 IS NULL OR path > ?6) ORDER BY path LIMIT ?7");
+            sql.push_str(" AND (?6 IS NULL OR path > ?6)");
         }
+        sql.push_str(&meta_sql);
+        sql.push_str(if order_desc {
+            " ORDER BY updated_at DESC, path LIMIT ?7"
+        } else {
+            " ORDER BY path LIMIT ?7"
+        });
         let conn = self.conn.lock().await;
         query(
             &conn,
@@ -249,7 +310,12 @@ impl IndexStore for TursoIndex {
                 filter.kind.map(|kind| kind.as_str()),
                 after_updated,
                 after_path,
-                limit as i64
+                limit as i64,
+                opt_str(&meta_params[0]),
+                opt_str(&meta_params[1]),
+                opt_str(&meta_params[2]),
+                opt_num(&meta_params[3]),
+                opt_str(&meta_params[4]),
             ],
             map_list_row,
         )
@@ -301,6 +367,7 @@ fn map_list_row(row: &Row) -> turso::Result<ListRow> {
         sha256: row.get(7)?,
         media_type: row.get(8)?,
         updated_at: row.get(9)?,
+        meta_json: row.get(10)?,
     })
 }
 fn map_link_row(row: &Row) -> turso::Result<LinkRow> {

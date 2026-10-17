@@ -39,6 +39,12 @@ pub struct ListQuery {
     pub cursor: Option<String>,
     pub tags: Vec<String>,
     pub kind: Option<brains_domain::FileKind>,
+    /// Lifecycle/trust filters (issue #13); index source only.
+    pub status: Option<String>,
+    pub type_: Option<String>,
+    pub trust: Option<String>,
+    /// `Some(true)` = only stale, `Some(false)` = only fresh.
+    pub stale: Option<bool>,
     pub sort: ListOrder,
     pub include_deleted: bool,
 }
@@ -51,6 +57,10 @@ impl Default for ListQuery {
             cursor: None,
             tags: Vec::new(),
             kind: None,
+            status: None,
+            type_: None,
+            trust: None,
+            stale: None,
             sort: ListOrder::Path,
             include_deleted: false,
         }
@@ -80,6 +90,10 @@ where
             cursor,
             tags,
             kind,
+            status,
+            type_,
+            trust,
+            stale,
             sort,
             include_deleted,
         } = query;
@@ -93,10 +107,15 @@ where
                 self.limits.list_page_max
             )));
         }
+        let meta = crate::meta_filter(status, type_, trust, stale)?;
         if source == ListSource::Store {
-            if !tags.is_empty() || kind.is_some() || sort == ListOrder::UpdatedDesc {
+            if !tags.is_empty()
+                || kind.is_some()
+                || !meta.is_empty()
+                || sort == ListOrder::UpdatedDesc
+            {
                 return Err(DomainError::InvalidArgument(
-                    "tags/kind/sort=updated_desc require source=index".into(),
+                    "tags/kind/meta filters/sort=updated_desc require source=index".into(),
                 ));
             }
             let page = self
@@ -128,6 +147,7 @@ where
             prefix,
             tags,
             kind,
+            meta,
             include_deleted,
             order: sort,
         };
@@ -164,6 +184,7 @@ where
                 } else {
                     Some(row.title)
                 },
+                meta_json: Some(row.meta_json),
             })
             .collect();
         Ok(ListPage {

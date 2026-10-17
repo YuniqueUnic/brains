@@ -108,3 +108,77 @@ fn yaml_core_schema_does_not_merge_hidden_tags_or_coerce_plain_words() {
             .is_empty()
     );
 }
+
+#[test]
+fn parses_lifecycle_trust_and_provenance_fields() {
+    let fm = parse(
+        "type: Decision\ndescription: 缓存策略决定\nstatus: draft\nstale_after: \"2026-12-01\"\n\
+         generated:\n  by: human:alice\n  at: \"2026-10-01T09:00:00Z\"\n\
+         verified:\n  - by: human:bob\n    at: \"2026-10-02T10:00:00Z\"\n  - by: tool/agent-1\n\
+         sources:\n  - id: run-1\n    resource: logs/run-1.txt\n    title: CI 运行\n    last_modified: \"2026-09-30\"",
+    );
+    assert_eq!(fm.type_.as_deref(), Some("Decision"));
+    assert_eq!(fm.description.as_deref(), Some("缓存策略决定"));
+    assert_eq!(fm.status, crate::frontmatter::NoteStatus::Draft);
+    assert_eq!(fm.stale_after.as_deref(), Some("2026-12-01"));
+    assert_eq!(fm.generated_by.as_deref(), Some("human:alice"));
+    assert_eq!(fm.verified.len(), 2);
+    assert_eq!(fm.verified[0].by, "human:bob");
+    assert_eq!(fm.sources.len(), 1);
+    assert_eq!(fm.sources[0].id, "run-1");
+    assert_eq!(
+        fm.trust_tier(),
+        crate::frontmatter::TrustTier::HumanReviewed
+    );
+    assert!(fm.warnings.is_empty());
+}
+
+#[test]
+fn bare_verified_mapping_is_a_one_element_list() {
+    let fm = parse("verified:\n  by: tool/x\n  at: \"2026-10-01T00:00:00Z\"");
+    assert_eq!(fm.verified.len(), 1);
+    assert_eq!(fm.verified[0].by, "tool/x");
+    assert_eq!(
+        fm.trust_tier(),
+        crate::frontmatter::TrustTier::MachineConfirmed
+    );
+}
+
+#[test]
+fn machine_only_verification_is_machine_confirmed() {
+    let fm = parse("verified:\n  - by: process:ci\n");
+    assert_eq!(
+        fm.trust_tier(),
+        crate::frontmatter::TrustTier::MachineConfirmed
+    );
+    assert_eq!(
+        parse("").trust_tier(),
+        crate::frontmatter::TrustTier::Unverified
+    );
+}
+
+#[test]
+fn malformed_lifecycle_values_warn_but_never_error() {
+    let fm = parse(
+        "status: published\nstale_after: 2026-13-40\nverified:\n  - at: \"2026-10-01\"\nsources:\n  - resource: no-id.md",
+    );
+    // Unknown status warns and defaults to stable; invalid date is dropped.
+    assert_eq!(fm.status, crate::frontmatter::NoteStatus::Stable);
+    assert_eq!(fm.stale_after, None);
+    assert!(fm.verified.is_empty());
+    assert!(fm.sources.is_empty());
+    assert!(fm.warnings.iter().any(|w| w.contains("status")));
+    assert!(fm.warnings.iter().any(|w| w.contains("stale_after")));
+    assert!(fm.warnings.iter().any(|w| w.contains("verified")));
+    assert!(fm.warnings.iter().any(|w| w.contains("sources")));
+}
+
+#[test]
+fn absent_lifecycle_fields_behave_as_before() {
+    let fm = parse("tags: [rust]");
+    assert_eq!(fm.status, crate::frontmatter::NoteStatus::Stable);
+    assert_eq!(fm.stale_after, None);
+    assert!(fm.verified.is_empty());
+    assert!(fm.sources.is_empty());
+    assert_eq!(fm.trust_tier(), crate::frontmatter::TrustTier::Unverified);
+}

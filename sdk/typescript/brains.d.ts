@@ -21,7 +21,26 @@
                     runtime: Runtime;
                     limits: CapabilityLimits;
                     features: Record<string, boolean>;
+                    semantic?: SemanticCapability;
+                    document_conversion?: DocumentConversion;
                     vault?: string;
+                }
+
+
+    export interface SemanticCapability {
+
+                model_id: string;
+                    dimensions: number;
+                    vector_index_version: number;
+                    unavailable_reason?: string;
+                }
+
+
+    export interface DocumentConversion {
+
+                converter: string;
+                    version: string;
+                    media_types: Array<string>;
                 }
 
 
@@ -37,6 +56,43 @@
                     media_type?: string;
                     kind?: string;
                     title?: string;
+                    meta?: NoteMeta;
+                }
+
+
+    export interface NoteMeta {
+
+                "type"?: string;
+                    description?: string;
+                    status: string;
+                    trust: string;
+                    stale_after?: string;
+                    generated?: Generated;
+                    verified: Array<Verification>;
+                    sources: Array<SourceRef>;
+                }
+
+
+    export interface Generated {
+
+                by: string;
+                    at?: string;
+                }
+
+
+    export interface Verification {
+
+                by: string;
+                    at?: string;
+                }
+
+
+    export interface SourceRef {
+
+                id: string;
+                    resource?: string;
+                    title?: string;
+                    last_modified?: string;
                 }
 
 
@@ -173,6 +229,14 @@
                 path: string;
                     indexed_revision: string;
                     snippet: string;
+                    retrieved_by: Array<Retrieval>;
+                }
+
+
+    export interface Retrieval {
+
+                retriever: string;
+                    rank: number;
                 }
 
 
@@ -183,6 +247,7 @@
                     complete: boolean;
                     scanned: number;
                     index_state: string;
+                    unavailable: Array<string>;
                 }
 
 
@@ -451,6 +516,10 @@
                     kind?: string;
                     sort?: string;
                     include_deleted?: boolean;
+                    status?: string;
+                    "type"?: string;
+                    trust?: string;
+                    stale?: boolean;
                 }
 
 
@@ -460,6 +529,10 @@
                     mode?: string;
                     prefix?: string;
                     tags?: Array<string>;
+                    status?: string;
+                    "type"?: string;
+                    trust?: string;
+                    stale?: boolean;
                     scan_limit?: number;
                     cursor?: string;
                 }
