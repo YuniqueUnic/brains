@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.5.0](https://github.com/YuniqueUnic/brains/compare/v0.4.0...v0.5.0) (2026-10-17)
 
 ### Features
 
@@ -23,13 +23,6 @@
 * import-url pins every request to the DNS addresses validated by the SSRF check (`ClientBuilder::resolve`), closing the check-to-connect rebinding window; redirect hops and the robots probe share the same per-host pins.
 * literal scans keep lifecycle filters inside the candidate window so paging stays exact.
 * `bsx checkpoint update --create` and `--if-revision` are now rejected as mutually exclusive instead of silently ignoring the revision precondition.
-
-## [0.5.0](https://github.com/YuniqueUnic/brains/compare/v0.4.0...v0.5.0) (2026-10-17)
-
-
-### Features
-
-* agent-ready memory batch — issues [#12](https://github.com/YuniqueUnic/brains/issues/12)–[#22](https://github.com/YuniqueUnic/brains/issues/22) ([#24](https://github.com/YuniqueUnic/brains/issues/24)) ([c3aef1a](https://github.com/YuniqueUnic/brains/commit/c3aef1ae06bc72eef0df53a69ae46ec9560979ff))
 
 ## [0.4.0](https://github.com/YuniqueUnic/brains/compare/v0.3.0...v0.4.0) (2026-10-11)
 
