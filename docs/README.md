@@ -11,6 +11,9 @@ Documentation for the Brains repository, written against the code as it is
 | [editor-search.md](editor-search.md) | Source tags, search commands, and editor width |
 | [releasing.md](releasing.md) | Unified versions and release workflows |
 | [capabilities.md](capabilities.md) | Capability matrix per runtime, compile features, `BRAINS_DISABLE`, how state changes propagate |
+| [native-release.md](native-release.md) | Release archives: install, `bsx update` self-upgrade, cargo-binstall, first server run |
+| [docker.md](docker.md) | Compose deployment: volumes, users, secrets, HTTPS, capability switches |
+| [turso.md](turso.md) | Native Turso FTS and optional Tantivy: build switches, query syntax, index rebuild |
 
 ## Documentation standards
 
@@ -35,5 +38,3 @@ highlights below. Keep them applying when you edit:
 
 Regenerating generated artifacts referenced here (OpenAPI, SDKs) is
 documented in [../scripts/gen-api.sh](../scripts/gen-api.sh).
-
-- [原生 Turso 与可选全文检索](turso.md)：构建开关、搜索语法、索引重建及上游能力边界。

@@ -69,7 +69,7 @@ What a shipped `bsx` can do (full matrix in [docs/capabilities.md](docs/capabili
 
 | Command | What it does |
 |---|---|
-| `bsx search --mode hybrid` | weighted reciprocal-rank fusion over literal + FTS; per-hit provenance; semantic joins when a provider exists |
+| `bsx search --mode hybrid` | weighted reciprocal-rank fusion over literal + FTS; per-hit provenance; a semantic retriever slot is reserved (none mounted yet, reported honestly) |
 | `bsx ls --status draft --type Decision --stale` | lifecycle/trust filters over the indexed projection (`status`, `type`, `trust`, `stale_after`) |
 | `bsx check` | quality report: stale notes, unconfirmed agent claims, broken links, footnote gaps (`--okf` for OKF v0.2 conformance) |
 | `bsx checkpoint show/update <scope>` | per-scope continuity note with CAS rules |

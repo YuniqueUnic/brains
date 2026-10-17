@@ -87,7 +87,7 @@ pub fn build_state(config: &ServerConfig) -> Result<(SharedState, String, bool),
         .without_advertised(&config.disable)
         .map_err(|name| {
             format!(
-                "unknown capability `{name}` for --disable; supported: document_conversion, semantic"
+                "unknown capability `{name}` for --disable; supported: document_conversion, semantic (alias semantic_search)"
             )
         })?;
     let state: SharedState = Arc::new(AppState {

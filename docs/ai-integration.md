@@ -125,8 +125,7 @@ content hash (no credentials). Then:
   never retried with a fresh revision; re-running resumes because
   already-written paths no longer differ from the manifest.
 
-This composes existing APIs only — the capability flag
-`checkout_push_pull: false` keeps meaning "no server-side sync endpoint".
+This composes existing APIs only — there is no server-side sync endpoint.
 
 ## Minimal end-to-end example
 

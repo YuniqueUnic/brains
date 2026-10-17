@@ -10,10 +10,10 @@ instance, and `bsx capabilities --json` prints it for any profile.
 | Capability | Standalone `bsx` (local profile) | `brains-server` (native, release build) | Docker image | Worker (`cloudflare-rust`) |
 |---|---|---|---|---|
 | Literal search | yes | yes | yes | yes |
-| Full-text search (FTS) | yes (opt-in Tantivy) | yes (Turso FTS5) | yes | yes (D1 FTS5) |
+| Full-text search (FTS) | yes (Tantivy-backed, opt-in) | yes (Tantivy-backed, default on) | yes | yes (SQLite FTS5 on D1) |
 | Hybrid ranked search | yes | yes | yes | yes, degraded: semantic explicitly unavailable |
 | Semantic search | declared unavailable (no embedding provider yet) | declared unavailable | declared unavailable | ready for the AI binding; see the roadmap issue |
-| Document conversion (`bsx convert`) | yes | declared (conversion runs client-side) | declared | declared |
+| Document conversion (`bsx convert`) | yes | advertised (conversion runs client-side) | advertised | not advertised (the Worker build has no converter; `bsx convert` still works against it) |
 | URL import (`bsx import-url`) | yes | n/a (client-side) | n/a | n/a |
 | `bsx check`, `bsx checkpoint` | yes | yes (against a remote profile too) | yes | yes |
 | Working copy (`checkout/status/pull/push`) | yes | yes | yes | yes |
@@ -40,8 +40,11 @@ Three layers, in order of authority:
    - `document_conversion` — the server only advertises conversion; the
      CLI performs it, so not advertising it fully disables the flow.
    - `semantic` — hides the semantic block from hybrid-search clients.
-   Any other name (for example `fts`) fails startup: FTS is a compile-time
-   store capability and pretending otherwise would be a lie.
+   `semantic_search` is accepted as an alias of `semantic`. Any other name
+   (for example `fts`) fails startup: FTS is a compile-time store capability
+   and pretending otherwise would be a lie. Note that disabling only removes
+   the advertisement — capability-respecting clients (the web app, agents
+   that read `/capabilities`) stop offering the flow.
 3. **Runtime environment (Worker only).** `SEMANTIC_SEARCH=off`, or a
    missing `AI` binding, makes the Worker report semantic search as
    explicitly unavailable, with the reason in `capabilities.semantic.

@@ -66,7 +66,7 @@ bsx search "关键词" --mode hybrid
 
 | 命令 | 作用 |
 |---|---|
-| `bsx search --mode hybrid` | 字面 + FTS 加权倒数排名融合；逐命中检索溯源；接入语义检索后自动参与 |
+| `bsx search --mode hybrid` | 字面 + FTS 加权倒数排名融合；逐命中检索溯源；语义检索槽位已预留（尚未接入任何 provider，如实报告） |
 | `bsx ls --status draft --type Decision --stale` | 基于索引投影的生命周期/信任过滤（`status`、`type`、`trust`、`stale_after`） |
 | `bsx check` | 质量报告：过期笔记、未确认的 agent 结论、断链、脚注缺口（`--okf` 为 OKF v0.2 一致性检查） |
 | `bsx checkpoint show/update <scope>` | 按 scope 的连续性检查点笔记，CAS 写入 |
