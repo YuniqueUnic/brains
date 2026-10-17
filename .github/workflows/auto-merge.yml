@@ -1,0 +1,62 @@
+name: Auto merge
+
+# Dependency bumps and release-please PRs merge themselves once CI is green:
+# dependabot patch/minor updates (plus github-actions majors, which every CI
+# job exercises directly) enable auto-merge; the release PR ships on green
+# too. Anything else — cargo/npm majors and the pinned xberg converter in
+# particular — waits for a human, on purpose.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-24.04
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/dependabot/fetch-metadata@v2
+        id: metadata
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Enable auto-merge for safe dependency updates
+        if: |
+          !contains(steps.metadata.outputs.dependency-names, 'xberg') &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-patch' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+           steps.metadata.outputs.compatibility-score == '100' ||
+           startsWith(steps.metadata.outputs.dependency-names, 'actions/'))
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Flag updates that need a human
+        if: |
+          contains(steps.metadata.outputs.dependency-names, 'xberg') ||
+          (steps.metadata.outputs.update-type == 'version-update:semver-major' &&
+           !startsWith(steps.metadata.outputs.dependency-names, 'actions/'))
+        run: |
+          gh pr comment "$PR_URL" --body "Held for manual review: this is a major bump or a pinned-crate change (xberg is locked on purpose; see \`crates/adapter-convert\`). Verify the changelog and run the affected build before merging."
+          gh pr edit "$PR_URL" --add-label "needs-human-review" || true
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release:
+    runs-on: ubuntu-24.04
+    if: startsWith(github.head_ref, 'release-please--')
+    steps:
+      - name: Enable auto-merge for the release PR
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
