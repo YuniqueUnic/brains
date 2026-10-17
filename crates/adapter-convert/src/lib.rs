@@ -1,6 +1,8 @@
-//! Embedded document converter (issue #19): the Xberg PDF backend behind the
+//! Embedded document converter (issue #19): the Xberg backend behind the
 //! `DocumentConverter` port. Pure Rust, fully offline, no system libraries.
-//! OCR, layout models, URL ingestion and transcription stay off.
+//! OCR, layout models, URL ingestion and transcription stay off. At xberg
+//! 1.0.0-rc.5 only PDF compiled (the office/excel/html gates referenced
+//! `zip` unconditionally); the zip-9-based 1.3.x line restored the full set.
 
 #![cfg(feature = "xberg")]
 
@@ -25,11 +27,20 @@ impl Default for XbergConverter {
 
 impl DocumentConverter for XbergConverter {
     fn supported_media_types(&self) -> &'static [&'static str] {
-        &["application/pdf", "text/csv", "text/plain"]
+        &[
+            "application/pdf",
+            "text/csv",
+            "text/plain",
+            "text/html",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ]
     }
 
     fn identity(&self) -> (&'static str, &'static str) {
-        ("xberg", "1.0.0-rc.5")
+        // Keep in step with the pinned xberg version in Cargo.toml.
+        ("xberg", "1.3.10")
     }
 
     async fn convert(&self, bytes: &[u8], media_type: &str) -> DomainResult<ConvertedDocument> {

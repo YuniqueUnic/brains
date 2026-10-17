@@ -4,6 +4,7 @@
 
 ### Features
 
+* **convert:** xberg 1.0.0-rc.5 → 1.3.10 with the full format set re-enabled: DOCX, XLSX, PPTX and HTML join PDF/CSV/plain text (`bsx convert`, capabilities `media_types`). The rc.5 lock existed only because its office/excel/html feature gates referenced `zip` unconditionally; the zip-9-based 1.3.x line fixed that. Every format verified by real conversion.
 * **cli:** `bsx update [--check] [--version <tag>] [--yes]`: self-upgrade from GitHub releases — platform-matched tarball, published-sha256 verification, atomic in-place replacement of bsx (and a sibling brains-server); non-interactive runs require `--yes`.
 * **cli:** cargo-binstall metadata on `brains-cli`/`brains-server`: `cargo binstall --git <repo>` installs release binaries without compiling, matched per rust target.
 * **web:** hybrid search (`/hybrid` token and a three-state mode switch) with per-hit retrieval provenance (`literal#1 · fts#2`) and an honest unavailable-retriever notice; the properties panel shows lifecycle and trust (status, trust tier, stale_after, verified-by, source count).
