@@ -9,11 +9,11 @@
     "test:demo": "playwright test --config playwright.demo.config.ts"
   },
   "devDependencies": {
-    "@playwright/test": "^1.52.0",
+    "@playwright/test": "1.64.1",
     "@serenity-js/assertions": "^3.31.0",
     "@serenity-js/core": "^3.31.0",
     "@serenity-js/playwright": "^3.48.0",
-    "@serenity-js/playwright-test": "^3.31.0",
+    "@serenity-js/playwright-test": "3.49.0",
     "@serenity-js/rest": "^3.31.0",
     "@serenity-js/web": "^3.48.0",
     "@types/node": "^26.6.4",
