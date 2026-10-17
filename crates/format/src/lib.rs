@@ -5,7 +5,9 @@
 pub mod frontmatter;
 pub mod markdown;
 
-pub use frontmatter::{Frontmatter, split_frontmatter};
+pub use frontmatter::{
+    Frontmatter, NoteStatus, SourceRef, TrustTier, Verification, split_frontmatter,
+};
 pub use markdown::{LinkKind, ParsedDocument, ResolvedLink, extract_links, extract_title};
 
 use brains_domain::{DomainError, VaultPath};
