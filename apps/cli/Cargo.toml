@@ -10,10 +10,16 @@ name = "bsx"
 path = "src/main.rs"
 
 [features]
-default = ["fts"]
+default = ["fts", "convert", "url-import"]
 fts = ["brains-client/fts"]
+# Embedded document conversion (issue #19). The Worker and
+# --no-default-features builds stay without it and report conversion as
+# explicitly unavailable.
+convert = ["brains-adapter-convert/xberg", "brains-client/convert"]
+url-import = ["brains-client/url-import"]
 
 [dependencies]
+brains-adapter-convert = { workspace = true, optional = true }
 brains-build-info.workspace = true
 anyhow.workspace = true
 brains-api-types.workspace = true
@@ -29,6 +35,7 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }

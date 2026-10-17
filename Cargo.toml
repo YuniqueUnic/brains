@@ -6,6 +6,7 @@ members = [
     "crates/format",
     "crates/ports",
     "crates/application",
+    "crates/adapter-convert",
     "crates/adapter-fs",
     "crates/adapter-turso",
     "crates/api-types",
@@ -38,6 +39,7 @@ brains-adapter-turso = { path = "crates/adapter-turso", default-features = false
 brains-api-types = { path = "crates/api-types" }
 brains-api-http = { path = "crates/api-http", default-features = false }
 brains-adapter-r2 = { path = "crates/adapter-r2" }
+brains-adapter-convert = { path = "crates/adapter-convert", default-features = false }
 brains-adapter-d1 = { path = "crates/adapter-d1" }
 brains-client = { path = "crates/client", default-features = false }
 brains-local = { path = "crates/local", default-features = false }
