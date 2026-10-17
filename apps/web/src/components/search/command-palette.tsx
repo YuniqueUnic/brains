@@ -31,6 +31,8 @@ type FullTextState =
       items: SearchHit[];
       incomplete: boolean;
       building: boolean;
+      /** Hybrid mode: retrievers that did not contribute and why. */
+      unavailable: string[];
     };
 
 export function CommandPalette({
@@ -50,8 +52,8 @@ export function CommandPalette({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   files: Entry[];
-  searchMode: "literal" | "fts";
-  onSearchModeChange: (mode: "literal" | "fts") => void;
+  searchMode: "literal" | "fts" | "hybrid";
+  onSearchModeChange: (mode: "literal" | "fts" | "hybrid") => void;
   onOpenFile: (path: string) => void;
   onNewDocument: () => void;
   onUpload: (intent: UploadIntent) => void;
@@ -120,6 +122,7 @@ export function CommandPalette({
             items,
             incomplete: !!cursor,
             building: false,
+            unavailable: [],
           });
         }
         return;
@@ -143,6 +146,7 @@ export function CommandPalette({
         items,
         incomplete: Boolean(cursor) || !complete,
         building: page.index_state === "building",
+        unavailable: page.unavailable ?? [],
       });
     } catch {
       // A failed search must not pose as "no matches".
@@ -193,15 +197,19 @@ export function CommandPalette({
             <button
               type="button"
               data-testid="search-mode-command"
-              aria-label={t("switchSearchMode", { mode: t(searchMode === "fts" ? "modeLiteral" : "modeFts") })}
+              aria-label={t("switchSearchMode", {
+                mode: t(searchMode === "fts" ? "modeHybrid" : searchMode === "hybrid" ? "modeLiteral" : "modeFts"),
+              })}
               title={t("modeCommands")}
               onClick={() => {
-                onSearchModeChange(searchMode === "fts" ? "literal" : "fts");
+                onSearchModeChange(
+                  searchMode === "fts" ? "hybrid" : searchMode === "hybrid" ? "literal" : "fts",
+                );
                 inputRef.current?.focus();
               }}
               className="search-mode-command"
             >
-              {searchMode === "fts" ? "/fts" : "/text"}
+              {searchMode === "fts" ? "/fts" : searchMode === "hybrid" ? "/hybrid" : "/text"}
             </button>
             {tags.map((tag) => (
               <button
@@ -279,6 +287,16 @@ export function CommandPalette({
               </div>
             )}
 
+            {fullText.kind === "done" && fullText.unavailable.length > 0 && (
+              <div
+                className="border-b px-4 py-1.5 text-meta text-muted-foreground"
+                role="status"
+                data-testid="search-unavailable"
+              >
+                {t("searchUnavailable", { reasons: fullText.unavailable.join(", ") })}
+              </div>
+            )}
+
             {showFullText && (
               <PaletteGroup
                 label={
@@ -317,6 +335,14 @@ export function CommandPalette({
                         <span className="mt-0.5 block truncate text-meta-lg text-muted-foreground">
                           <Snippet text={hit.snippet} query={fullText.query} />
                         </span>
+                        {hit.retrieved_by && hit.retrieved_by.length > 0 && (
+                          <span
+                            className="mt-1 block font-mono text-meta text-faint"
+                            title={t("retrievalRanks")}
+                          >
+                            {hit.retrieved_by.map((r) => `${r.retriever}#${r.rank}`).join(" · ")}
+                          </span>
+                        )}
                       </button>
                     </Command.Item>
                   ))}

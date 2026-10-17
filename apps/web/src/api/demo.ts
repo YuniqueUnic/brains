@@ -284,7 +284,7 @@ export const demoApi = {
     if (!source?.content) throw new ApiError(400, "INVALID_ARGUMENT", "该版本没有内容");
     return commit(path, "restore", source.content);
   },
-  async search(query: { q: string; tags?: string[]; mode: "literal" | "fts"; prefix?: string; cursor?: string | null }): Promise<SearchPage> {
+  async search(query: { q: string; tags?: string[]; mode: "literal" | "fts" | "hybrid"; prefix?: string; cursor?: string | null; status?: string; type?: string; trust?: string; stale?: boolean }): Promise<SearchPage> {
     await latency();
     const q = query.q.trim();
     const items: SearchPage["items"] = [];

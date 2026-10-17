@@ -9,10 +9,10 @@ export const OpenNote = (path: string) =>
   Task.where(`#actor opens ${path} from the sidebar`, Click.on(Workbench.fileItem(path)));
 
 /** Search with the same keyboard command a user can enter. */
-export const SearchFor = (query: string, mode: "literal" | "fts" = "literal") =>
+export const SearchFor = (query: string, mode: "literal" | "fts" | "hybrid" = "literal") =>
   Task.where(`#actor searches for "${query}" (${mode})`,
     Click.on(Workbench.paletteTrigger()),
-    Enter.theValue(`/${mode === "fts" ? "fts" : "text"} ${query}`).into(Workbench.searchBox()),
+    Enter.theValue(`/${mode === "fts" ? "fts" : mode === "hybrid" ? "hybrid" : "text"} ${query}`).into(Workbench.searchBox()),
     Press.the("Enter").in(Workbench.searchBox()),
   );
 

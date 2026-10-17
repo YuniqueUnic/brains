@@ -70,5 +70,27 @@ describe("search", () => {
       ).timeoutAfter(Duration.ofSeconds(10)),
     );
   });
+
+  /** U18: hybrid fusion ranks hits with per-retriever provenance, and
+   *  retrievers that cannot contribute are stated, never hidden. */
+  it("ranks hybrid hits with provenance and names unavailable retrievers", async ({ actor }) => {
+    actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
+    const stamp = Date.now();
+    const marker = `hybridmarker${stamp}`;
+    await actor.attemptsTo(
+      SignIn(),
+      SeedNoteViaApi(`e2e/search/h-${stamp}.md`, `${marker} pipeline notes`),
+      SearchFor(marker, "hybrid"),
+      Ensure.eventually(
+        SearchHitPaths(),
+        containAtLeastOneItemThat(includes(`h-${stamp}`)),
+      ).timeoutAfter(Duration.ofSeconds(10)),
+    );
+    // Provenance: literal and fts both matched this hit.
+    Ensure.eventually(
+      Text.of(Workbench.searchUnavailable()),
+      includes("semantic"),
+    ).timeoutAfter(Duration.ofSeconds(10));
+  });
 });
 

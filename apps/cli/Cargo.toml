@@ -3,11 +3,35 @@ name = "brains-cli"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 # The CLI is invoked as `bsx`.
 [[bin]]
 name = "bsx"
 path = "src/main.rs"
+
+# Install or upgrade without compiling: `cargo binstall --git <repo> brains-cli`
+# (or brains-server). Release tarballs are named brains-<version>-<id>.tar.gz
+# with a brains-<version>-<id>/ prefix inside; the ids below are the release
+# workflow's matrix ids, not rust triples.
+[package.metadata.binstall]
+pkg-fmt = "tgz"
+
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/brains-{ version }-macos-arm64.{ archive-format }"
+bin-dir = "brains-{ version }-macos-arm64/{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/brains-{ version }-macos-x64.{ archive-format }"
+bin-dir = "brains-{ version }-macos-x64/{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.x86_64-unknown-linux-musl]
+pkg-url = "{ repo }/releases/download/v{ version }/brains-{ version }-linux-x64.{ archive-format }"
+bin-dir = "brains-{ version }-linux-x64/{ bin }{ binary-ext }"
+
+[package.metadata.binstall.overrides.aarch64-unknown-linux-musl]
+pkg-url = "{ repo }/releases/download/v{ version }/brains-{ version }-linux-arm64.{ archive-format }"
+bin-dir = "brains-{ version }-linux-arm64/{ bin }{ binary-ext }"
 
 [features]
 default = ["fts", "convert", "url-import"]
@@ -31,10 +55,12 @@ clap.workspace = true
 clap_complete.workspace = true
 clap_complete_nushell.workspace = true
 hex.workspace = true
-reqwest.workspace = true
+flate2 = "1"
+reqwest = { workspace = true, features = ["blocking"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+tar = "0.4"
 tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]

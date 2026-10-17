@@ -102,7 +102,9 @@ export function PropertiesPanel({
   const { t } = useTranslation("info");
   const context = { files, onOpen: onOpenFile, onTag: onOpenTag };
   const [fetchedMeta, setFetchedMeta] = useState<Entry | null>(null);
-  const meta = entry ?? fetchedMeta;
+  // Prefer the listing entry, but never let its missing projection hide
+  // lifecycle facts the metadata read provides.
+  const meta = entry?.meta ? entry : fetchedMeta;
   const [history, setHistory] = useState<RevisionDto[] | null>(null);
   // null = still loading (skeleton); loads that FAIL set the error flag so
   // the section says so instead of posing as an empty result.
@@ -131,9 +133,10 @@ export function PropertiesPanel({
     setMetaError(false);
     setHistoryError(false);
     setLinksError(false);
-    // The workspace listing already owns metadata for live and trashed files.
-    // Search can open a path outside that bounded listing; fetch only that case.
-    if (!entry) {
+    // The workspace listing already owns metadata for live and trashed
+    // files, but store listings carry no lifecycle projection (issue #13):
+    // fetch whenever the entry has no meta, not only when it is missing.
+    if (!entry || !entry.meta) {
       api.readMeta(path).then(
         (entry) => alive && setFetchedMeta(entry),
         () => {
@@ -163,7 +166,7 @@ export function PropertiesPanel({
     return () => {
       alive = false;
     };
-  }, [path, revision, entry]);
+  }, [path, revision, entry, entry?.meta]);
   const historyLoading = path !== null && history === null;
   const historyItems = history ?? [];
 
@@ -231,6 +234,42 @@ export function PropertiesPanel({
                     <>
                       <dt className="text-muted-foreground">{t("updatedLabel")}</dt>
                       <dd className="font-mono text-meta">{formatDateTime(meta.updated_at)}</dd>
+                    </>
+                  )}
+                </>
+              )}
+              {meta?.meta && (
+                <>
+                  {meta.meta.type && (
+                    <>
+                      <dt className="text-muted-foreground">{t("noteTypeLabel")}</dt>
+                      <dd className="font-mono text-meta">{meta.meta.type}</dd>
+                    </>
+                  )}
+                  <dt className="text-muted-foreground">{t("statusLabel")}</dt>
+                  <dd className="font-mono text-meta">{meta.meta.status}</dd>
+                  <dt className="text-muted-foreground">{t("trustLabel")}</dt>
+                  <dd className="font-mono text-meta">{meta.meta.trust}</dd>
+                  {meta.meta.stale_after && (
+                    <>
+                      <dt className="text-muted-foreground">{t("staleAfterLabel")}</dt>
+                      <dd className="font-mono text-meta">{meta.meta.stale_after}</dd>
+                    </>
+                  )}
+                  {meta.meta.verified.length > 0 && (
+                    <>
+                      <dt className="text-muted-foreground">{t("verifiedLabel")}</dt>
+                      <dd className="font-mono text-meta">
+                        {meta.meta.verified
+                          .map((v) => v.by)
+                          .join(", ")}
+                      </dd>
+                    </>
+                  )}
+                  {meta.meta.sources.length > 0 && (
+                    <>
+                      <dt className="text-muted-foreground">{t("sourcesLabel")}</dt>
+                      <dd className="font-mono text-meta">{meta.meta.sources.length}</dd>
                     </>
                   )}
                 </>

@@ -19,6 +19,21 @@ export interface Entry {
   media_type?: string;
   kind?: "note" | "text" | "script" | "binary";
   title?: string;
+  /** Lifecycle/trust projection (issue #13); present on index-source and
+   *  metadata reads, absent on store listings. */
+  meta?: NoteMeta;
+}
+
+/** Parsed frontmatter plus the derived trust tier; informational only. */
+export interface NoteMeta {
+  type?: string;
+  description?: string;
+  status: "draft" | "stable" | "deprecated";
+  trust: "unverified" | "machine-confirmed" | "human-reviewed";
+  stale_after?: string;
+  generated?: { by: string; at?: string };
+  verified: { by: string; at?: string }[];
+  sources: { id: string; resource?: string; title?: string; last_modified?: string }[];
 }
 
 export interface MutationResult extends Entry {
@@ -56,6 +71,8 @@ export interface SearchHit {
   path: string;
   indexed_revision: string;
   snippet: string;
+  /** Hybrid mode only: which retrievers matched, with the rank in each. */
+  retrieved_by?: { retriever: string; rank: number }[];
 }
 
 export interface SearchPage {
@@ -64,6 +81,8 @@ export interface SearchPage {
   complete: boolean;
   scanned: number;
   index_state: "available" | "building";
+  /** Hybrid mode only: retrievers that did not contribute and why. */
+  unavailable?: string[];
 }
 
 export interface TransferResult {
@@ -253,6 +272,10 @@ const httpApi = {
     source?: "store" | "index";
     tags?: string[];
     sort?: string;
+    status?: string;
+    type?: string;
+    trust?: string;
+    stale?: boolean;
   }): Promise<FilePage> {
     return request<FilePage>("/files/query", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(query),
@@ -389,9 +412,13 @@ const httpApi = {
   async search(query: {
     q: string;
     tags?: string[];
-    mode: "literal" | "fts";
+    mode: "literal" | "fts" | "hybrid";
     prefix?: string;
     cursor?: string | null;
+    status?: string;
+    type?: string;
+    trust?: string;
+    stale?: boolean;
   }): Promise<SearchPage> {
     return request<SearchPage>("/search", {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(query),
