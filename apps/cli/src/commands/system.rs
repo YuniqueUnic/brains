@@ -196,6 +196,7 @@ pub(crate) fn export(
     client: &dyn Library,
     output: &std::path::Path,
     format: crate::cli::TransferFormat,
+    with_log: bool,
 ) -> ClientResult<i32> {
     let vault = client
         .capabilities()?
@@ -208,19 +209,60 @@ pub(crate) fn export(
         crate::cli::TransferFormat::Archive => {
             brains_client::archive::export_archive(client, output, &vault)?
         }
+        crate::cli::TransferFormat::Okf => {
+            let written = brains_client::okf::export_okf(client, output, with_log)?;
+            format!(
+                "okf bundle: {written} files written to {}",
+                output.display()
+            )
+        }
     };
     println!("{summary}");
     Ok(0)
 }
 
+/// `bsx index`: regenerate `<prefix>/index.md` from the current listing.
+pub(crate) fn index_scope(
+    client: &dyn Library,
+    prefix: &str,
+    if_revision: Option<&str>,
+) -> ClientResult<i32> {
+    let path = brains_client::okf::rebuild_scope_index(client, prefix, if_revision)?;
+    println!("index regenerated at {path}");
+    Ok(0)
+}
+
 /// Push the built-in template notes into the target vault: existing paths are
-/// skipped, missing ones are created. Idempotent — rerun anytime.
-pub(crate) fn seed_template(client: &dyn Library) -> ClientResult<i32> {
+/// skipped, missing ones are created. Idempotent — rerun anytime. `--refresh`
+/// replaces existing live template paths whose content differs (CAS-guarded,
+/// so a concurrent edit fails instead of being overwritten); trashed paths
+/// stay trashed.
+pub(crate) fn seed_template(client: &dyn Library, refresh: bool) -> ClientResult<i32> {
+    use sha2::{Digest, Sha256};
+
     let mut written = 0usize;
+    let mut refreshed = 0usize;
     let mut skipped = 0usize;
     for (path, body) in brains_application::seed::template_notes() {
+        let digest = hex::encode(Sha256::digest(body.as_bytes()));
         match client.get_meta(path) {
-            Ok(_) | Err(ClientError { status: 410, .. }) => skipped += 1,
+            Ok(entry) => {
+                if !refresh || entry.state != "live" || entry.sha256.as_deref() == Some(&digest) {
+                    skipped += 1;
+                    continue;
+                }
+                client.put_content(
+                    path,
+                    body.as_bytes(),
+                    "text/markdown",
+                    None,
+                    Precondition::IfRevision(entry.revision.clone()),
+                    None,
+                )?;
+                refreshed += 1;
+                println!("refreshed {path}");
+            }
+            Err(ClientError { status: 410, .. }) => skipped += 1,
             Err(error) if error.status == 404 => {
                 client.put_content(
                     path,
@@ -236,7 +278,7 @@ pub(crate) fn seed_template(client: &dyn Library) -> ClientResult<i32> {
             Err(error) => return Err(error),
         }
     }
-    println!("done: {written} seeded, {skipped} already present.");
+    println!("done: {written} seeded, {refreshed} refreshed, {skipped} already present.");
     Ok(0)
 }
 
@@ -248,7 +290,9 @@ pub(crate) fn import(
     dry_run: bool,
 ) -> ClientResult<i32> {
     match format {
-        crate::cli::TransferFormat::WorkingTree => {
+        crate::cli::TransferFormat::WorkingTree | crate::cli::TransferFormat::Okf => {
+            // An OKF bundle IS a working tree: reserved `index.md`/`log.md`
+            // import as ordinary files, never as concepts.
             let report =
                 brains_client::import::import_working_tree(client, input, overwrite, dry_run)?;
             print_pretty(&report)?;

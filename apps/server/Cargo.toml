@@ -5,10 +5,14 @@ edition.workspace = true
 license.workspace = true
 
 [features]
-default = ["fts"]
+default = ["fts", "convert"]
 fts = ["brains-local/fts"]
+# Embedded document conversion (issue #19), reported by capabilities; the
+# conversion itself is invoked client-side over existing APIs.
+convert = ["brains-adapter-convert/xberg"]
 
 [dependencies]
+brains-adapter-convert = { workspace = true, optional = true }
 brains-build-info.workspace = true
 axum.workspace = true
 brains-adapter-fs.workspace = true

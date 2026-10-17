@@ -31,9 +31,29 @@ pub mod brains {
         pub limits: CapabilityLimits,
         pub features: ::std::collections::BTreeMap<String, bool>,
         #[serde(skip_serializing_if = "Option::is_none")]
+        pub semantic: Option<SemanticCapability>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub document_conversion: Option<DocumentConversion>,
+        #[serde(skip_serializing_if = "Option::is_none")]
         pub vault: Option<String>,
     }
     impl Capabilities {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct SemanticCapability {
+        pub model_id: String,
+        pub dimensions: u64,
+        pub vector_index_version: i64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub unavailable_reason: Option<String>,
+    }
+    impl SemanticCapability {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct DocumentConversion {
+        pub converter: String,
+        pub version: String,
+        pub media_types: Vec<String>,
+    }
+    impl DocumentConversion {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct Entry {
         pub path: String,
@@ -52,8 +72,51 @@ pub mod brains {
         pub kind: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub meta: Option<NoteMeta>,
     }
     impl Entry {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct NoteMeta {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub r#type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub description: Option<String>,
+        pub status: String,
+        pub trust: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub stale_after: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub generated: Option<Generated>,
+        pub verified: Vec<Verification>,
+        pub sources: Vec<SourceRef>,
+    }
+    impl NoteMeta {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct Generated {
+        pub by: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub at: Option<String>,
+    }
+    impl Generated {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct Verification {
+        pub by: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub at: Option<String>,
+    }
+    impl Verification {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct SourceRef {
+        pub id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub resource: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub title: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub last_modified: Option<String>,
+    }
+    impl SourceRef {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct PurgeResult {
         pub path: String,
@@ -195,8 +258,15 @@ pub mod brains {
         pub path: String,
         pub indexed_revision: String,
         pub snippet: String,
+        pub retrieved_by: Vec<Retrieval>,
     }
     impl SearchHit {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct Retrieval {
+        pub retriever: String,
+        pub rank: u64,
+    }
+    impl Retrieval {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct SearchPage {
         pub items: Vec<SearchHit>,
@@ -205,6 +275,7 @@ pub mod brains {
         pub complete: bool,
         pub scanned: i64,
         pub index_state: String,
+        pub unavailable: Vec<String>,
     }
     impl SearchPage {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
@@ -475,6 +546,14 @@ pub mod brains {
         pub sort: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub include_deleted: Option<bool>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub status: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub r#type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub trust: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub stale: Option<bool>,
     }
     impl ListFilesQuery {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
@@ -486,6 +565,14 @@ pub mod brains {
         pub prefix: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub tags: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub status: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub r#type: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub trust: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub stale: Option<bool>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub scan_limit: Option<i64>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -4098,6 +4185,10 @@ pub mod brains {
             pub limits: __xidl_in_Files::brains_CapabilityLimits,
             pub features: ::std::collections::BTreeMap<String, bool>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub semantic: Option<__xidl_in_Files::brains_SemanticCapability>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub document_conversion: Option<__xidl_in_Files::brains_DocumentConversion>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
             pub vault: Option<String>,
         }
         #[allow(unused_variables, unreachable_code)]
@@ -4110,6 +4201,8 @@ pub mod brains {
                     runtime: value.runtime.into(),
                     limits: value.limits.into(),
                     features: value.features.into_iter().collect(),
+                    semantic: value.semantic.map(|value| value.into()),
+                    document_conversion: value.document_conversion.map(|value| value.into()),
                     vault: value.vault,
                 }
             }
@@ -4124,6 +4217,8 @@ pub mod brains {
                     runtime: value.runtime.into(),
                     limits: value.limits.into(),
                     features: value.features.into_iter().collect(),
+                    semantic: value.semantic.map(|value| value.into()),
+                    document_conversion: value.document_conversion.map(|value| value.into()),
                     vault: value.vault,
                 }
             }
@@ -4220,6 +4315,32 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_DocumentConversion {
+            pub converter: String,
+            pub version: String,
+            pub media_types: Vec<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::DocumentConversion> for brains_DocumentConversion {
+            fn from(value: super::DocumentConversion) -> Self {
+                Self {
+                    converter: value.converter,
+                    version: value.version,
+                    media_types: value.media_types.into_iter().collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_DocumentConversion> for super::DocumentConversion {
+            fn from(value: brains_DocumentConversion) -> Self {
+                Self {
+                    converter: value.converter,
+                    version: value.version,
+                    media_types: value.media_types.into_iter().collect(),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Entry {
             pub path: String,
             pub revision: String,
@@ -4237,6 +4358,8 @@ pub mod brains {
             pub kind: Option<String>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub title: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub meta: Option<__xidl_in_Files::brains_NoteMeta>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::Entry> for brains_Entry {
@@ -4252,6 +4375,7 @@ pub mod brains {
                     media_type: value.media_type,
                     kind: value.kind,
                     title: value.title,
+                    meta: value.meta.map(|value| value.into()),
                 }
             }
         }
@@ -4269,6 +4393,7 @@ pub mod brains {
                     media_type: value.media_type,
                     kind: value.kind,
                     title: value.title,
+                    meta: value.meta.map(|value| value.into()),
                 }
             }
         }
@@ -4333,6 +4458,30 @@ pub mod brains {
                     next_cursor: value.next_cursor,
                     source: value.source,
                     consistency: value.consistency,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_Generated {
+            pub by: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub at: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::Generated> for brains_Generated {
+            fn from(value: super::Generated) -> Self {
+                Self {
+                    by: value.by,
+                    at: value.at,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_Generated> for super::Generated {
+            fn from(value: brains_Generated) -> Self {
+                Self {
+                    by: value.by,
+                    at: value.at,
                 }
             }
         }
@@ -4435,6 +4584,14 @@ pub mod brains {
             pub sort: Option<String>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub include_deleted: Option<bool>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub status: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub r#type: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub trust: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub stale: Option<bool>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::ListFilesQuery> for brains_ListFilesQuery {
@@ -4448,6 +4605,10 @@ pub mod brains {
                     kind: value.kind,
                     sort: value.sort,
                     include_deleted: value.include_deleted,
+                    status: value.status,
+                    r#type: value.r#type,
+                    trust: value.trust,
+                    stale: value.stale,
                 }
             }
         }
@@ -4463,6 +4624,10 @@ pub mod brains {
                     kind: value.kind,
                     sort: value.sort,
                     include_deleted: value.include_deleted,
+                    status: value.status,
+                    r#type: value.r#type,
+                    trust: value.trust,
+                    stale: value.stale,
                 }
             }
         }
@@ -4526,6 +4691,67 @@ pub mod brains {
                     index_state: value.index_state,
                     operation_id: value.operation_id,
                     created: value.created,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_NoteMeta {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub r#type: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub description: Option<String>,
+            pub status: String,
+            pub trust: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub stale_after: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub generated: Option<__xidl_in_Files::brains_Generated>,
+            pub verified: Vec<__xidl_in_Files::brains_Verification>,
+            pub sources: Vec<__xidl_in_Files::brains_SourceRef>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::NoteMeta> for brains_NoteMeta {
+            fn from(value: super::NoteMeta) -> Self {
+                Self {
+                    r#type: value.r#type,
+                    description: value.description,
+                    status: value.status,
+                    trust: value.trust,
+                    stale_after: value.stale_after,
+                    generated: value.generated.map(|value| value.into()),
+                    verified: value
+                        .verified
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
+                    sources: value
+                        .sources
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_NoteMeta> for super::NoteMeta {
+            fn from(value: brains_NoteMeta) -> Self {
+                Self {
+                    r#type: value.r#type,
+                    description: value.description,
+                    status: value.status,
+                    trust: value.trust,
+                    stale_after: value.stale_after,
+                    generated: value.generated.map(|value| value.into()),
+                    verified: value
+                        .verified
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
+                    sources: value
+                        .sources
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
                 }
             }
         }
@@ -4734,6 +4960,29 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_Retrieval {
+            pub retriever: String,
+            pub rank: u64,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::Retrieval> for brains_Retrieval {
+            fn from(value: super::Retrieval) -> Self {
+                Self {
+                    retriever: value.retriever,
+                    rank: value.rank,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_Retrieval> for super::Retrieval {
+            fn from(value: brains_Retrieval) -> Self {
+                Self {
+                    retriever: value.retriever,
+                    rank: value.rank,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Revision {
             pub revision: String,
             pub path: String,
@@ -4827,6 +5076,7 @@ pub mod brains {
             pub path: String,
             pub indexed_revision: String,
             pub snippet: String,
+            pub retrieved_by: Vec<__xidl_in_Files::brains_Retrieval>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::SearchHit> for brains_SearchHit {
@@ -4835,6 +5085,11 @@ pub mod brains {
                     path: value.path,
                     indexed_revision: value.indexed_revision,
                     snippet: value.snippet,
+                    retrieved_by: value
+                        .retrieved_by
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
                 }
             }
         }
@@ -4845,6 +5100,11 @@ pub mod brains {
                     path: value.path,
                     indexed_revision: value.indexed_revision,
                     snippet: value.snippet,
+                    retrieved_by: value
+                        .retrieved_by
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
                 }
             }
         }
@@ -4856,6 +5116,7 @@ pub mod brains {
             pub complete: bool,
             pub scanned: i64,
             pub index_state: String,
+            pub unavailable: Vec<String>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::SearchPage> for brains_SearchPage {
@@ -4866,6 +5127,7 @@ pub mod brains {
                     complete: value.complete,
                     scanned: value.scanned,
                     index_state: value.index_state,
+                    unavailable: value.unavailable.into_iter().collect(),
                 }
             }
         }
@@ -4878,6 +5140,7 @@ pub mod brains {
                     complete: value.complete,
                     scanned: value.scanned,
                     index_state: value.index_state,
+                    unavailable: value.unavailable.into_iter().collect(),
                 }
             }
         }
@@ -4891,6 +5154,14 @@ pub mod brains {
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub tags: Option<Vec<String>>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub status: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub r#type: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub trust: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub stale: Option<bool>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
             pub scan_limit: Option<i64>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub cursor: Option<String>,
@@ -4903,6 +5174,10 @@ pub mod brains {
                     mode: value.mode,
                     prefix: value.prefix,
                     tags: value.tags.map(|value| value.into_iter().collect()),
+                    status: value.status,
+                    r#type: value.r#type,
+                    trust: value.trust,
+                    stale: value.stale,
                     scan_limit: value.scan_limit,
                     cursor: value.cursor,
                 }
@@ -4916,8 +5191,74 @@ pub mod brains {
                     mode: value.mode,
                     prefix: value.prefix,
                     tags: value.tags.map(|value| value.into_iter().collect()),
+                    status: value.status,
+                    r#type: value.r#type,
+                    trust: value.trust,
+                    stale: value.stale,
                     scan_limit: value.scan_limit,
                     cursor: value.cursor,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticCapability {
+            pub model_id: String,
+            pub dimensions: u64,
+            pub vector_index_version: i64,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub unavailable_reason: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticCapability> for brains_SemanticCapability {
+            fn from(value: super::SemanticCapability) -> Self {
+                Self {
+                    model_id: value.model_id,
+                    dimensions: value.dimensions,
+                    vector_index_version: value.vector_index_version,
+                    unavailable_reason: value.unavailable_reason,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticCapability> for super::SemanticCapability {
+            fn from(value: brains_SemanticCapability) -> Self {
+                Self {
+                    model_id: value.model_id,
+                    dimensions: value.dimensions,
+                    vector_index_version: value.vector_index_version,
+                    unavailable_reason: value.unavailable_reason,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SourceRef {
+            pub id: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub resource: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub title: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub last_modified: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SourceRef> for brains_SourceRef {
+            fn from(value: super::SourceRef) -> Self {
+                Self {
+                    id: value.id,
+                    resource: value.resource,
+                    title: value.title,
+                    last_modified: value.last_modified,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SourceRef> for super::SourceRef {
+            fn from(value: brains_SourceRef) -> Self {
+                Self {
+                    id: value.id,
+                    resource: value.resource,
+                    title: value.title,
+                    last_modified: value.last_modified,
                 }
             }
         }
@@ -4991,6 +5332,30 @@ pub mod brains {
                 }
             }
         }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_Verification {
+            pub by: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub at: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::Verification> for brains_Verification {
+            fn from(value: super::Verification) -> Self {
+                Self {
+                    by: value.by,
+                    at: value.at,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_Verification> for super::Verification {
+            fn from(value: brains_Verification) -> Self {
+                Self {
+                    by: value.by,
+                    at: value.at,
+                }
+            }
+        }
     }
     #[allow(
         non_snake_case,
@@ -5009,6 +5374,10 @@ pub mod brains {
             pub limits: __xidl_out_Files::brains_CapabilityLimits,
             pub features: ::std::collections::BTreeMap<String, bool>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub semantic: Option<__xidl_out_Files::brains_SemanticCapability>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub document_conversion: Option<__xidl_out_Files::brains_DocumentConversion>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
             pub vault: Option<String>,
         }
         #[allow(unused_variables, unreachable_code)]
@@ -5021,6 +5390,8 @@ pub mod brains {
                     runtime: value.runtime.into(),
                     limits: value.limits.into(),
                     features: value.features.into_iter().collect(),
+                    semantic: value.semantic.map(|value| value.into()),
+                    document_conversion: value.document_conversion.map(|value| value.into()),
                     vault: value.vault,
                 }
             }
@@ -5035,6 +5406,8 @@ pub mod brains {
                     runtime: value.runtime.into(),
                     limits: value.limits.into(),
                     features: value.features.into_iter().collect(),
+                    semantic: value.semantic.map(|value| value.into()),
+                    document_conversion: value.document_conversion.map(|value| value.into()),
                     vault: value.vault,
                 }
             }
@@ -5131,6 +5504,32 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_DocumentConversion {
+            pub converter: String,
+            pub version: String,
+            pub media_types: Vec<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::DocumentConversion> for brains_DocumentConversion {
+            fn from(value: super::DocumentConversion) -> Self {
+                Self {
+                    converter: value.converter,
+                    version: value.version,
+                    media_types: value.media_types.into_iter().collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_DocumentConversion> for super::DocumentConversion {
+            fn from(value: brains_DocumentConversion) -> Self {
+                Self {
+                    converter: value.converter,
+                    version: value.version,
+                    media_types: value.media_types.into_iter().collect(),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Entry {
             pub path: String,
             pub revision: String,
@@ -5148,6 +5547,8 @@ pub mod brains {
             pub kind: Option<String>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub title: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub meta: Option<__xidl_out_Files::brains_NoteMeta>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::Entry> for brains_Entry {
@@ -5163,6 +5564,7 @@ pub mod brains {
                     media_type: value.media_type,
                     kind: value.kind,
                     title: value.title,
+                    meta: value.meta.map(|value| value.into()),
                 }
             }
         }
@@ -5180,6 +5582,7 @@ pub mod brains {
                     media_type: value.media_type,
                     kind: value.kind,
                     title: value.title,
+                    meta: value.meta.map(|value| value.into()),
                 }
             }
         }
@@ -5244,6 +5647,30 @@ pub mod brains {
                     next_cursor: value.next_cursor,
                     source: value.source,
                     consistency: value.consistency,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_Generated {
+            pub by: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub at: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::Generated> for brains_Generated {
+            fn from(value: super::Generated) -> Self {
+                Self {
+                    by: value.by,
+                    at: value.at,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_Generated> for super::Generated {
+            fn from(value: brains_Generated) -> Self {
+                Self {
+                    by: value.by,
+                    at: value.at,
                 }
             }
         }
@@ -5346,6 +5773,14 @@ pub mod brains {
             pub sort: Option<String>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub include_deleted: Option<bool>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub status: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub r#type: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub trust: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub stale: Option<bool>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::ListFilesQuery> for brains_ListFilesQuery {
@@ -5359,6 +5794,10 @@ pub mod brains {
                     kind: value.kind,
                     sort: value.sort,
                     include_deleted: value.include_deleted,
+                    status: value.status,
+                    r#type: value.r#type,
+                    trust: value.trust,
+                    stale: value.stale,
                 }
             }
         }
@@ -5374,6 +5813,10 @@ pub mod brains {
                     kind: value.kind,
                     sort: value.sort,
                     include_deleted: value.include_deleted,
+                    status: value.status,
+                    r#type: value.r#type,
+                    trust: value.trust,
+                    stale: value.stale,
                 }
             }
         }
@@ -5437,6 +5880,67 @@ pub mod brains {
                     index_state: value.index_state,
                     operation_id: value.operation_id,
                     created: value.created,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_NoteMeta {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub r#type: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub description: Option<String>,
+            pub status: String,
+            pub trust: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub stale_after: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub generated: Option<__xidl_out_Files::brains_Generated>,
+            pub verified: Vec<__xidl_out_Files::brains_Verification>,
+            pub sources: Vec<__xidl_out_Files::brains_SourceRef>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::NoteMeta> for brains_NoteMeta {
+            fn from(value: super::NoteMeta) -> Self {
+                Self {
+                    r#type: value.r#type,
+                    description: value.description,
+                    status: value.status,
+                    trust: value.trust,
+                    stale_after: value.stale_after,
+                    generated: value.generated.map(|value| value.into()),
+                    verified: value
+                        .verified
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
+                    sources: value
+                        .sources
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_NoteMeta> for super::NoteMeta {
+            fn from(value: brains_NoteMeta) -> Self {
+                Self {
+                    r#type: value.r#type,
+                    description: value.description,
+                    status: value.status,
+                    trust: value.trust,
+                    stale_after: value.stale_after,
+                    generated: value.generated.map(|value| value.into()),
+                    verified: value
+                        .verified
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
+                    sources: value
+                        .sources
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
                 }
             }
         }
@@ -5645,6 +6149,29 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_Retrieval {
+            pub retriever: String,
+            pub rank: u64,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::Retrieval> for brains_Retrieval {
+            fn from(value: super::Retrieval) -> Self {
+                Self {
+                    retriever: value.retriever,
+                    rank: value.rank,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_Retrieval> for super::Retrieval {
+            fn from(value: brains_Retrieval) -> Self {
+                Self {
+                    retriever: value.retriever,
+                    rank: value.rank,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Revision {
             pub revision: String,
             pub path: String,
@@ -5738,6 +6265,7 @@ pub mod brains {
             pub path: String,
             pub indexed_revision: String,
             pub snippet: String,
+            pub retrieved_by: Vec<__xidl_out_Files::brains_Retrieval>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::SearchHit> for brains_SearchHit {
@@ -5746,6 +6274,11 @@ pub mod brains {
                     path: value.path,
                     indexed_revision: value.indexed_revision,
                     snippet: value.snippet,
+                    retrieved_by: value
+                        .retrieved_by
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
                 }
             }
         }
@@ -5756,6 +6289,11 @@ pub mod brains {
                     path: value.path,
                     indexed_revision: value.indexed_revision,
                     snippet: value.snippet,
+                    retrieved_by: value
+                        .retrieved_by
+                        .into_iter()
+                        .map(|value| value.into())
+                        .collect(),
                 }
             }
         }
@@ -5767,6 +6305,7 @@ pub mod brains {
             pub complete: bool,
             pub scanned: i64,
             pub index_state: String,
+            pub unavailable: Vec<String>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::SearchPage> for brains_SearchPage {
@@ -5777,6 +6316,7 @@ pub mod brains {
                     complete: value.complete,
                     scanned: value.scanned,
                     index_state: value.index_state,
+                    unavailable: value.unavailable.into_iter().collect(),
                 }
             }
         }
@@ -5789,6 +6329,7 @@ pub mod brains {
                     complete: value.complete,
                     scanned: value.scanned,
                     index_state: value.index_state,
+                    unavailable: value.unavailable.into_iter().collect(),
                 }
             }
         }
@@ -5802,6 +6343,14 @@ pub mod brains {
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub tags: Option<Vec<String>>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub status: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub r#type: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub trust: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub stale: Option<bool>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
             pub scan_limit: Option<i64>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub cursor: Option<String>,
@@ -5814,6 +6363,10 @@ pub mod brains {
                     mode: value.mode,
                     prefix: value.prefix,
                     tags: value.tags.map(|value| value.into_iter().collect()),
+                    status: value.status,
+                    r#type: value.r#type,
+                    trust: value.trust,
+                    stale: value.stale,
                     scan_limit: value.scan_limit,
                     cursor: value.cursor,
                 }
@@ -5827,8 +6380,74 @@ pub mod brains {
                     mode: value.mode,
                     prefix: value.prefix,
                     tags: value.tags.map(|value| value.into_iter().collect()),
+                    status: value.status,
+                    r#type: value.r#type,
+                    trust: value.trust,
+                    stale: value.stale,
                     scan_limit: value.scan_limit,
                     cursor: value.cursor,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticCapability {
+            pub model_id: String,
+            pub dimensions: u64,
+            pub vector_index_version: i64,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub unavailable_reason: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticCapability> for brains_SemanticCapability {
+            fn from(value: super::SemanticCapability) -> Self {
+                Self {
+                    model_id: value.model_id,
+                    dimensions: value.dimensions,
+                    vector_index_version: value.vector_index_version,
+                    unavailable_reason: value.unavailable_reason,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticCapability> for super::SemanticCapability {
+            fn from(value: brains_SemanticCapability) -> Self {
+                Self {
+                    model_id: value.model_id,
+                    dimensions: value.dimensions,
+                    vector_index_version: value.vector_index_version,
+                    unavailable_reason: value.unavailable_reason,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SourceRef {
+            pub id: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub resource: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub title: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub last_modified: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SourceRef> for brains_SourceRef {
+            fn from(value: super::SourceRef) -> Self {
+                Self {
+                    id: value.id,
+                    resource: value.resource,
+                    title: value.title,
+                    last_modified: value.last_modified,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SourceRef> for super::SourceRef {
+            fn from(value: brains_SourceRef) -> Self {
+                Self {
+                    id: value.id,
+                    resource: value.resource,
+                    title: value.title,
+                    last_modified: value.last_modified,
                 }
             }
         }
@@ -5899,6 +6518,30 @@ pub mod brains {
                     target_revision: value.target_revision,
                     source_revision: value.source_revision,
                     error: value.error.map(|value| value.into()),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_Verification {
+            pub by: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub at: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::Verification> for brains_Verification {
+            fn from(value: super::Verification) -> Self {
+                Self {
+                    by: value.by,
+                    at: value.at,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_Verification> for super::Verification {
+            fn from(value: brains_Verification) -> Self {
+                Self {
+                    by: value.by,
+                    at: value.at,
                 }
             }
         }
