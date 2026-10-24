@@ -28,7 +28,7 @@
     "dompurify": "^3.4.17",
     "i18next": "^26.4.2",
     "lucide-react": "^1.52.0",
-    "marked": "^18.1.0",
+    "marked": "^18.1.1",
     "react": "^19.1.0",
     "react-aria-components": "^1.22.0",
     "react-dom": "^19.1.0",
