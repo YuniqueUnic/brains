@@ -19,6 +19,6 @@
     "cloudflare:mcp-verify": "python3 scripts/cloudflare.py mcp-verify"
   },
   "devDependencies": {
-    "oxlint": "^1.88.0"
+    "oxlint": "^1.89.0"
   }
 }

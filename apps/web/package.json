@@ -28,12 +28,12 @@
     "dompurify": "^3.4.17",
     "i18next": "^26.4.2",
     "lucide-react": "^1.52.0",
-    "marked": "^18.1.0",
+    "marked": "^18.1.1",
     "react": "^19.1.0",
     "react-aria-components": "^1.22.0",
     "react-dom": "^19.1.0",
     "react-i18next": "^17.0.16",
-    "react-resizable-panels": "^4.14.3",
+    "react-resizable-panels": "^4.14.8",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.7.0",
     "yaml": "^2.9.1"
@@ -45,6 +45,6 @@
     "@vitejs/plugin-react": "^6.1.2",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3",
-    "vite": "^8.3.3"
+    "vite": "^8.3.5"
   }
 }
