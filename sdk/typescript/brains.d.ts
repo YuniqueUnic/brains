@@ -5,6 +5,18 @@
     export namespace brains {
 
 
+    export interface ErrorDetail {
+
+                code: string;
+                    message: string;
+                    request_id: string;
+                    path?: string;
+                    current_revision?: string;
+                    resource_rule?: string;
+                    reset_at?: number;
+                }
+
+
     export interface CapabilityLimits {
 
                 reindex_page_max?: number;
@@ -492,18 +504,6 @@
                     target: string;
                     expected_source_revision: string;
                     operation_id: string;
-                }
-
-
-    export interface ErrorDetail {
-
-                code: string;
-                    message: string;
-                    request_id: string;
-                    path?: string;
-                    current_revision?: string;
-                    resource_rule?: string;
-                    reset_at?: number;
                 }
 
 

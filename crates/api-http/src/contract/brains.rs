@@ -5,6 +5,21 @@
 #[allow(clippy::too_many_arguments, clippy::large_enum_variant)]
 pub mod brains {
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ErrorDetail {
+        pub code: String,
+        pub message: String,
+        pub request_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub path: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub current_revision: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub resource_rule: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub reset_at: Option<i64>,
+    }
+    impl ErrorDetail {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct CapabilityLimits {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub reindex_page_max: Option<u64>,
@@ -538,21 +553,6 @@ pub mod brains {
         pub operation_id: String,
     }
     impl TransferBody {}
-    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
-    pub struct ErrorDetail {
-        pub code: String,
-        pub message: String,
-        pub request_id: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub path: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub current_revision: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub resource_rule: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub reset_at: Option<i64>,
-    }
-    impl ErrorDetail {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct TransferResult {
         pub copied: bool,

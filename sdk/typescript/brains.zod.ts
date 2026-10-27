@@ -6,6 +6,24 @@ import { xjson } from "xidl-typescript-codec";
 
     export namespace brains {
 
+        export const ErrorDetailSchema = z.object({
+
+                code: z.coerce.string(),
+
+                message: z.coerce.string(),
+
+                request_id: z.coerce.string(),
+
+                path: z.coerce.string().optional(),
+
+                current_revision: z.coerce.string().optional(),
+
+                resource_rule: z.coerce.string().optional(),
+
+                reset_at: z.coerce.number().int().optional()
+
+        });
+
         export const CapabilityLimitsSchema = z.object({
 
                 reindex_page_max: z.coerce.number().int().nonnegative().optional(),
@@ -676,24 +694,6 @@ import { xjson } from "xidl-typescript-codec";
                 expected_source_revision: z.coerce.string(),
 
                 operation_id: z.coerce.string()
-
-        });
-
-        export const ErrorDetailSchema = z.object({
-
-                code: z.coerce.string(),
-
-                message: z.coerce.string(),
-
-                request_id: z.coerce.string(),
-
-                path: z.coerce.string().optional(),
-
-                current_revision: z.coerce.string().optional(),
-
-                resource_rule: z.coerce.string().optional(),
-
-                reset_at: z.coerce.number().int().optional()
 
         });
 

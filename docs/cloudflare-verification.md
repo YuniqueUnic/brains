@@ -14,7 +14,7 @@ This record covers the cloud ingestion, retrieval and resource-policy implementa
 | Thin client | A CLI built without default features called remote conversion, URL import, resource usage and capability endpoints successfully. |
 | MCP | The official MCP client SDK negotiated the real deployed endpoint and called all three read-only tools. Missing credentials were rejected, mutation tools were absent, and the upstream reader was denied administrative APIs. Note citations matched the returned revision. |
 | Web | Web build, lint, Worker binding checks, MCP checks and bundle passed. Desktop and mobile browser flows covered authentication, resource usage, conversion, opening results and URL validation. Screenshots showed no content overflow. |
-| Generated contract | Regenerating API/SDK artifacts with the pinned compiler produced no additional drift. |
+| Generated contract | Regenerating API/SDK artifacts with the pinned compiler produced no additional drift. Generated TypeScript SDK business acceptance passed against both the native server and workerd, including schema initialization, conditional writes, history, transfers, archive replay, session and CSRF behavior. |
 
 ## Reproduce the checks
 

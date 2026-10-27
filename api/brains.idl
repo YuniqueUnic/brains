@@ -28,6 +28,16 @@
 
 module brains {
 
+struct ErrorDetail {
+    string code;
+    string message;
+    string request_id;
+    @optional string path;
+    @optional string current_revision;
+    @optional string resource_rule;
+    @optional int64 reset_at;
+};
+
 struct CapabilityLimits {
     @optional uint64 reindex_page_max;
     uint64 max_text_bytes;
@@ -400,16 +410,6 @@ struct TransferBody {
     string target;
     string expected_source_revision;
     string operation_id;
-};
-
-struct ErrorDetail {
-    string code;
-    string message;
-    string request_id;
-    @optional string path;
-    @optional string current_revision;
-    @optional string resource_rule;
-    @optional int64 reset_at;
 };
 
 struct TransferResult {
