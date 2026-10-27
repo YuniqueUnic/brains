@@ -174,7 +174,7 @@ bash tests/worker-smoke.sh                                               # again
 ## Status & honest limits
 
 - local-rust profile: **complete and verified** (P0 + patch/copy/move/diff/export, lifecycle metadata, hybrid search, document conversion, URL import, quality checks, working copy).
-- cloudflare-rust profile: **implemented and verified under local workerd**; real-account deployment, real R2/D1 behavior and the free-tier CPU budget remain to be validated with credentials.
+- cloudflare-rust profile: **implemented and verified under local workerd and on isolated Cloudflare resources**, including real R2/D1 operations, conversion, URL import, semantic retrieval and read-only MCP. Production rollout, Access SSO and sustained Free-tier CPU performance remain separate checks; see the [verification record](docs/cloudflare-verification.md).
 - Windows and non-Chromium browsers are untested; no long-running concurrency soak yet.
 
 ## License

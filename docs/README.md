@@ -15,6 +15,7 @@ Documentation for the Brains repository, written against the code as it is
 | [cloudflare-ai-plan.md](cloudflare-ai-plan.md) | Cloud ingestion, managed semantic retrieval, source validation and operational boundaries |
 | [cloudflare-quotas.md](cloudflare-quotas.md) | Composable resource rules, dated Free snapshot, quota admission and measured enforcement |
 | [cloudflare-mcp.md](cloudflare-mcp.md) | Dedicated read-only MCP Worker and owner-only Access portal setup |
+| [cloudflare-verification.md](cloudflare-verification.md) | Local and isolated-cloud business verification, reproduction commands and untested boundaries |
 | [native-release.md](native-release.md) | Release archives: install, `bsx update` self-upgrade, cargo-binstall, first server run |
 | [docker.md](docker.md) | Compose deployment: volumes, users, secrets, HTTPS, capability switches |
 | [turso.md](turso.md) | Native Turso FTS and optional Tantivy: build switches, query syntax, index rebuild |
