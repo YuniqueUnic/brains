@@ -2,7 +2,8 @@
 # runs workerd with local R2/D1 — no cloud credentials required.
 name = "brains"
 main = "build/worker/shim.mjs"
-compatibility_date = "2026-10-07"
+compatibility_date = "2026-10-19"
+compatibility_flags = ["global_fetch_strictly_public"]
 
 [observability]
 enabled = true
@@ -35,10 +36,8 @@ database_name = "brains-index"
 database_id = "local"
 migrations_dir = "../../migrations/d1"
 
-# Semantic search stays declared unavailable in /capabilities until the
-# embedding retriever ships (roadmap issue); the AI/Vectorize bindings are
-# added together with it. SEMANTIC_SEARCH=off records an explicit operator
-# decision in capabilities.semantic.unavailable_reason.
+# Optional AI/Search bindings and reconciliation cron are composed by
+# scripts/cloudflare.py from BRAINS_CLOUD_CONFIG_FILE.
 [secrets]
 required = ["TOKEN_REGISTRY_JSON", "SESSION_SIGNING_KEY", "CURSOR_SIGNING_KEY"]
 

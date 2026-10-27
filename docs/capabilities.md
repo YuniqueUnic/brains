@@ -11,10 +11,10 @@ instance, and `bsx capabilities --json` prints it for any profile.
 |---|---|---|---|---|
 | Literal search | yes | yes | yes | yes |
 | Full-text search (FTS) | yes (Tantivy-backed, default on) | yes (Tantivy-backed, default on) | yes | yes (SQLite FTS5 on D1) |
-| Hybrid ranked search | yes | yes | yes | yes, degraded: semantic explicitly unavailable |
-| Semantic search | declared unavailable (no embedding provider yet) | declared unavailable | declared unavailable | declared unavailable ([roadmap issue](https://github.com/YuniqueUnic/brains/issues/40)) |
-| Document conversion (`bsx convert`) | yes | advertised (conversion runs client-side) | advertised | not advertised (the Worker build has no converter; `bsx convert` still works against it) |
-| URL import (`bsx import-url`) | yes | n/a (client-side) | n/a | n/a |
+| Hybrid ranked search | yes | yes | yes | yes; semantic joins when configured |
+| Semantic search | declared unavailable (no embedding provider yet) | declared unavailable | declared unavailable | optional managed AI Search |
+| Document conversion (`bsx convert`) | yes | advertised (conversion runs client-side) | advertised | optional remote conversion; native CLI fallback remains available |
+| URL import (`bsx import-url`) | yes | n/a (client-side) | optional remote import | n/a |
 | `bsx check`, `bsx checkpoint` | yes | yes (against a remote profile too) | yes | yes |
 | Working copy (`checkout/status/pull/push`) | yes | yes | yes | yes |
 | Archive export/import, sync | yes | yes | yes | yes |
@@ -22,8 +22,7 @@ instance, and `bsx capabilities --json` prints it for any profile.
 
 "Declared" capabilities on servers are an advertisement: the web app and
 agents read them to decide what to offer. `bsx convert` and `bsx import-url`
-always run in the CLI against existing file APIs. Server declarations guide
-clients that read them; they are not an execution or permission gate for CLI conversion.
+prefer a mounted remote provider when the instance advertises it, including in a thin CLI build. Otherwise a full native CLI uses its own converter/fetcher against the file APIs. Provider availability and request permissions are separate checks.
 
 ## Where a capability comes from
 
@@ -45,11 +44,7 @@ Three layers, in order of authority:
    and pretending otherwise would be a lie. Note that disabling only removes
    the advertisement — capability-respecting clients (the web app, agents
    that read `/capabilities`) stop offering the flow.
-3. **Runtime environment (Worker only).** `SEMANTIC_SEARCH=off` records an
-   explicit operator decision in `capabilities.semantic.
-   unavailable_reason`; without it the Worker reports the same declared
-   unavailability as the native runtime until the embedding retriever
-   ships (roadmap issue above).
+3. **Runtime providers (Worker).** `BRAINS_CLOUD_CONFIG` installs conversion/URL/semantic providers; the helper adds matching bindings. `SEMANTIC_SEARCH=off` prevents mounting semantic retrieval. Resource policy admission reports quota or unknown-cost restrictions separately from implementation availability. The web app offers conversion/import only when mounted and the session can write; administrator settings can inspect resource usage. See [cloud configuration](cloudflare.md) and [retrieval behavior](cloudflare-ai-plan.md).
 
 ## How state actually changes (and why there is no event bus)
 

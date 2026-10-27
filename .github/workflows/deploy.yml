@@ -10,6 +10,10 @@ on:
         description: "GitHub Environment containing the target vars and secrets"
         default: production
         type: environment
+      deploy_mcp:
+        description: "Also deploy the configured read-only MCP Worker"
+        default: false
+        type: boolean
       apply_migrations:
         description: "Apply D1 migrations to the remote index first"
         default: true
@@ -40,6 +44,14 @@ jobs:
       MAX_ATTACHMENT_BYTES: ${{ vars.MAX_ATTACHMENT_BYTES || '8388608' }}
       ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
       SEMANTIC_SEARCH: ${{ vars.SEMANTIC_SEARCH || 'off' }}
+      BRAINS_MCP_API_TOKEN: ${{ secrets.BRAINS_MCP_API_TOKEN }}
+      BRAINS_MCP_ACCESS_TOKEN: ${{ secrets.BRAINS_MCP_ACCESS_TOKEN }}
+      BRAINS_MCP_WORKER_NAME: ${{ vars.BRAINS_MCP_WORKER_NAME }}
+      BRAINS_MCP_HOSTNAME: ${{ vars.BRAINS_MCP_HOSTNAME }}
+      BRAINS_CLOUD_CONFIG: ${{ vars.BRAINS_CLOUD_CONFIG }}
+      BRAINS_RESOURCE_PROFILE: ${{ vars.BRAINS_RESOURCE_PROFILE }}
+      BRAINS_AI_SEARCH_NAMESPACE: ${{ vars.BRAINS_AI_SEARCH_NAMESPACE || 'default' }}
+      BRAINS_RECONCILE_CRON: ${{ vars.BRAINS_RECONCILE_CRON || '*/5 * * * *' }}
       BRAINS_APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
       BRAINS_ADMIN_TOKEN: ${{ secrets.BRAINS_ADMIN_TOKEN }}
       TOKEN_REGISTRY_JSON: ${{ secrets.TOKEN_REGISTRY_JSON }}
@@ -60,3 +72,6 @@ jobs:
         run: cargo install worker-build --locked --version 0.8.7
       - name: Check, migrate, deploy and verify the Worker
         run: pnpm cloudflare:deploy
+      - name: Deploy the optional read-only MCP Worker
+        if: ${{ inputs.deploy_mcp }}
+        run: pnpm cloudflare:mcp-deploy

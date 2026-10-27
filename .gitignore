@@ -3,6 +3,9 @@
 /target-e2e
 /apps/web/dist
 /apps/worker/build
+/apps/mcp/build
+/apps/mcp/worker-configuration.d.ts
+/apps/worker/worker-configuration.d.ts
 node_modules
 *.tsbuildinfo
 brainstore-design

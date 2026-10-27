@@ -11,6 +11,7 @@ import {
 } from "../ui/dialog";
 import { SliderRow } from "../ui/slider-row";
 import { ToggleGroupSection } from "./toggle-section";
+import { ResourceUsage } from "./resource-usage";
 
 /*
  * UI-level settings (DESIGN feedback round 3): interface font, interface
@@ -63,8 +64,10 @@ export function UiSettingsProvider({ children }: { children: React.ReactNode }) 
 export function SettingsDialog({
   open,
   onOpenChange,
+  showResources=false,
 }: {
   open: boolean;
+  showResources?: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const { t } = useTranslation("workspace");
@@ -91,7 +94,7 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent data-testid="settings-dialog" className="w-[min(24rem,94vw)]">
+      <DialogContent data-testid="settings-dialog" className="max-h-[85vh] w-[min(30rem,94vw)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t("settingsTitle")}</DialogTitle>
           <DialogDescription>{t("settingsHint")}</DialogDescription>
@@ -148,6 +151,7 @@ export function SettingsDialog({
             />
           </SettingRow>
         </div>
+        {showResources && open && <ResourceUsage />}
       </DialogContent>
     </Dialog>
   );

@@ -7,7 +7,7 @@
 // OpenAPI document. Both the axum server (crates/api-http) and the Rust/TS
 // SDKs are generated from this file.
 //
-// Error channel (xidl #294): operations declare `raises(...)`; each
+// Error channel (xidl #294): operations declare `raises(..., QuotaExceeded)`; each
 // exception carries an HTTP status via `@http(N)`, optional response
 // headers (the ETag on 304/410/412) and the shared `{"error": ErrorDetail}`
 // body. Statuses an operation does not raise are still possible at the
@@ -29,6 +29,7 @@
 module brains {
 
 struct CapabilityLimits {
+    @optional uint64 reindex_page_max;
     uint64 max_text_bytes;
     uint64 max_attachment_bytes;
 };
@@ -43,11 +44,98 @@ enum Runtime {
     CloudflareTypescript,
 };
 
+struct DimensionControl {
+    string mode;
+    sequence<uint64> supported;
+    @optional uint64 minimum;
+    @optional uint64 maximum;
+};
+struct ResourceDescriptor { string service; string kind; };
+struct ResourceMeasure { string metric; string unit; };
+struct ResourceScope { string kind; };
+struct ResourceWindow {
+    string kind;
+    @optional uint64 size;
+    @optional string unit;
+    @optional string timezone;
+    @optional string ref;
+};
+struct ResourceLimit { string kind; @optional double value; };
+struct ResourcePolicy {
+    @optional double fraction;
+    @optional double maximum;
+    @optional string when_exhausted;
+    @optional string when_charge_unknown;
+};
+struct ResourceRule {
+    string id;
+    ResourceDescriptor resource;
+    ResourceMeasure measure;
+    ResourceScope scope;
+    ResourceWindow window;
+    ResourceLimit limit;
+    @optional ResourcePolicy policy;
+    @optional string source;
+    @optional double effective_limit;
+    string enforcement;
+};
+struct ResourceUsage {
+    string key;
+    string meter;
+    string rule;
+    string unit;
+    string evidence;
+    double consumed;
+    double reserved;
+    double limit;
+    @optional int64 reset_at;
+};
+struct ResourceCapability { string profile_id; string reviewed_at; string coverage; };
+struct AdmissionState {
+    string state;
+    @optional string reason;
+    @optional string rule;
+    @optional double limit;
+    @optional double consumed;
+    @optional double reserved;
+    @optional double remaining;
+    @optional int64 reset_at;
+};
+struct ResourceReport {
+    ResourceCapability profile;
+    sequence<ResourceRule> rules;
+    sequence<ResourceUsage> usage;
+    sequence<string> limitations;
+};
+struct ConversionInput { string path; @optional string to; };
+struct ConversionResult {
+    string companion_path;
+    string companion_revision;
+    string converter;
+    boolean created;
+    boolean unchanged;
+};
+struct UrlImportInput { string url; string path; };
+struct UrlImportResult {
+    string path;
+    @optional string revision;
+    boolean partial;
+    @optional ErrorDetail error;
+    @optional string source_revision;
+    string source_url;
+    @optional string source_path;
+    boolean created;
+    boolean unchanged;
+};
+
 struct SemanticCapability {
     string model_id;
     uint64 dimensions;
     int64 vector_index_version;
     @optional string unavailable_reason;
+    @optional DimensionControl dimension_control;
+    @optional sequence<string> model_modalities;
+    @optional sequence<string> accepted_inputs;
 };
 
 // Document conversion of this instance (issue #19): absent when the build
@@ -72,6 +160,8 @@ struct Capabilities {
     // Document conversion (issue #19); absent = unavailable.
     @optional DocumentConversion document_conversion;
     @optional string vault;
+    @optional ResourceCapability resources;
+    @optional map<string, AdmissionState> admission;
 };
 
 struct Generated {
@@ -125,6 +215,7 @@ struct PurgeResult {
     string path;
     boolean purged;
     string index_state;
+    @optional string semantic_state;
     string operation_id;
 };
 
@@ -140,6 +231,7 @@ struct MutationResult {
     @optional string kind;
     @optional string title;
     string index_state;
+    @optional string semantic_state;
     string operation_id;
     // Create-vs-replace is answered in-band (the success status is fixed at
     // 200 by the generated transport).
@@ -316,6 +408,8 @@ struct ErrorDetail {
     string request_id;
     @optional string path;
     @optional string current_revision;
+    @optional string resource_rule;
+    @optional int64 reset_at;
 };
 
 struct TransferResult {
@@ -392,6 +486,9 @@ exception PreconditionRequired {
     ErrorDetail error;
 };
 
+@http(429)
+exception QuotaExceeded { ErrorDetail error; };
+
 @http(500)
 exception Internal {
     ErrorDetail error;
@@ -450,6 +547,11 @@ exception HeadGone {
 
 @http(503)
 exception HeadServiceUnavailable {
+    @header @rename("X-Brain-Error-Code") string code;
+};
+
+@http(429)
+exception HeadQuotaExceeded {
     @header @rename("X-Brain-Error-Code") string code;
 };
 
@@ -520,11 +622,23 @@ interface Files {
     @get(path = "/capabilities")
     Capabilities capabilities();
 
+    @get(path = "/resources")
+    ResourceReport resource_status() raises(Forbidden, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
+
+    @post(path = "/files/convert")
+    ConversionResult convert_document(@flatten in ConversionInput body)
+        raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
+
+    @post(path = "/files/import-url")
+    UrlImportResult import_url(@flatten in UrlImportInput body)
+        raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
+
+
     // Listing. source=store is the authoritative HEAD scan; source=index adds
     // tag/kind filters and updated_desc order. Cursors are opaque + signed:
     // echo them back unchanged or the server answers 400.
     @post(path = "/files/query")
-    FilePage list_files(@flatten in ListFilesQuery body) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
+    FilePage list_files(@flatten in ListFilesQuery body) raises(BadRequest, Forbidden, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Create or conditionally replace one file's exact bytes (design §8.2).
     // Raw body = application/octet-stream; text media types are declared via
@@ -541,7 +655,7 @@ interface Files {
         @header @rename("Content-Type") @optional string content_type,
         @header @rename("ETag") @optional out string etag,
         in sequence<octet> body
-    ) raises(BadRequest, Forbidden, Gone, PreconditionRequired, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, Gone, PreconditionRequired, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Current-HEAD read: JSON metadata (`format=meta`) or raw bytes
     // (`format` omitted). Both views answer If-None-Match with 304 + ETag;
@@ -555,7 +669,7 @@ interface Files {
         @header @rename("ETag") @optional out string etag,
         @header @rename("X-Brain-Media-Type") @optional out string media_type,
         @header @rename("Content-Disposition") @optional out string content_disposition
-    ) raises(BadRequest, Forbidden, NotFound, Gone, NotModified, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, NotModified, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Metadata-only probe: never fetch the content blob.
     @head(path = "/file")
@@ -564,7 +678,7 @@ interface Files {
         @header @rename("ETag") out string etag,
         @header @rename("X-Brain-Generation") out int64 generation,
         @header @rename("X-Brain-State") out string state
-    ) raises(HeadBadRequest, HeadForbidden, HeadNotFound, HeadGone, HeadServiceUnavailable, HeadInternal);
+    ) raises(HeadBadRequest, HeadForbidden, HeadNotFound, HeadGone, HeadServiceUnavailable, HeadInternal, HeadQuotaExceeded);
 
     // Conditional delete: writes a tombstone revision. 412 on stale base.
     @delete(path = "/file")
@@ -573,7 +687,7 @@ interface Files {
         @header @rename("If-Match") @optional string if_match,
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("ETag") @optional out string etag
-    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Permanently remove a tombstoned path; live files fail with 409.
     @delete(path = "/trash")
@@ -581,7 +695,7 @@ interface Files {
         @query string path,
         @header @rename("If-Match") @optional string if_match,
         @header @rename("X-Operation-ID") @optional string operation_id
-    ) raises(BadRequest, Forbidden, NotFound, Conflict, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Conflict, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Patch text in place. Dry-run previews the same edits without changing
     // HEAD; committed contains the new mutation only after a successful write.
@@ -592,7 +706,7 @@ interface Files {
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("ETag") @optional out string etag,
         @flatten in PatchBody body
-    ) raises(BadRequest, Forbidden, NotFound, Gone, Conflict, PreconditionRequired, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, Conflict, PreconditionRequired, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Reachable history of one path, newest first (signed cursor pages).
     @get(path = "/revisions")
@@ -600,7 +714,7 @@ interface Files {
         @query string path,
         @query @optional int64 limit,
         @query @optional string cursor
-    ) raises(BadRequest, Forbidden, NotFound, Gone, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, ServiceUnavailable, Internal, QuotaExceeded);
 
     // One immutable revision by ID: metadata (`format=meta`) or raw bytes.
     @get(path = "/revision")
@@ -611,7 +725,7 @@ interface Files {
         @header @rename("ETag") @optional out string etag,
         @header @rename("X-Brain-Media-Type") @optional out string media_type,
         @header @rename("Content-Disposition") @optional out string content_disposition
-    ) raises(BadRequest, Forbidden, NotFound, Gone, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Restore a prior revision's content as a NEW revision (gen only moves
     // forward). If-Match anchors on the current head.
@@ -621,11 +735,11 @@ interface Files {
         @header @rename("X-Operation-ID") @optional string operation_id,
         @header @rename("ETag") @optional out string etag,
         @flatten in RestoreBody body
-    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Literal (case-sensitive UTF-8 substring) or FTS (tokenized) search.
     @post(path = "/search")
-    SearchPage search(@flatten in SearchQuery body) raises(BadRequest, Forbidden, NotImplemented, ServiceUnavailable, Internal);
+    SearchPage search(@flatten in SearchQuery body) raises(BadRequest, Forbidden, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Wiki-link graph induced by [[links]] in stored text. Pages are fixed
     // at 50 rows; `cursor` walks the rest.
@@ -634,7 +748,7 @@ interface Files {
         @query string path,
         @query @rename("direction") @optional string direction,
         @query @optional string cursor
-    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Copy: create target from a source revision; source stays live. A
     // partially failed transfer answers TransferConflict (409) whose body
@@ -642,14 +756,14 @@ interface Files {
     @post(path = "/copy")
     TransferResult copy(
         @flatten in TransferBody body
-    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, UnprocessableEntity, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, UnprocessableEntity, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Move: copy + trash source; partial outcomes are TransferConflict (409),
     // never hidden.
     @post(path = "/move")
     TransferResult move(
         @flatten in TransferBody body
-    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, UnprocessableEntity, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, TransferConflict, UnprocessableEntity, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Unified diff between two revisions of one path.
     @get(path = "/diff")
@@ -657,18 +771,18 @@ interface Files {
         @query string path,
         @query string from,
         @query string to
-    ) raises(BadRequest, Forbidden, NotFound, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Paged index rebuild from authoritative storage (safe anytime).
     @post(path = "/maintenance/reindex")
     ReindexPage reindex(
         @flatten in ReindexRequest body
-    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Reserved server-side consistency check; answers 501 until delivered
     // (design §22.5).
     @post(path = "/maintenance/validate")
-    void validate() raises(NotImplemented);
+    void validate() raises(NotImplemented, QuotaExceeded);
 };
 
 // Authentication and cookie mutation protection share Files middleware.
@@ -678,21 +792,21 @@ interface Archives {
     // absent; immutable storage records are converted at the service boundary.
     @get(path = "/maintenance/archive/revision")
     ArchiveRevision archive_revision(@query string path, @query string revision)
-        raises(BadRequest, Forbidden, NotFound, UnprocessableEntity, ServiceUnavailable, Internal);
+        raises(BadRequest, Forbidden, NotFound, UnprocessableEntity, ServiceUnavailable, Internal, QuotaExceeded);
 
     @post(path = "/maintenance/archive/revision")
     ArchiveRevision import_archive_revision(@flatten in ArchiveRevision body)
-        raises(BadRequest, Forbidden, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
+        raises(BadRequest, Forbidden, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal, QuotaExceeded);
 
     @put(path = "/maintenance/archive/blob")
     ArchiveBlobStored import_archive_blob(
         @query string path, @query string revision, in sequence<octet> body
-    ) raises(BadRequest, Forbidden, NotFound, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal);
+    ) raises(BadRequest, Forbidden, NotFound, PayloadTooLarge, UnprocessableEntity, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Publish exactly one source generation with CAS; reindex after replay.
     @post(path = "/maintenance/archive/head")
     ArchivePublished import_archive_head(@query string path, @query string revision)
-        raises(BadRequest, Forbidden, NotFound, PreconditionFailed, UnprocessableEntity, ServiceUnavailable, Internal);
+        raises(BadRequest, Forbidden, NotFound, PreconditionFailed, UnprocessableEntity, ServiceUnavailable, Internal, QuotaExceeded);
 
 };
 
@@ -707,7 +821,7 @@ interface Sessions {
     Session login(
         @header string authorization,
         @header @rename("Set-Cookie") @optional out string set_cookie
-    ) raises(BadRequest, Forbidden, Internal);
+    ) raises(BadRequest, Forbidden, Internal, QuotaExceeded);
 
     @get(path = "/session")
     Session current();

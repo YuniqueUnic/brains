@@ -17,7 +17,7 @@ function GitHubMark() {
   );
 }
 
-export type UploadIntent = "files" | "folder" | "clipboard";
+export type UploadIntent = "files" | "folder" | "clipboard" | "url" | "convert";
 
 /**
  * Top bar (DESIGN.md §4-8): 52px, quiet chrome. 新建 is a direct button (it
@@ -35,6 +35,7 @@ export function TopBar({
   onOpenPalette,
   onNewDocument,
   onUpload,
+  cloudActions,
   onOpenSettings,
   onLogout,
 }: {
@@ -45,6 +46,7 @@ export function TopBar({
   onOpenPalette: () => void;
   onNewDocument: () => void;
   onUpload: (intent: UploadIntent) => void;
+  cloudActions?: { url: boolean; convert: boolean };
   onOpenSettings: () => void;
   onLogout: () => void;
 }) {
@@ -151,6 +153,8 @@ export function TopBar({
           >
             {t("uploadClipboard")}
           </Menu.Item>
+          {cloudActions?.url && <Menu.Item className={menuItemClass()} onClick={() => onUpload("url")} data-testid="import-url">Import a public URL</Menu.Item>}
+          {cloudActions?.convert && <Menu.Item className={menuItemClass()} onClick={() => onUpload("convert")} data-testid="convert-document">Convert an attachment</Menu.Item>}
         </HoverMenu>
 
         <Tooltip content={t("openSettings")}>

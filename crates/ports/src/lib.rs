@@ -3,9 +3,12 @@
 //! into one unconditional `write(path, bytes)`. Adapters declare what they
 //! can do; an adapter without atomic CAS must never back a writable HeadStore.
 
+pub mod content;
 pub mod convert;
 pub mod embedding;
 pub mod index;
+pub mod resources;
+pub mod semantic;
 pub mod store;
 
 pub use convert::{ConvertedDocument, DocumentConverter};

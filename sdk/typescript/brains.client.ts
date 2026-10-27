@@ -72,6 +72,77 @@ import {
             return await decodeResponseBody<types.brains.Capabilities>(resp, "application/json", this.codecs);
         }
 
+                async resource_status(): Promise<types.brains.ResourceReport> {
+                    let xidlPath = "/resources";
+                    const query = new URLSearchParams();
+                    const headers = new Headers(this.defaultHeaders);
+                    const cookies: string[] = [];
+                    applyCookies(headers, cookies);
+                    applyClientAuth(xidlPath, query, headers, this.auth, []);
+                    const queryString = query.toString();
+                    if (queryString.length > 0) {
+                        xidlPath = `${xidlPath}?${queryString}`;
+                    }
+                    const url = joinUrl(this.baseUrl, xidlPath);
+                    headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "GET", headers });
+            if (!resp.ok) {
+                await this.throwResourceStatusError(resp);
+
+            }
+            return await decodeResponseBody<types.brains.ResourceReport>(resp, "application/json", this.codecs);
+        }
+
+                async convert_document(body: types.brains.ConversionInput): Promise<types.brains.ConversionResult> {
+                    const parsed = ifaceSchemas.brains.FilesConvertDocumentRequestSchema.parse({ "body": body });
+                    let xidlPath = "/files/convert";
+                    const query = new URLSearchParams();
+                    const headers = new Headers(this.defaultHeaders);
+                    const cookies: string[] = [];
+                    applyCookies(headers, cookies);
+                    applyClientAuth(xidlPath, query, headers, this.auth, []);
+                    const queryString = query.toString();
+                    if (queryString.length > 0) {
+                        xidlPath = `${xidlPath}?${queryString}`;
+                    }
+                    const url = joinUrl(this.baseUrl, xidlPath);
+                    const xidlBody = parsed["body"];
+            headers.set("Content-Type", "application/json");
+
+            headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.ConversionInputSchema) });
+            if (!resp.ok) {
+                await this.throwConvertDocumentError(resp);
+
+            }
+            return await decodeResponseBody<types.brains.ConversionResult>(resp, "application/json", this.codecs);
+        }
+
+                async import_url(body: types.brains.UrlImportInput): Promise<types.brains.UrlImportResult> {
+                    const parsed = ifaceSchemas.brains.FilesImportUrlRequestSchema.parse({ "body": body });
+                    let xidlPath = "/files/import-url";
+                    const query = new URLSearchParams();
+                    const headers = new Headers(this.defaultHeaders);
+                    const cookies: string[] = [];
+                    applyCookies(headers, cookies);
+                    applyClientAuth(xidlPath, query, headers, this.auth, []);
+                    const queryString = query.toString();
+                    if (queryString.length > 0) {
+                        xidlPath = `${xidlPath}?${queryString}`;
+                    }
+                    const url = joinUrl(this.baseUrl, xidlPath);
+                    const xidlBody = parsed["body"];
+            headers.set("Content-Type", "application/json");
+
+            headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.UrlImportInputSchema) });
+            if (!resp.ok) {
+                await this.throwImportUrlError(resp);
+
+            }
+            return await decodeResponseBody<types.brains.UrlImportResult>(resp, "application/json", this.codecs);
+        }
+
                 async list_files(body: types.brains.ListFilesQuery): Promise<types.brains.FilePage> {
                     const parsed = ifaceSchemas.brains.FilesListFilesRequestSchema.parse({ "body": body });
                     let xidlPath = "/files/query";
@@ -538,6 +609,322 @@ import {
         }
 
 
+            async throwResourceStatusError(resp: Response): Promise<never> {
+                const status = resp.status;
+                if (status === 403) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Forbidden({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 501) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.NotImplemented({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 503) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.ServiceUnavailable({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 500) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
+                throw await parseXidlError(resp);
+            }
+
+            async throwConvertDocumentError(resp: Response): Promise<never> {
+                const status = resp.status;
+                if (status === 400) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.BadRequest({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 403) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Forbidden({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 404) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.NotFound({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 410) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Gone({
+                        "etag": (readResponseHeader(resp.headers, "ETag", false, value => value) ?? undefined) as never,
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 412) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.PreconditionFailed({
+                        "etag": (readResponseHeader(resp.headers, "ETag", false, value => value) ?? undefined) as never,
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 413) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.PayloadTooLarge({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 422) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.UnprocessableEntity({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 501) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.NotImplemented({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 503) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.ServiceUnavailable({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 500) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
+                throw await parseXidlError(resp);
+            }
+
+            async throwImportUrlError(resp: Response): Promise<never> {
+                const status = resp.status;
+                if (status === 400) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.BadRequest({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 403) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Forbidden({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 404) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.NotFound({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 410) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Gone({
+                        "etag": (readResponseHeader(resp.headers, "ETag", false, value => value) ?? undefined) as never,
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 412) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.PreconditionFailed({
+                        "etag": (readResponseHeader(resp.headers, "ETag", false, value => value) ?? undefined) as never,
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 413) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.PayloadTooLarge({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 422) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.UnprocessableEntity({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 501) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.NotImplemented({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 503) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.ServiceUnavailable({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 500) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
+                throw await parseXidlError(resp);
+            }
+
             async throwListFilesError(resp: Response): Promise<never> {
                 const status = resp.status;
                 if (status === 400) {
@@ -581,6 +968,17 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
                         "error": body["error"] as never,
                         });
                 }
@@ -690,6 +1088,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -767,6 +1176,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -800,6 +1220,11 @@ import {
                 }
                 if (status === 500) {
                     throw new $xidlErrors.HeadInternal({
+                        "code": readResponseHeader(resp.headers, "X-Brain-Error-Code", false, value => value) as never,
+                        });
+                }
+                if (status === 429) {
+                    throw new $xidlErrors.HeadQuotaExceeded({
                         "code": readResponseHeader(resp.headers, "X-Brain-Error-Code", false, value => value) as never,
                         });
                 }
@@ -898,6 +1323,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -989,6 +1425,17 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
                         "error": body["error"] as never,
                         });
                 }
@@ -1120,6 +1567,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -1192,6 +1650,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -1261,6 +1730,17 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
                         "error": body["error"] as never,
                         });
                 }
@@ -1359,6 +1839,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -1419,6 +1910,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -1465,6 +1967,17 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
                         "error": body["error"] as never,
                         });
                 }
@@ -1580,6 +2093,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -1692,6 +2216,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -1752,6 +2287,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -1801,6 +2347,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -1814,6 +2371,17 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.NotImplemented({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
                         "error": body["error"] as never,
                         });
                 }
@@ -2009,6 +2577,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -2089,6 +2668,17 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
                         "error": body["error"] as never,
                         });
                 }
@@ -2174,6 +2764,17 @@ import {
                         "error": body["error"] as never,
                         });
                 }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
                 throw await parseXidlError(resp);
             }
 
@@ -2254,6 +2855,17 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
                         "error": body["error"] as never,
                         });
                 }
@@ -2380,6 +2992,17 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
                         "error": body["error"] as never,
                         });
                 }

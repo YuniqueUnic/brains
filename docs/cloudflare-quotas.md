@@ -1,6 +1,6 @@
 # Cloudflare resource rules, usage budgets and model configuration
 
-Status: proposed for review, not implemented. Verified against official documentation on October 27, 2026. This page refines [the Cloudflare AI plan](cloudflare-ai-plan.md). The [complete example profile](examples/cloudflare-free-2026-10-27.json) is editable design data; it is not connected to deployment or billing enforcement yet.
+The Worker loads these resource rules through the shared deployment helper. The [complete example profile](examples/cloudflare-free-2026-10-27.json) contains the October 27, 2026 Free-tier snapshot, with application allowance defaults at 80%. Copy it, fill real billing-cycle bounds and review current provider pricing before use. The catalog includes informational and platform-managed values as well as implemented admission meters; see the enforcement table below.
 
 ## Configuration primitives
 
@@ -85,35 +85,28 @@ MCP tool-log quantity/retention remains unknown where the portal documentation d
 
 Default to the Cloudflare-hosted Qwen model through managed AI Search; the current managed dimension is 1,024. Users can choose another supported model and request dimensions, but configuration validation must check what that adapter actually exposes. See [the model/dimension matrix and multimodal boundaries](cloudflare-ai-plan.md#model-and-dimension-policy).
 
-This is a proposed high-level configuration shape, not a new implemented loader:
+Use [cloudflare-services.json](examples/cloudflare-services.json) for enabled services and ranking, and the complete resource profile for quotas. Set `BRAINS_CLOUD_CONFIG_FILE` and `BRAINS_RESOURCE_PROFILE_FILE` locally; Actions accepts their inline JSON equivalents. These are two explicit inputs, not a profile-inheritance or rule-override language.
+
+For example, edit the full `search-semantic` rule in your copied profile to use this policy:
 
 ```json
 {
-  "semantic": {
-    "provider": "ai-search",
-    "embedding_model": "@cf/qwen/qwen3-embedding-0.6b",
-    "dimensions": 1024,
-    "ranking": {
-      "candidate_limit": 50,
-      "result_limit": 10,
-      "minimum_score": null,
-      "fusion": "rrf",
-      "reranker": null
-    },
-    "query_rewriting": false,
-    "generation": false
-  },
-  "quotas": {
-    "profile": "cloudflare-free-2026-10-27",
-    "policy": { "fraction": 0.8, "when_exhausted": "block", "when_charge_unknown": "block" },
-    "rule_overrides": [
-      { "id": "search-semantic", "policy": { "maximum": 600 } }
-    ]
-  }
+  "id": "search-semantic",
+  "resource": {"service": "ai_search", "kind": "instance"},
+  "measure": {"metric": "semantic_queries", "unit": "query"},
+  "scope": {"kind": "account"},
+  "window": {"kind": "billing_cycle", "ref": "ai_search"},
+  "limit": {"kind": "allowance", "value": 1000},
+  "policy": {"maximum": 600},
+  "source": "ai_search"
 }
 ```
 
-The override reduces semantic queries to 600 per configured billing cycle. Profile policy supplies defaults, and an explicit per-rule policy overrides the named fields in one level; do not add recursive inheritance or an expression language. Keep provider/source values separate from application policy and runtime counters. Resolve real billing-cycle references and active resources during setup; unset required account context blocks protected work.
+The example is one complete rule within the profile, not a standalone replacement for the full catalog. Global policy provides fraction/exhaustion/unknown-charge defaults; a per-rule policy overrides those fields and can set an absolute maximum in that rule's display unit. A global maximum is rejected because the rules use different units. Runtime facts use canonical units, including bytes for measured capacity. Changing a display unit, alias, profile ID or limit does not reset usage.
+
+`context.billing_cycles` contains actual `{ "start": <unix-seconds>, "end": <unix-seconds> }` bounds. A required missing/expired cycle blocks the protected operation. The runtime supports UTC fixed calendar intervals and explicit billing windows; rolling limits remain platform-managed. The `changes` section records dated pricing review items and does not automatically switch entitlements or reset counters.
+
+The helper serializes the full profile into deterministic ASCII chunks below the Worker's 5 KB per-variable limit. The Worker reassembles it at the composition root. Users still edit one profile file.
 
 A null `minimum_score` means no application quality cutoff. The AI Search adapter must explicitly send `ai_search_options.retrieval.match_threshold: 0`, because omitting it leaves the provider default of 0.4. Request at most 50 candidates, then apply source/permission checks, document deduplication, RRF and the result count. The first release leaves a true model reranker off. Authorization and freshness filtering remain mandatory. [Search binding](https://developers.cloudflare.com/ai-search/api/search/workers-binding/).
 
@@ -123,7 +116,7 @@ An optional Google profile uses its own project quotas, provider credentials and
 
 ## Runtime usage and admission
 
-The runtime needs two additional small records: `Usage` holds consumed/reserved amounts and evidence for a normalized meter/window; `Reservation` holds one outbound attempt's allocated amounts and delivery/settlement state. These records are not free-tier configuration and must survive redeployment and policy edits.
+The runtime stores two additional small records: `Usage` holds consumed/reserved amounts and evidence for a normalized meter/window; `Reservation` holds one outbound attempt's allocated amounts and delivery/settlement state. These records are not free-tier configuration and must survive redeployment and policy edits.
 
 ```text
 authorize operation
@@ -153,11 +146,11 @@ Release only amounts known not to have been charged. A sent request that times o
 
 Sources: [AI Search accounting](https://developers.cloudflare.com/ai-search/platform/limits-pricing/), [Items API](https://developers.cloudflare.com/ai-search/api/items/workers-binding/), [D1 pricing](https://developers.cloudflare.com/d1/platform/pricing/), [Gateway pricing](https://developers.cloudflare.com/ai-gateway/reference/pricing/).
 
-The guarantee is bounded application admission for controlled measurable work. Other account applications, provider background work, incoming invocations and retained storage prevent an app-only account-wide zero-billing guarantee. A self-managed embedding provider can be selected when dimension control or per-call metering is required; it replaces managed ingestion for that corpus. Never delete authoritative history automatically to meet a watermark. Expose repairable pending publication and explicit source-preserving cleanup choices.
+The guarantee is bounded application admission for controlled measurable work. Other account applications, provider background work, incoming invocations and retained storage prevent an app-only account-wide zero-billing guarantee. A future self-managed embedding adapter could replace managed ingestion when dimension control or per-call metering is required; this release mounts managed AI Search only. Never delete authoritative history automatically to meet a watermark. Expose repairable pending publication and explicit source-preserving cleanup choices.
 
 ## Capabilities and quota status
 
-Extend existing [capability primitives](../crates/domain/src/capabilities.rs) rather than replacing them. Report active model/dimensions, dimension control, model modalities and the adapter's accepted inputs separately. Keep temporary admission state distinct from installed feature support. This is a proposed response excerpt for a configured default provider with its semantic query budget exhausted:
+Capabilities report installed features separately from temporary admission. Model dimensions, dimension controls, model modalities and accepted adapter inputs have distinct fields. This response excerpt illustrates an exhausted semantic-query budget:
 
 ```json
 {
@@ -175,7 +168,6 @@ Extend existing [capability primitives](../crates/domain/src/capabilities.rs) ra
       "state": "blocked",
       "reason": "quota_exhausted",
       "rule": "search-semantic",
-      "measure": { "metric": "semantic_queries", "unit": "query" },
       "limit": 800,
       "consumed": 800,
       "reserved": 0,
@@ -191,6 +183,27 @@ Cache capability identity separately from current admission. Recheck the atomic 
 
 ## Implementation and verification
 
-Keep the configuration/profile model, normalized unit handling, admission/settlement and provider metering in small modules. No field-name parser, recursive policy engine or generic billing formula language is needed. All configuration below is still proposed; any future capability extension goes through the shared API/SDK generator. Do not mutate current deployment secrets, library profiles or existing content.
+Configuration, unit normalization, admission, settlement and provider metering live in separate small modules. Public operations and capability changes go through the shared API/SDK generator. Focused domain/application regressions and `tests/cloudflare-resources.py` protect alias/unit identity, concurrent admission, unresolved reservations, conditional conversion and partial imports.
 
 Verify JSON rule shape, recognized units/periods, scope sharing, whole-account versus per-resource capacity, fraction calculation including fractional storage, 80% defaults and explicit overrides. Verify inactive products and eligible log generations, future pricing replacement without double counting, and that rule renames/config reloads do not reset usage. Implementation acceptance also needs concurrent/duplicate attempts, retries, ambiguous delivery, billing rollover, stale capabilities, fixed/adjustable dimensions, both model modalities and actual adapter inputs, and ranked retrieval without the provider's default threshold. A document check is not runtime acceptance.
+
+
+## Implemented enforcement
+
+| Meter or constraint | Current behavior |
+| --- | --- |
+| Dynamic Worker requests | Debit before routing; exhaustion returns structured 429, rule and reset time. Incoming requests outside this code still consume provider usage. |
+| Source R2 Class A/B | Conservatively debit dispatched storage attempts, including conditional writes; failed attempts are not automatically refunded. Static assets are separate. |
+| D1 rows | Use actual result metadata for application SQL and a conservative bookkeeping allowance for ledger work. Observe completed scans/writes and reject later admissions; this cannot pre-bound every SQLite scan. |
+| D1 database size | Record `size_after` as a byte gauge and apply the configured per-database watermark before later writes. Account-wide storage remains observational. |
+| AI Search semantic queries | Atomically reserve one attempt, consume on success and retain uncertain delivery rather than refund it. |
+| AI Search managed ingestion | Source-byte count is explicitly estimated, not billable tokens. Default strict policy pauses it; `when_charge_unknown: "observe"` permits this opaque path. |
+| Image conversion / external model billing | Strict mode blocks opaque costs. Explicit observation opts in without claiming a billable-neuron or Google-project hard bound. |
+| Storage-time, logs/traces, Access/MCP seats and unmounted products | Retain provider facts and user policy in the catalog. Runtime does not invent account-wide usage or enforce these through unrelated request counters. Configure provider-side controls and telemetry separately. |
+| CPU, memory, connection/query ceilings and retained-record limits | Platform constraints. The Worker also uses bounded semantic validation and smaller advertised reindex pages; lowering an informational catalog rule alone does not reconfigure the platform. |
+
+Use `GET /api/v1/resources`, `bsx resources` or administrator settings to inspect the full catalog and measured usage. Ordinary capabilities separate mounted features from request/semantic-query/semantic-ingestion admission. Unknown ingestion is not a completed index; pending/blocked projections keep semantic coverage incomplete.
+
+A stable meter identity excludes its window, alias, display unit and policy; each usage bucket has its own window key. Unresolved reservations remain visible and constrain the next window. A success received after its reserved window expires stays uncertain until reconciled, rather than being silently charged to the wrong period or released. Terminal settlement is idempotent. Operators can inspect `resource_attempts` and its original quantities in D1; release only when evidence proves an attempt was not charged. Do not clear usage tables to change a limit or retry a request.
+
+These counters describe the configured deployment ledger. Other applications, other Brains ledgers, existing retained data and provider background work can use the same account allowance. Configure smaller allocations when sharing an account. The application does not promise account-wide zero billing, exact provider invoices, automatic current-price discovery or universal hard enforcement. Review the snapshot and Cloudflare's current pricing before enabling a product or raising an allowance.

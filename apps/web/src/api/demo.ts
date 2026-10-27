@@ -181,6 +181,18 @@ async function transfer(source: string, target: string, expected: string, action
 const session: SessionInfo = { actor: "demo", scopes: ["read:/", "write:/", "admin:/"] };
 
 export const demoApi = {
+  async getCapabilities() {
+    return { features: { remote_conversion: false, remote_url_import: false, resource_policy: false } };
+  },
+  async convertDocument(_path: string, _to?: string): Promise<never> {
+    throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Cloud conversion is unavailable in the demo.");
+  },
+  async importUrl(_url: string, _path: string): Promise<never> {
+    throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Cloud URL import is unavailable in the demo.");
+  },
+  async resourceStatus(): Promise<never> {
+    throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Resource usage is unavailable in the demo.");
+  },
   fileUrl(path: string): string {
     const url = new URL(window.location.href);
     url.search = "";

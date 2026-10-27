@@ -168,6 +168,11 @@ pub(crate) fn login(
 }
 
 pub(crate) fn reindex(client: &dyn Library, all_pages: bool, limit: usize) -> ClientResult<i32> {
+    let limit = client
+        .capabilities()?
+        .limits
+        .reindex_page_max
+        .map_or(limit, |maximum| limit.min(maximum));
     let mut cursor: Option<String> = None;
     let mut processed = 0i64;
     let mut failed = 0usize;

@@ -2,6 +2,7 @@
 //! link extraction. Parsers never rewrite the original bytes; all limits are
 //! explicit and reported as warnings, never silently truncated.
 
+pub mod companion;
 pub mod frontmatter;
 pub mod markdown;
 

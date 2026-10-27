@@ -24,6 +24,7 @@ pub(crate) enum Failure {
     PayloadTooLarge,
     UnprocessableEntity,
     NotImplemented,
+    QuotaExceeded,
     ServiceUnavailable,
     Internal,
 }
@@ -41,9 +42,10 @@ pub(crate) fn classify(err: &DomainError) -> Failure {
         }
         DomainError::PreconditionRequired => Failure::PreconditionRequired,
         DomainError::CapabilityUnsupported(_) => Failure::NotImplemented,
-        DomainError::IndexUnavailable(_) | DomainError::StorageUnavailable(_) => {
-            Failure::ServiceUnavailable
-        }
+        DomainError::QuotaExceeded { .. } => Failure::QuotaExceeded,
+        DomainError::IndexUnavailable(_)
+        | DomainError::StorageUnavailable(_)
+        | DomainError::ResourcePolicy(_) => Failure::ServiceUnavailable,
         DomainError::Internal(_) => Failure::Internal,
         DomainError::Forbidden(_) => Failure::Forbidden,
         // Authentication failures are handled before dispatch.
@@ -59,6 +61,14 @@ pub(crate) fn detail(err: &DomainError, request_id: &str) -> contract::ErrorDeta
         request_id: request_id.to_owned(),
         path: err.path().map(str::to_owned),
         current_revision: err.current_revision().map(str::to_owned),
+        resource_rule: match err {
+            DomainError::QuotaExceeded { rule, .. } => Some(rule.clone()),
+            _ => None,
+        },
+        reset_at: match err {
+            DomainError::QuotaExceeded { reset_at, .. } => *reset_at,
+            _ => None,
+        },
     }
 }
 
@@ -94,6 +104,7 @@ macro_rules! error_from_domain {
     ($name:ident, $enum:ident, [$($variant:ident),+ $(,)?]) => {
         pub(crate) fn $name(err: DomainError, rid: &str) -> $enum {
             match crate::service::error::classify(&err) {
+                crate::service::error::Failure::QuotaExceeded => $enum::QuotaExceeded(exception!(QuotaExceeded, &err, rid)),
                 $(crate::service::error::Failure::$variant => $enum::$variant(exception!($variant, &err, rid)),)+
                 // `Internal` is present in every list and absorbs the rest.
                 _ => $enum::Internal(exception!(Internal, &err, rid)),
@@ -296,9 +307,48 @@ pub(crate) fn head_file_error(error: DomainError) -> contract::FilesHeadFileErro
             etag: etag_of(&error),
         }),
         Failure::ServiceUnavailable => failure!(HeadServiceUnavailable),
+        Failure::QuotaExceeded => failure!(HeadQuotaExceeded),
         _ => failure!(HeadInternal),
     }
 }
 
 pub(crate) use error_from_domain;
 pub(crate) use exception;
+
+error_from_domain!(
+    resource_status_error,
+    FilesResourceStatusError,
+    [Forbidden, NotImplemented, ServiceUnavailable, Internal]
+);
+error_from_domain!(
+    convert_document_error,
+    FilesConvertDocumentError,
+    [
+        BadRequest,
+        Forbidden,
+        NotFound,
+        Gone,
+        PreconditionFailed,
+        PayloadTooLarge,
+        UnprocessableEntity,
+        NotImplemented,
+        ServiceUnavailable,
+        Internal
+    ]
+);
+error_from_domain!(
+    import_url_error,
+    FilesImportUrlError,
+    [
+        BadRequest,
+        Forbidden,
+        NotFound,
+        Gone,
+        PreconditionFailed,
+        PayloadTooLarge,
+        UnprocessableEntity,
+        NotImplemented,
+        ServiceUnavailable,
+        Internal
+    ]
+);

@@ -1,8 +1,8 @@
 # Deploy the existing Brains Worker
 
-Cloudflare runs the Brains Worker API and web app, with R2 for versioned content and D1 for the rebuildable index. The full `bsx` client runs on your machine and connects through a remote profile. Document conversion and URL import run in that client; they do not require a cloud converter.
+Cloudflare runs the Brains API and web app, with R2 for versioned content and D1 for derived indexes and usage accounting. Optional Worker providers add document conversion, public URL import and managed AI Search. A remote `bsx`, including a thin build without a native converter, can use those APIs.
 
-The deployed core includes file and attachment storage, conditional writes, history, restore/trash, metadata filters, literal/FTS search, and the APIs used by archive, working-copy and sync commands. Semantic retrieval, Workers AI, Vectorize, cloud document conversion and Browser Rendering are not implemented by this Worker. Setting `SEMANTIC_SEARCH=on` does not enable them. See [capabilities](capabilities.md).
+Core-only deployments retain file storage, conditional writes, history, trash/restore, lexical search, archive and sync. Cloud services are opt-in: a switch alone does not mount a provider or create an index. AI Search uses managed vectors; standalone Vectorize, Browser Run and answer generation are separate extensions. See [capabilities](capabilities.md) and [cloud architecture](cloudflare-ai-plan.md).
 
 ## Requirements
 
@@ -73,7 +73,7 @@ Three app secrets are sent together with the code through `deploy --secrets-file
 | `MAX_TEXT_BYTES` | Text indexing threshold; larger content can still be stored up to the attachment limit. |
 | `MAX_ATTACHMENT_BYTES` | Maximum stored content size. |
 | `ALLOWED_ORIGINS` | Optional comma-separated origins for cross-origin cookie flows; empty means same-origin only. |
-| `SEMANTIC_SEARCH` | `off` records an operator-disabled reason; all values still report semantic retrieval unavailable. |
+| `SEMANTIC_SEARCH` | `off` prevents mounting semantic retrieval; `on` uses the configured provider when bindings and resource policy are present. |
 | `BRAINS_APPLY_MIGRATIONS` | `true` by default; `false` skips remote migration application. |
 
 There is no `FULL_MODE` or generic Worker `BRAINS_DISABLE` switch. Native compile-time features and server advertisement switches are not Worker runtime controls. Every deployment derives ordinary variables from this configuration, so Dashboard-only changes may be overwritten. [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
@@ -111,3 +111,39 @@ Verification checks the web page, health, authenticated runtime capabilities, th
 Deployment does not migrate a local library, change its default profile or synchronize it. Full-history migration is a separate explicit operation: retain a source archive and verify the empty destination and import before switching use. See the [runbook](runbook.md) and [portable workflow](portable-workflow.md).
 
 For an intentional reuse of already-built Worker/Web inputs, the helper accepts `--skip-build`. An alternative dotenv path can be supplied with `--env-file /private/path/.env`; this also makes isolated configuration checks independent of the root `.env`.
+
+
+## Enable cloud conversion and managed search
+
+Copy [cloudflare-services.json](examples/cloudflare-services.json) and [the dated resource profile](examples/cloudflare-free-2026-10-27.json) into a private configuration directory. Keep the service instance/model aligned with the actual AI Search instance. Fill real R2 and AI Search billing-window bounds in `context.billing_cycles`; unset or expired required windows block protected operations. Review the latest Cloudflare pricing before using the snapshot. The default allowance policy is 80%, not an account-wide billing guarantee.
+
+```dotenv
+SEMANTIC_SEARCH=on
+BRAINS_CLOUD_CONFIG_FILE=secrets/cloud-services.json
+BRAINS_RESOURCE_PROFILE_FILE=secrets/cloud-resources.json
+BRAINS_AI_SEARCH_NAMESPACE=default
+BRAINS_AI_GATEWAY_ID=brains-notes
+BRAINS_RECONCILE_CRON='*/5 * * * *'
+```
+
+The root `.env` and `secrets/` are ignored. The helper loads each JSON input, assembles matching bindings and reassembles the full resource catalog through sub-5-KB Worker vars. On Actions use `BRAINS_CLOUD_CONFIG` and `BRAINS_RESOURCE_PROFILE` JSON variables instead of local filenames. Inline and file variants are mutually exclusive.
+
+```sh
+# Requires an API token with AI Search and AI Gateway management permissions.
+# Wrangler OAuth alone can still deploy pre-provisioned bindings.
+pnpm cloudflare:provision
+pnpm cloudflare:check
+pnpm cloudflare:deploy
+pnpm cloudflare:verify
+bsx --profile cloud resources
+```
+
+Provisioning creates or verifies a dedicated Gateway and upload-only AI Search instance. It disables public search, Gateway caching, rate limits and payload collection by default. It uploads no notes. If choosing a non-default namespace, create that namespace first. The default Qwen model at 1,024 dimensions needs no external key. A Google model requires separately configured Gateway BYOK, supported managed dimensions and explicit external-usage observation; it has a separate provider bill.
+
+Managed ingestion has no documented per-attempt billable-token upper bound. The default `when_charge_unknown: "block"` pauses it before upload. To opt in, set `policy.when_charge_unknown: "observe"` on the full `search-ingestion` rule in your private profile. Its byte-derived counter remains labeled estimated. Apply the same deliberate policy review to image conversion; an unknown amount is not a zero-cost inference. See [enforcement details](cloudflare-quotas.md).
+
+After a commit, semantic publication is pending until the provider processes it. Mutations and the configured cron run bounded reconciliation; `bsx reindex --all-pages` repairs current projections and respects the advertised page limit. Queries validate current source revisions and permissions before returning snippets, and bounded/incomplete coverage remains explicit.
+
+The web upload menu exposes conversion and URL import when providers are mounted and the session can write. Administrator settings show measured resource usage. For an optional MCP Worker and owner-only portal, follow [the MCP guide](cloudflare-mcp.md). Actions can deploy the MCP Worker after the core when `deploy_mcp` is selected and its dedicated secrets/hostname are configured.
+
+R2 purge uses an ETag-conditional zero-byte HEAD vacancy marker so a concurrent restore cannot be erased by an unconditional delete. Listings and reads hide these markers; create-only writes can reuse the path. Current filesystem adapters also understand them in raw R2 backups. Restore raw backups with this version or newer; HTTP archives keep their normal logical file representation.

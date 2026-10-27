@@ -9,8 +9,8 @@
 //! 2) static HTML through Readability + HTML-to-Markdown, 3) rendered HTML
 //! via the optional external `moli` tool when found on `PATH`, 4) documents
 //! (PDF…) stored as attachments for `bsx convert`. These steps also work
-//! with a remote Worker as the storage target. Cloud-side AI conversion
-//! and Browser Rendering are not implemented by the current Worker.
+//! with a remote Worker as the storage target. Remote cloud conversion and
+//! URL import are selected by the CLI when advertised; Browser Run is optional.
 
 use std::io::Read;
 use std::net::IpAddr;

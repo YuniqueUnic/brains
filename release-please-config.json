@@ -138,6 +138,11 @@
           "type": "json",
           "path": "tests/http-sdk/package-lock.json",
           "jsonpath": "$.packages[''].version"
+        },
+        {
+          "type": "json",
+          "path": "apps/mcp/package.json",
+          "jsonpath": "$.version"
         }
       ]
     }

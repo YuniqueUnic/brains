@@ -36,6 +36,7 @@ import { useClipboardImport } from "./use-clipboard-import";
 import { useExternalDrag } from "./use-external-drag";
 import { useMoveBatch } from "./use-move-batch";
 import { WorkspaceDialogs, type DialogState } from "./workspace-dialogs";
+import { CloudImportDialog } from "../components/upload/cloud-import-dialog";
 import { MobileLayout } from "./mobile-layout";
 import { useFileNavigation } from "./use-file-navigation";
 import { useMobileTabSync } from "./use-mobile-tab-sync";
@@ -96,7 +97,10 @@ export default function Workspace({
   }, []);
   const [searchMode, setSearchMode] = useState<"literal" | "fts" | "hybrid">("literal");
   const [dialog, setDialog] = useState<DialogState>(null);
+  const [cloudImport, setCloudImport] = useState<"url" | "convert" | null>(null);
+  const [cloudActions, setCloudActions] = useState({ url: false, convert: false });
   const [selecting, setSelecting] = useState(false);
+  const [showResourceUsage,setShowResourceUsage]=useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [batchRunning, setBatchRunning] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -169,6 +173,11 @@ export default function Workspace({
 
   useEffect(() => {
     void refreshFiles().catch(fail);
+    void api.getCapabilities().then(({ features }) => {
+      const writable = session.scopes.some((scope) => scope.startsWith("write:") || scope.startsWith("admin:"));
+      setShowResourceUsage(Boolean(features.resource_policy) && session.scopes.includes("admin:/"));
+      setCloudActions({ url: writable && Boolean(features.remote_url_import), convert: writable && Boolean(features.remote_conversion) });
+    }).catch(fail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -189,7 +198,8 @@ export default function Workspace({
   const { dragging, overlayHandlers } = useExternalDrag({ mode, upload, runUpload });
 
   const openUploadIntent = (intent: UploadIntent) => {
-    if (intent === "files") fileInputRef.current?.click();
+    if (intent === "url" || intent === "convert") setCloudImport(intent);
+    else if (intent === "files") fileInputRef.current?.click();
     else if (intent === "folder") folderInputRef.current?.click();
     else void importFromClipboard();
   };
@@ -713,6 +723,7 @@ export default function Workspace({
         onOpenPalette={() => setPaletteOpen(true)}
         onNewDocument={() => treeActions.onNewDocumentIn("")}
         onUpload={openUploadIntent}
+        cloudActions={cloudActions}
         onOpenSettings={() => setSettingsOpen(true)}
         onLogout={onLogout}
       />
@@ -777,7 +788,13 @@ export default function Workspace({
 
       {banner && <Banner message={banner} onClose={() => setBanner(null)} />}
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} showResources={showResourceUsage} />
+      <CloudImportDialog mode={cloudImport} files={liveFiles} onClose={() => setCloudImport(null)} onComplete={async (path) => {
+        await refreshFiles();
+        const current=editorRef.current;
+        if (current.kind === "clean" && current.path === path) await openFile(path);
+        else requestOpen(path);
+      }} />
 
       <CommandPalette
         open={paletteOpen}

@@ -84,6 +84,7 @@ pub(crate) fn mutation_result(
         kind: Some(outcome.kind.as_str().to_owned()),
         title: None,
         index_state: outcome.index_state.as_str().to_owned(),
+        semantic_state: outcome.semantic_state.clone(),
         operation_id: outcome.operation_id.clone(),
         created: Some(outcome.created),
     }
@@ -133,11 +134,21 @@ pub(crate) fn capabilities(
 ) -> contract::Capabilities {
     let caps = &state.capabilities;
     contract::Capabilities {
+        resources: caps
+            .resources
+            .as_ref()
+            .map(|r| contract::ResourceCapability {
+                profile_id: r.profile_id.clone(),
+                reviewed_at: r.reviewed_at.clone(),
+                coverage: r.coverage.clone(),
+            }),
+        admission: None,
         build_version: caps.build_version.clone(),
         api_version: caps.api_version.clone(),
         store_format: caps.store_format,
         runtime: runtime(caps.runtime),
         limits: contract::CapabilityLimits {
+            reindex_page_max: Some(state.limits.reindex_page_max as u64),
             max_text_bytes: caps.limits.max_text_bytes as u64,
             max_attachment_bytes: caps.limits.max_attachment_bytes as u64,
         },
@@ -150,6 +161,16 @@ pub(crate) fn capabilities(
                 dimensions: semantic.dimensions as u64,
                 vector_index_version: semantic.vector_index_version,
                 unavailable_reason: semantic.unavailable_reason.clone(),
+                dimension_control: semantic.dimension_control.as_ref().map(|d| {
+                    contract::DimensionControl {
+                        mode: d.mode.clone(),
+                        supported: d.supported.iter().map(|n| *n as u64).collect(),
+                        minimum: d.minimum.map(|n| n as u64),
+                        maximum: d.maximum.map(|n| n as u64),
+                    }
+                }),
+                model_modalities: semantic.model_modalities.clone(),
+                accepted_inputs: semantic.accepted_inputs.clone(),
             }),
         document_conversion: caps.document_conversion.as_ref().map(|conversion| {
             contract::DocumentConversion {

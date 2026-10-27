@@ -69,7 +69,7 @@ What a shipped `bsx` can do (full matrix in [docs/capabilities.md](docs/capabili
 
 | Command | What it does |
 |---|---|
-| `bsx search --mode hybrid` | weighted reciprocal-rank fusion over literal + FTS; per-hit provenance; a semantic retriever slot is reserved (none mounted yet, reported honestly) |
+| `bsx search --mode hybrid` | rank fusion over literal + FTS and a configured Worker semantic provider; source revisions, provenance and incomplete coverage are explicit |
 | `bsx ls --status draft --type Decision --stale` | lifecycle/trust filters over the indexed projection (`status`, `type`, `trust`, `stale_after`) |
 | `bsx check` | quality report: stale notes, unconfirmed agent claims, broken links, footnote gaps (`--okf` for OKF v0.2 conformance) |
 | `bsx checkpoint show/update <scope>` | per-scope continuity note with CAS rules |
@@ -96,7 +96,7 @@ See the [runbook](docs/runbook.md) for server startup, auth, backups and recover
 
 ## Cloudflare local simulation (no cloud account needed)
 
-For a real Cloudflare deployment, use the [dotenv and GitHub Actions deployment guide](docs/cloudflare.md). Local and Actions deployment share one entry point; `bsx` remains the client.
+For a real Cloudflare deployment, use the [dotenv and GitHub Actions deployment guide](docs/cloudflare.md). Local and Actions deployments share one entry point. Optional cloud conversion, URL import, quota admission and managed semantic retrieval use the same protected API; see [cloud architecture](docs/cloudflare-ai-plan.md).
 
 The same axum layer runs as a Worker over R2 (content) + D1 (rebuildable index). `wrangler dev` executes it in a local workerd with simulated R2/D1 — the protocol behavior is the production behavior:
 

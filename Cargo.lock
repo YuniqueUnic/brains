@@ -740,6 +740,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "brains-adapter-cloudflare"
+version = "0.6.1"
+dependencies = [
+ "brains-adapter-d1",
+ "brains-adapter-r2",
+ "brains-application",
+ "brains-domain",
+ "brains-ports",
+ "futures",
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
+ "serde_json",
+ "time",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "worker",
+]
+
+[[package]]
 name = "brains-adapter-convert"
 version = "0.6.1"
 dependencies = [
@@ -753,10 +773,13 @@ dependencies = [
 name = "brains-adapter-d1"
 version = "0.6.1"
 dependencies = [
+ "brains-application",
  "brains-domain",
  "brains-ports",
+ "futures",
  "serde",
  "serde_json",
+ "time",
  "wasm-bindgen",
  "worker",
 ]
@@ -785,6 +808,7 @@ dependencies = [
 name = "brains-adapter-r2"
 version = "0.6.1"
 dependencies = [
+ "brains-application",
  "brains-domain",
  "brains-ports",
  "hex",
@@ -1019,6 +1043,7 @@ version = "0.6.1"
 dependencies = [
  "axum",
  "base64 0.23.1",
+ "brains-adapter-cloudflare",
  "brains-adapter-d1",
  "brains-adapter-r2",
  "brains-api-http",

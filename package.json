@@ -9,7 +9,14 @@
     "cloudflare:deploy": "python3 scripts/cloudflare.py deploy",
     "cloudflare:verify": "python3 scripts/cloudflare.py verify",
     "cloudflare:wrangler": "python3 scripts/cloudflare.py wrangler",
-    "lint": "oxlint --deny-warnings apps/web/src apps/web/vite.config.ts tests/e2e tests/http-sdk scripts"
+    "mcp:check": "pnpm --filter brains-mcp check",
+    "lint": "oxlint --deny-warnings apps/web/src apps/web/vite.config.ts apps/mcp/src apps/mcp/scripts crates/adapter-cloudflare/src/bindings.js tests/e2e tests/http-sdk scripts",
+    "cloudflare:provision": "python3 scripts/cloudflare.py provision",
+    "cloudflare:mcp-init": "python3 scripts/cloudflare.py mcp-init",
+    "cloudflare:mcp-check": "python3 scripts/cloudflare.py mcp-check",
+    "cloudflare:mcp-deploy": "python3 scripts/cloudflare.py mcp-deploy",
+    "worker:check": "pnpm --filter brains-worker check",
+    "cloudflare:mcp-verify": "python3 scripts/cloudflare.py mcp-verify"
   },
   "devDependencies": {
     "oxlint": "^1.88.0"

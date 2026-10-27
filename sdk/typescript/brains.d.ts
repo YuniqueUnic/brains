@@ -7,10 +7,163 @@
 
     export interface CapabilityLimits {
 
-                max_text_bytes: number;
+                reindex_page_max?: number;
+                    max_text_bytes: number;
                     max_attachment_bytes: number;
                 }
     export type Runtime = "local-rust" | "cloudflare-rust" | "cloudflare-typescript";
+
+
+    export interface DimensionControl {
+
+                mode: string;
+                    supported: Array<number>;
+                    minimum?: number;
+                    maximum?: number;
+                }
+
+
+    export interface ResourceDescriptor {
+
+                service: string;
+                    kind: string;
+                }
+
+
+    export interface ResourceMeasure {
+
+                metric: string;
+                    unit: string;
+                }
+
+
+    export interface ResourceScope {
+
+                kind: string;
+                }
+
+
+    export interface ResourceWindow {
+
+                kind: string;
+                    size?: number;
+                    unit?: string;
+                    timezone?: string;
+                    ref?: string;
+                }
+
+
+    export interface ResourceLimit {
+
+                kind: string;
+                    value?: number;
+                }
+
+
+    export interface ResourcePolicy {
+
+                fraction?: number;
+                    maximum?: number;
+                    when_exhausted?: string;
+                    when_charge_unknown?: string;
+                }
+
+
+    export interface ResourceRule {
+
+                id: string;
+                    resource: ResourceDescriptor;
+                    measure: ResourceMeasure;
+                    scope: ResourceScope;
+                    window: ResourceWindow;
+                    limit: ResourceLimit;
+                    policy?: ResourcePolicy;
+                    source?: string;
+                    effective_limit?: number;
+                    enforcement: string;
+                }
+
+
+    export interface ResourceUsage {
+
+                key: string;
+                    meter: string;
+                    rule: string;
+                    unit: string;
+                    evidence: string;
+                    consumed: number;
+                    reserved: number;
+                    limit: number;
+                    reset_at?: number;
+                }
+
+
+    export interface ResourceCapability {
+
+                profile_id: string;
+                    reviewed_at: string;
+                    coverage: string;
+                }
+
+
+    export interface AdmissionState {
+
+                state: string;
+                    reason?: string;
+                    rule?: string;
+                    limit?: number;
+                    consumed?: number;
+                    reserved?: number;
+                    remaining?: number;
+                    reset_at?: number;
+                }
+
+
+    export interface ResourceReport {
+
+                profile: ResourceCapability;
+                    rules: Array<ResourceRule>;
+                    usage: Array<ResourceUsage>;
+                    limitations: Array<string>;
+                }
+
+
+    export interface ConversionInput {
+
+                path: string;
+                    to?: string;
+                }
+
+
+    export interface ConversionResult {
+
+                companion_path: string;
+                    companion_revision: string;
+                    converter: string;
+                    created: boolean;
+                    unchanged: boolean;
+                }
+
+
+    export interface UrlImportInput {
+
+                url: string;
+                    path: string;
+                }
+
+
+    export interface UrlImportResult {
+
+                path: string;
+                    revision?: string;
+                    partial: boolean;
+                    error?: ErrorDetail;
+                    source_revision?: string;
+                    source_url: string;
+                    source_path?: string;
+                    created: boolean;
+                    unchanged: boolean;
+                }
 
 
     export interface SemanticCapability {
@@ -19,6 +172,9 @@
                     dimensions: number;
                     vector_index_version: number;
                     unavailable_reason?: string;
+                    dimension_control?: DimensionControl;
+                    model_modalities?: Array<string>;
+                    accepted_inputs?: Array<string>;
                 }
 
 
@@ -41,6 +197,8 @@
                     semantic?: SemanticCapability;
                     document_conversion?: DocumentConversion;
                     vault?: string;
+                    resources?: ResourceCapability;
+                    admission?: Record<string, AdmissionState>;
                 }
 
 
@@ -101,6 +259,7 @@
                 path: string;
                     purged: boolean;
                     index_state: string;
+                    semantic_state?: string;
                     operation_id: string;
                 }
 
@@ -118,6 +277,7 @@
                     kind?: string;
                     title?: string;
                     index_state: string;
+                    semantic_state?: string;
                     operation_id: string;
                     created?: boolean;
                 }
@@ -342,6 +502,8 @@
                     request_id: string;
                     path?: string;
                     current_revision?: string;
+                    resource_rule?: string;
+                    reset_at?: number;
                 }
 
 
@@ -427,6 +589,12 @@
                 }
 
 
+    export interface QuotaExceeded {
+
+                error: ErrorDetail;
+                }
+
+
     export interface Internal {
 
                 error: ErrorDetail;
@@ -489,6 +657,12 @@
 
 
     export interface HeadServiceUnavailable {
+
+                code: string;
+                }
+
+
+    export interface HeadQuotaExceeded {
 
                 code: string;
                 }

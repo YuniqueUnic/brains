@@ -12,6 +12,7 @@ brains-build-info.workspace = true
 axum = { version = "0.8", default-features = false, features = ["json", "query", "macros"] }
 base64.workspace = true
 brains-adapter-d1.workspace = true
+brains-adapter-cloudflare.workspace = true
 brains-adapter-r2.workspace = true
 brains-api-http.workspace = true
 brains-api-types.workspace = true

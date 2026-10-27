@@ -6,6 +6,11 @@
 use brains_client::{ClientError, ClientResult, Library};
 
 pub(crate) fn convert(client: &dyn Library, path: &str, to: Option<&str>) -> ClientResult<i32> {
+    if client.capabilities()?.features.get("remote_conversion") == Some(&true) {
+        let report = client.convert_document(path, to)?;
+        print_report(&report);
+        return Ok(0);
+    }
     #[cfg(feature = "convert")]
     {
         // Xberg's async pipeline needs a real tokio context; the rest of the
@@ -18,19 +23,7 @@ pub(crate) fn convert(client: &dyn Library, path: &str, to: Option<&str>) -> Cli
         let report = runtime.block_on(brains_client::convert::convert_attachment(
             client, &converter, path, to,
         ))?;
-        println!(
-            "{}: companion {} at revision {} ({})",
-            report.converter,
-            report.companion_path,
-            report.companion_revision,
-            if report.created {
-                "created"
-            } else if report.unchanged {
-                "unchanged"
-            } else {
-                "new revision"
-            }
-        );
+        print_report(&report);
         Ok(0)
     }
     #[cfg(not(feature = "convert"))]
@@ -39,4 +32,20 @@ pub(crate) fn convert(client: &dyn Library, path: &str, to: Option<&str>) -> Cli
         eprintln!("bsx: conversion: unavailable — this build has no document converter");
         Ok(9)
     }
+}
+
+fn print_report(report: &brains_client::convert::ConvertReport) {
+    println!(
+        "{}: companion {} at revision {} ({})",
+        report.converter,
+        report.companion_path,
+        report.companion_revision,
+        if report.unchanged {
+            "unchanged"
+        } else if report.created {
+            "created"
+        } else {
+            "new revision"
+        }
+    );
 }

@@ -67,6 +67,8 @@ enum Command {
         #[arg(long)]
         json: bool,
     },
+    /// Show the target's resource rules, effective limits and usage (admin).
+    Resources,
     /// Print the authenticated principal.
     Whoami {
         #[arg(long)]
@@ -541,6 +543,12 @@ pub(crate) fn run() -> i32 {
 
     let result = match cli.command {
         Command::Capabilities { json } => commands::system::capabilities(client, json),
+        Command::Resources => client.resource_status().and_then(|report| {
+            let json = serde_json::to_string_pretty(&report)
+                .map_err(|e| brains_client::ClientError::transport(e.to_string()))?;
+            println!("{json}");
+            Ok(0)
+        }),
         Command::Whoami { json } => commands::system::whoami(client, json),
         Command::Profile { command } => commands::system::profile_command(&mut config, command),
         Command::Login { .. } | Command::Init { .. } | Command::Update { .. } => {

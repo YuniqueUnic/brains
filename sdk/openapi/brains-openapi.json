@@ -19,6 +19,43 @@
         ],
         "type": "object"
       },
+      "brains.AdmissionState": {
+        "properties": {
+          "consumed": {
+            "format": "double",
+            "type": "number"
+          },
+          "limit": {
+            "format": "double",
+            "type": "number"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "remaining": {
+            "format": "double",
+            "type": "number"
+          },
+          "reserved": {
+            "format": "double",
+            "type": "number"
+          },
+          "reset_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
       "brains.ArchiveBlobStored": {
         "properties": {
           "stored": {
@@ -174,6 +211,12 @@
       },
       "brains.Capabilities": {
         "properties": {
+          "admission": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/brains.AdmissionState"
+            },
+            "type": "object"
+          },
           "api_version": {
             "type": "string"
           },
@@ -191,6 +234,9 @@
           },
           "limits": {
             "$ref": "#/components/schemas/brains.CapabilityLimits"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/brains.ResourceCapability"
           },
           "runtime": {
             "$ref": "#/components/schemas/brains.Runtime"
@@ -225,6 +271,11 @@
             "type": "integer"
           },
           "max_text_bytes": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "reindex_page_max": {
             "format": "int64",
             "minimum": 0,
             "type": "integer"
@@ -271,6 +322,47 @@
         ],
         "type": "object"
       },
+      "brains.ConversionInput": {
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "to": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      },
+      "brains.ConversionResult": {
+        "properties": {
+          "companion_path": {
+            "type": "string"
+          },
+          "companion_revision": {
+            "type": "string"
+          },
+          "converter": {
+            "type": "string"
+          },
+          "created": {
+            "type": "boolean"
+          },
+          "unchanged": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "companion_path",
+          "companion_revision",
+          "converter",
+          "created",
+          "unchanged"
+        ],
+        "type": "object"
+      },
       "brains.CopiedFrom": {
         "properties": {
           "path": {
@@ -294,6 +386,36 @@
         },
         "required": [
           "diff"
+        ],
+        "type": "object"
+      },
+      "brains.DimensionControl": {
+        "properties": {
+          "maximum": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "minimum": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "supported": {
+            "items": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode",
+          "supported"
         ],
         "type": "object"
       },
@@ -380,6 +502,13 @@
             "type": "string"
           },
           "request_id": {
+            "type": "string"
+          },
+          "reset_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "resource_rule": {
             "type": "string"
           }
         },
@@ -495,6 +624,9 @@
         "type": "object"
       },
       "brains.HeadNotFound": {
+        "type": "object"
+      },
+      "brains.HeadQuotaExceeded": {
         "type": "object"
       },
       "brains.HeadServiceUnavailable": {
@@ -641,6 +773,9 @@
             "type": "string"
           },
           "revision": {
+            "type": "string"
+          },
+          "semantic_state": {
             "type": "string"
           },
           "sha256": {
@@ -848,6 +983,9 @@
           },
           "purged": {
             "type": "boolean"
+          },
+          "semantic_state": {
+            "type": "string"
           }
         },
         "required": [
@@ -855,6 +993,17 @@
           "purged",
           "index_state",
           "operation_id"
+        ],
+        "type": "object"
+      },
+      "brains.QuotaExceeded": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/brains.ErrorDetail"
+          }
+        },
+        "required": [
+          "error"
         ],
         "type": "object"
       },
@@ -905,6 +1054,248 @@
             "type": "integer"
           }
         },
+        "type": "object"
+      },
+      "brains.ResourceCapability": {
+        "properties": {
+          "coverage": {
+            "type": "string"
+          },
+          "profile_id": {
+            "type": "string"
+          },
+          "reviewed_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile_id",
+          "reviewed_at",
+          "coverage"
+        ],
+        "type": "object"
+      },
+      "brains.ResourceDescriptor": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "service": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "service",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "brains.ResourceLimit": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "value": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "brains.ResourceMeasure": {
+        "properties": {
+          "metric": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric",
+          "unit"
+        ],
+        "type": "object"
+      },
+      "brains.ResourcePolicy": {
+        "properties": {
+          "fraction": {
+            "format": "double",
+            "type": "number"
+          },
+          "maximum": {
+            "format": "double",
+            "type": "number"
+          },
+          "when_charge_unknown": {
+            "type": "string"
+          },
+          "when_exhausted": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "brains.ResourceReport": {
+        "properties": {
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/brains.ResourceCapability"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/brains.ResourceRule"
+            },
+            "type": "array"
+          },
+          "usage": {
+            "items": {
+              "$ref": "#/components/schemas/brains.ResourceUsage"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "profile",
+          "rules",
+          "usage",
+          "limitations"
+        ],
+        "type": "object"
+      },
+      "brains.ResourceRule": {
+        "properties": {
+          "effective_limit": {
+            "format": "double",
+            "type": "number"
+          },
+          "enforcement": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "limit": {
+            "$ref": "#/components/schemas/brains.ResourceLimit"
+          },
+          "measure": {
+            "$ref": "#/components/schemas/brains.ResourceMeasure"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/brains.ResourcePolicy"
+          },
+          "resource": {
+            "$ref": "#/components/schemas/brains.ResourceDescriptor"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/brains.ResourceScope"
+          },
+          "source": {
+            "type": "string"
+          },
+          "window": {
+            "$ref": "#/components/schemas/brains.ResourceWindow"
+          }
+        },
+        "required": [
+          "id",
+          "resource",
+          "measure",
+          "scope",
+          "window",
+          "limit",
+          "enforcement"
+        ],
+        "type": "object"
+      },
+      "brains.ResourceScope": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "brains.ResourceUsage": {
+        "properties": {
+          "consumed": {
+            "format": "double",
+            "type": "number"
+          },
+          "evidence": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "limit": {
+            "format": "double",
+            "type": "number"
+          },
+          "meter": {
+            "type": "string"
+          },
+          "reserved": {
+            "format": "double",
+            "type": "number"
+          },
+          "reset_at": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "meter",
+          "rule",
+          "unit",
+          "evidence",
+          "consumed",
+          "reserved",
+          "limit"
+        ],
+        "type": "object"
+      },
+      "brains.ResourceWindow": {
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "size": {
+            "format": "int64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
         "type": "object"
       },
       "brains.RestoreBody": {
@@ -1134,6 +1525,15 @@
       },
       "brains.SemanticCapability": {
         "properties": {
+          "accepted_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "dimension_control": {
+            "$ref": "#/components/schemas/brains.DimensionControl"
+          },
           "dimensions": {
             "format": "int64",
             "minimum": 0,
@@ -1141,6 +1541,12 @@
           },
           "model_id": {
             "type": "string"
+          },
+          "model_modalities": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "unavailable_reason": {
             "type": "string"
@@ -1310,6 +1716,60 @@
         ],
         "type": "object"
       },
+      "brains.UrlImportInput": {
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "path"
+        ],
+        "type": "object"
+      },
+      "brains.UrlImportResult": {
+        "properties": {
+          "created": {
+            "type": "boolean"
+          },
+          "error": {
+            "$ref": "#/components/schemas/brains.ErrorDetail"
+          },
+          "partial": {
+            "type": "boolean"
+          },
+          "path": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "string"
+          },
+          "source_path": {
+            "type": "string"
+          },
+          "source_revision": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          },
+          "unchanged": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "partial",
+          "source_url",
+          "created",
+          "unchanged"
+        ],
+        "type": "object"
+      },
       "brains.Verification": {
         "properties": {
           "at": {
@@ -1470,6 +1930,16 @@
             },
             "description": "Error: UnprocessableEntity"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -1566,6 +2036,16 @@
               }
             },
             "description": "Error: NotFound"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
           },
           "500": {
             "content": {
@@ -1715,6 +2195,16 @@
             },
             "description": "Error: PreconditionRequired"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -1860,6 +2350,16 @@
               }
             }
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -1958,6 +2458,16 @@
                   "type": "string"
                 }
               },
+              "X-Brain-Error-Code": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Error: HeadQuotaExceeded",
+            "headers": {
               "X-Brain-Error-Code": {
                 "schema": {
                   "type": "string"
@@ -2149,6 +2659,16 @@
               }
             },
             "description": "Error: PreconditionRequired"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
           },
           "500": {
             "content": {
@@ -2347,6 +2867,16 @@
             },
             "description": "Error: PreconditionRequired"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2356,6 +2886,314 @@
               }
             },
             "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/files/convert": {
+      "post": {
+        "operationId": "brains.Files.convert_document",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/brains.ConversionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ConversionResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.BadRequest"
+                }
+              }
+            },
+            "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotFound"
+                }
+              }
+            },
+            "description": "Error: NotFound"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PayloadTooLarge"
+                }
+              }
+            },
+            "description": "Error: PayloadTooLarge"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.UnprocessableEntity"
+                }
+              }
+            },
+            "description": "Error: UnprocessableEntity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Internal"
+                }
+              }
+            },
+            "description": "Error: Internal"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotImplemented"
+                }
+              }
+            },
+            "description": "Error: NotImplemented"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/files/import-url": {
+      "post": {
+        "operationId": "brains.Files.import_url",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/brains.UrlImportInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.UrlImportResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.BadRequest"
+                }
+              }
+            },
+            "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotFound"
+                }
+              }
+            },
+            "description": "Error: NotFound"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Gone"
+                }
+              }
+            },
+            "description": "Error: Gone",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PayloadTooLarge"
+                }
+              }
+            },
+            "description": "Error: PayloadTooLarge"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.UnprocessableEntity"
+                }
+              }
+            },
+            "description": "Error: UnprocessableEntity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Internal"
+                }
+              }
+            },
+            "description": "Error: Internal"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotImplemented"
+                }
+              }
+            },
+            "description": "Error: NotImplemented"
           },
           "503": {
             "content": {
@@ -2416,6 +3254,16 @@
               }
             },
             "description": "Error: Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
           },
           "500": {
             "content": {
@@ -2503,6 +3351,16 @@
               }
             },
             "description": "Error: Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
           },
           "500": {
             "content": {
@@ -2622,6 +3480,16 @@
             },
             "description": "Error: UnprocessableEntity"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2738,6 +3606,16 @@
             },
             "description": "Error: UnprocessableEntity"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -2836,6 +3714,16 @@
               }
             },
             "description": "Error: UnprocessableEntity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
           },
           "500": {
             "content": {
@@ -2942,6 +3830,16 @@
             },
             "description": "Error: UnprocessableEntity"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3012,6 +3910,16 @@
             },
             "description": "Error: Forbidden"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3045,6 +3953,16 @@
         "responses": {
           "204": {
             "description": "OK"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
           },
           "500": {
             "content": {
@@ -3180,6 +4098,16 @@
             },
             "description": "Error: UnprocessableEntity"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3189,6 +4117,77 @@
               }
             },
             "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/resources": {
+      "get": {
+        "operationId": "brains.Files.resource_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ResourceReport"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Internal"
+                }
+              }
+            },
+            "description": "Error: Internal"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotImplemented"
+                }
+              }
+            },
+            "description": "Error: NotImplemented"
           },
           "503": {
             "content": {
@@ -3329,6 +4328,16 @@
             },
             "description": "Error: PreconditionRequired"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3466,6 +4475,16 @@
               }
             }
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3581,6 +4600,16 @@
               }
             }
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3650,6 +4679,16 @@
               }
             },
             "description": "Error: Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
           },
           "500": {
             "content": {
@@ -3804,6 +4843,16 @@
             },
             "description": "Error: Forbidden"
           },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
@@ -3927,6 +4976,16 @@
               }
             },
             "description": "Error: PreconditionRequired"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
           },
           "500": {
             "content": {

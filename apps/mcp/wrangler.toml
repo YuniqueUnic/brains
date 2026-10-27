@@ -1,0 +1,19 @@
+name = "brains-mcp"
+main = "src/index.ts"
+compatibility_date = "2026-10-19"
+compatibility_flags = ["nodejs_compat"]
+
+[[services]]
+binding = "BRAINS_API"
+service = "brains"
+
+[observability]
+enabled = true
+redact_query_string = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
+[secrets]
+required = ["MCP_ACCESS_TOKEN", "BRAINS_API_TOKEN"]
