@@ -109,9 +109,10 @@ pub fn verify_index(client: &dyn Library) -> ClientResult<()> {
 
 /// Fully rebuild and compare the disposable index before accepting a target.
 pub fn rebuild_index(client: &dyn Library) -> ClientResult<()> {
+    let page_size = client.reindex_page_size(5)?;
     let mut cursor = None;
     loop {
-        let page = client.reindex(cursor.as_deref(), 5)?;
+        let page = client.reindex(cursor.as_deref(), page_size)?;
         if !page.failed.is_empty() {
             return Err(invalid(&format!(
                 "index rebuild failed for {} paths",

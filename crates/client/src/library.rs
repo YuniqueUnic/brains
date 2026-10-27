@@ -40,6 +40,14 @@ pub trait Library: crate::archive::ArchiveEndpoint {
         })
     }
     fn capabilities(&self) -> ClientResult<Capabilities>;
+    /// Choose a maintenance batch size within the server's advertised limit.
+    fn reindex_page_size(&self, requested: usize) -> ClientResult<usize> {
+        Ok(self
+            .capabilities()?
+            .limits
+            .reindex_page_max
+            .map_or(requested, |maximum| requested.min(maximum)))
+    }
     fn session(&self) -> ClientResult<Session>;
     fn list_files(&self, query: &brains_application::listing::ListQuery) -> ClientResult<FilePage>;
     fn get_meta(&self, path: &str) -> ClientResult<Entry>;
