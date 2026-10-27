@@ -1,0 +1,516 @@
+{
+  "profile": {
+    "id": "cloudflare-free-2026-10-27",
+    "status": "proposed-not-applied",
+    "provider": "cloudflare",
+    "plan": "free",
+    "reviewed_at": "2026-10-27"
+  },
+  "context": {
+    "billing_cycles": {"ai_search": null, "r2": null, "vectorize": null},
+    "gateway_log_generation": null
+  },
+  "policy": {"fraction": 0.8, "when_exhausted": "block", "when_charge_unknown": "block"},
+  "rules": [
+    {
+      "id": "worker-requests",
+      "resource": {"service": "workers", "kind": "worker"},
+      "measure": {"metric": "requests", "unit": "request"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+      "limit": {"kind": "allowance", "value": 100000},
+      "source": "workers"
+    },
+    {
+      "id": "worker-log-events",
+      "resource": {"service": "observability", "kind": "worker_logs"},
+      "measure": {"metric": "ingestion", "unit": "event"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+      "limit": {"kind": "allowance", "value": 200000},
+      "source": "worker_logs"
+    },
+    {
+      "id": "r2-storage",
+      "resource": {"service": "r2", "kind": "standard_bucket"},
+      "measure": {"metric": "storage_time", "unit": "GB-month"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "billing_cycle", "ref": "r2"},
+      "limit": {"kind": "allowance", "value": 10},
+      "source": "r2"
+    },
+    {
+      "id": "r2-class-a",
+      "resource": {"service": "r2", "kind": "standard_bucket"},
+      "measure": {"metric": "class_a_operations", "unit": "operation"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "billing_cycle", "ref": "r2"},
+      "limit": {"kind": "allowance", "value": 1000000},
+      "source": "r2"
+    },
+    {
+      "id": "r2-class-b",
+      "resource": {"service": "r2", "kind": "standard_bucket"},
+      "measure": {"metric": "class_b_operations", "unit": "operation"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "billing_cycle", "ref": "r2"},
+      "limit": {"kind": "allowance", "value": 10000000},
+      "source": "r2"
+    },
+    {
+      "id": "d1-reads",
+      "resource": {"service": "d1", "kind": "database"},
+      "measure": {"metric": "rows_read", "unit": "row"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+      "limit": {"kind": "allowance", "value": 5000000},
+      "source": "d1"
+    },
+    {
+      "id": "d1-writes",
+      "resource": {"service": "d1", "kind": "database"},
+      "measure": {"metric": "rows_written", "unit": "row"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+      "limit": {"kind": "allowance", "value": 100000},
+      "source": "d1"
+    },
+    {
+      "id": "d1-account-storage",
+      "resource": {"service": "d1", "kind": "database"},
+      "measure": {"metric": "storage", "unit": "GB"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "allowance", "value": 5},
+      "source": "d1_limits"
+    },
+    {
+      "id": "workers-ai-neurons",
+      "resource": {"service": "workers_ai", "kind": "inference"},
+      "measure": {"metric": "compute", "unit": "neuron"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+      "limit": {"kind": "allowance", "value": 10000},
+      "source": "workers_ai"
+    },
+    {
+      "id": "search-ingestion",
+      "resource": {"service": "ai_search", "kind": "instance"},
+      "measure": {"metric": "ingestion", "unit": "token"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "billing_cycle", "ref": "ai_search"},
+      "limit": {"kind": "allowance", "value": 5000000},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-storage",
+      "resource": {"service": "ai_search", "kind": "instance"},
+      "measure": {"metric": "storage_time", "unit": "GB-month"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "billing_cycle", "ref": "ai_search"},
+      "limit": {"kind": "allowance", "value": 10},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-semantic",
+      "resource": {"service": "ai_search", "kind": "instance"},
+      "measure": {"metric": "semantic_queries", "unit": "query"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "billing_cycle", "ref": "ai_search"},
+      "limit": {"kind": "allowance", "value": 1000},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-full-text",
+      "resource": {"service": "ai_search", "kind": "instance"},
+      "measure": {"metric": "full_text_queries", "unit": "query"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "billing_cycle", "ref": "ai_search"},
+      "limit": {"kind": "allowance", "value": 1000},
+      "source": "ai_search"
+    },
+    {
+      "id": "access-seats",
+      "resource": {"service": "access", "kind": "user"},
+      "measure": {"metric": "active_users", "unit": "user"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "allowance", "value": 50},
+      "source": "access_seats"
+    },
+    {
+      "id": "worker-cpu",
+      "resource": {"service": "workers", "kind": "worker"},
+      "measure": {"metric": "cpu", "unit": "ms"},
+      "scope": {"kind": "invocation"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 10},
+      "source": "workers"
+    },
+    {
+      "id": "worker-memory",
+      "resource": {"service": "workers", "kind": "worker"},
+      "measure": {"metric": "memory", "unit": "MB"},
+      "scope": {"kind": "invocation"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 128},
+      "source": "workers"
+    },
+    {
+      "id": "external-subrequests",
+      "resource": {"service": "workers", "kind": "worker"},
+      "measure": {"metric": "external_subrequests", "unit": "request"},
+      "scope": {"kind": "invocation"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 50},
+      "source": "workers"
+    },
+    {
+      "id": "cloudflare-subrequests",
+      "resource": {"service": "workers", "kind": "worker"},
+      "measure": {"metric": "cloudflare_subrequests", "unit": "request"},
+      "scope": {"kind": "invocation"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 1000},
+      "source": "workers"
+    },
+    {
+      "id": "outgoing-connections",
+      "resource": {"service": "workers", "kind": "worker"},
+      "measure": {"metric": "concurrent_connections", "unit": "connection"},
+      "scope": {"kind": "invocation"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 6},
+      "source": "workers"
+    },
+    {
+      "id": "worker-count",
+      "resource": {"service": "workers", "kind": "worker"},
+      "measure": {"metric": "count", "unit": "worker"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 100},
+      "source": "workers"
+    },
+    {
+      "id": "cron-count",
+      "resource": {"service": "workers", "kind": "cron"},
+      "measure": {"metric": "count", "unit": "trigger"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 5},
+      "source": "workers"
+    },
+    {
+      "id": "asset-file-count",
+      "resource": {"service": "workers", "kind": "asset_version"},
+      "measure": {"metric": "files", "unit": "file"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 20000},
+      "source": "workers"
+    },
+    {
+      "id": "asset-file-size",
+      "resource": {"service": "workers", "kind": "asset_file"},
+      "measure": {"metric": "size", "unit": "MiB"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 25},
+      "source": "workers"
+    },
+    {
+      "id": "d1-database-storage",
+      "resource": {"service": "d1", "kind": "database"},
+      "measure": {"metric": "storage", "unit": "MB"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 500},
+      "source": "d1_limits",
+      "policy": {"fraction": 0.8}
+    },
+    {
+      "id": "d1-database-count",
+      "resource": {"service": "d1", "kind": "database"},
+      "measure": {"metric": "count", "unit": "database"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 10},
+      "source": "d1_limits"
+    },
+    {
+      "id": "d1-query-calls",
+      "resource": {"service": "d1", "kind": "database"},
+      "measure": {"metric": "query_calls", "unit": "query"},
+      "scope": {"kind": "invocation"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 50},
+      "source": "d1_limits"
+    },
+    {
+      "id": "search-instance-count",
+      "resource": {"service": "ai_search", "kind": "instance"},
+      "measure": {"metric": "count", "unit": "instance"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 100},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-namespace-count",
+      "resource": {"service": "ai_search", "kind": "namespace"},
+      "measure": {"metric": "count", "unit": "namespace"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 100},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-file-count",
+      "resource": {"service": "ai_search", "kind": "instance"},
+      "measure": {"metric": "files", "unit": "file"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 100000},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-text-file-size",
+      "resource": {"service": "ai_search", "kind": "text_or_ocr_pdf"},
+      "measure": {"metric": "size", "unit": "MiB"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 10},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-other-file-size",
+      "resource": {"service": "ai_search", "kind": "other_document"},
+      "measure": {"metric": "size", "unit": "MiB"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 4},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-metadata-fields",
+      "resource": {"service": "ai_search", "kind": "instance"},
+      "measure": {"metric": "metadata_fields", "unit": "field"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 5},
+      "source": "ai_search"
+    },
+    {
+      "id": "search-candidates",
+      "resource": {"service": "ai_search", "kind": "instance"},
+      "measure": {"metric": "candidates", "unit": "chunk"},
+      "scope": {"kind": "invocation"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 50},
+      "source": "ai_search"
+    },
+    {
+      "id": "mcp-portal-count",
+      "resource": {"service": "mcp", "kind": "portal"},
+      "measure": {"metric": "count", "unit": "portal"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 20},
+      "source": "mcp_limits"
+    },
+    {
+      "id": "mcp-server-count",
+      "resource": {"service": "mcp", "kind": "portal"},
+      "measure": {"metric": "servers", "unit": "server"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 80},
+      "source": "mcp_limits"
+    },
+    {
+      "id": "mcp-domain-count",
+      "resource": {"service": "mcp", "kind": "portal"},
+      "measure": {"metric": "custom_domains", "unit": "domain"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 5},
+      "source": "mcp_limits"
+    },
+    {
+      "id": "worker-log-retention",
+      "resource": {"service": "observability", "kind": "worker_logs"},
+      "measure": {"metric": "retention", "unit": "day"},
+      "scope": {"kind": "record"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 3},
+      "source": "worker_logs"
+    },
+    {
+      "id": "worker-trace-retention",
+      "resource": {"service": "observability", "kind": "worker_traces"},
+      "measure": {"metric": "retention", "unit": "day"},
+      "scope": {"kind": "record"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 7},
+      "source": "worker_traces"
+    },
+    {
+      "id": "access-log-retention",
+      "resource": {"service": "access", "kind": "authentication_logs"},
+      "measure": {"metric": "retention", "unit": "hour"},
+      "scope": {"kind": "record"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 24},
+      "source": "zero_trust_logs"
+    },
+    {
+      "id": "mcp-log-retention",
+      "resource": {"service": "mcp", "kind": "tool_logs"},
+      "measure": {"metric": "retention", "unit": "hour"},
+      "scope": {"kind": "record"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "unknown"},
+      "source": "mcp_portals"
+    },
+    {
+      "id": "browser-time",
+      "resource": {"service": "browser_run", "kind": "browser"},
+      "measure": {"metric": "running_time", "unit": "second"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+      "limit": {"kind": "allowance", "value": 600},
+      "source": "browser_run"
+    },
+    {
+      "id": "vectorize-query-dimensions",
+      "resource": {"service": "vectorize", "kind": "standalone_index"},
+      "measure": {"metric": "queried_dimensions", "unit": "dimension"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "billing_cycle", "ref": "vectorize"},
+      "limit": {"kind": "allowance", "value": 30000000},
+      "source": "vectorize"
+    },
+    {
+      "id": "vectorize-storage",
+      "resource": {"service": "vectorize", "kind": "standalone_index"},
+      "measure": {"metric": "stored_dimensions", "unit": "dimension"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "allowance", "value": 5000000},
+      "source": "vectorize"
+    },
+    {
+      "id": "legacy-gateway-logs",
+      "resource": {"service": "ai_gateway", "kind": "legacy_logs"},
+      "measure": {"metric": "stored_logs", "unit": "event"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "allowance", "value": 100000},
+      "source": "ai_gateway"
+    },
+    {
+      "id": "browser-concurrency",
+      "resource": {"service": "browser_run", "kind": "browser"},
+      "measure": {"metric": "concurrent_sessions", "unit": "session"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "ceiling", "value": 3},
+      "source": "browser_run_limits"
+    },
+    {
+      "id": "browser-launch-rate",
+      "resource": {"service": "browser_run", "kind": "browser"},
+      "measure": {"metric": "session_launches", "unit": "session"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "rolling", "size": 20, "unit": "second"},
+      "limit": {"kind": "ceiling", "value": 1},
+      "source": "browser_run_limits"
+    },
+    {
+      "id": "browser-action-rate",
+      "resource": {"service": "browser_run", "kind": "quick_action"},
+      "measure": {"metric": "requests", "unit": "request"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "rolling", "size": 10, "unit": "second"},
+      "limit": {"kind": "ceiling", "value": 1},
+      "source": "browser_run_limits"
+    },
+    {
+      "id": "browser-default-timeout",
+      "resource": {"service": "browser_run", "kind": "browser"},
+      "measure": {"metric": "default_timeout", "unit": "second"},
+      "scope": {"kind": "resource"},
+      "window": {"kind": "none"},
+      "limit": {"kind": "reference", "value": 60},
+      "source": "browser_run_limits"
+    },
+    {
+      "id": "static-asset-requests",
+      "resource": {"service": "workers", "kind": "static_assets"},
+      "measure": {"metric": "requests", "unit": "request"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+      "limit": {"kind": "unmetered"},
+      "source": "workers_pricing"
+    },
+    {
+      "id": "gateway-core",
+      "resource": {"service": "ai_gateway", "kind": "core"},
+      "measure": {"metric": "requests", "unit": "request"},
+      "scope": {"kind": "account"},
+      "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+      "limit": {"kind": "unmetered"},
+      "source": "ai_gateway"
+    }
+  ],
+  "changes": [
+    {"effective_from": "2026-11-01", "review_required": true, "description": "AI Search usage billing begins with the announced included allowances in the rules."},
+    {
+      "effective_from": "2026-12-01",
+      "review_required": true,
+      "replaces": ["worker-log-events", "worker-log-retention", "worker-trace-retention", "legacy-gateway-logs"],
+      "description": "Review and select the shared Observability pool; do not count one separate allowance for each producer.",
+      "rules": [
+        {
+          "id": "shared-observability-ingestion",
+          "resource": {"service": "observability", "kind": "shared_logs_and_traces"},
+          "measure": {"metric": "ingestion", "unit": "GB"},
+          "scope": {"kind": "account"},
+          "window": {"kind": "calendar", "size": 1, "unit": "day", "timezone": "UTC"},
+          "limit": {"kind": "allowance", "value": 0.5},
+          "source": "observability"
+        },
+        {
+          "id": "shared-observability-retention",
+          "resource": {"service": "observability", "kind": "shared_logs_and_traces"},
+          "measure": {"metric": "retention", "unit": "day"},
+          "scope": {"kind": "record"},
+          "window": {"kind": "none"},
+          "limit": {"kind": "ceiling", "value": 7},
+          "source": "observability"
+        }
+      ]
+    }
+  ],
+  "sources": {
+    "workers": "https://developers.cloudflare.com/workers/platform/limits/",
+    "workers_pricing": "https://developers.cloudflare.com/workers/platform/pricing/",
+    "worker_logs": "https://developers.cloudflare.com/workers/observability/logs/workers-logs/",
+    "observability": "https://developers.cloudflare.com/observability/pricing/",
+    "r2": "https://developers.cloudflare.com/r2/pricing/",
+    "d1": "https://developers.cloudflare.com/d1/platform/pricing/",
+    "d1_limits": "https://developers.cloudflare.com/d1/platform/limits/",
+    "workers_ai": "https://developers.cloudflare.com/workers-ai/platform/pricing/",
+    "ai_search": "https://developers.cloudflare.com/ai-search/platform/limits-pricing/",
+    "ai_gateway": "https://developers.cloudflare.com/ai-gateway/reference/pricing/",
+    "access_seats": "https://developers.cloudflare.com/cloudflare-one/team-and-resources/users/seat-management/",
+    "zero_trust_logs": "https://developers.cloudflare.com/cloudflare-one/insights/logs/",
+    "mcp_limits": "https://developers.cloudflare.com/cloudflare-one/account-limits/",
+    "browser_run": "https://developers.cloudflare.com/browser-run/pricing/",
+    "browser_run_limits": "https://developers.cloudflare.com/browser-run/limits/",
+    "vectorize": "https://developers.cloudflare.com/vectorize/platform/pricing/",
+    "worker_traces": "https://developers.cloudflare.com/workers/observability/traces/",
+    "mcp_portals": "https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/mcp-portals/"
+  }
+}

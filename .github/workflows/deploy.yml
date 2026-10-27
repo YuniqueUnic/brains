@@ -1,31 +1,50 @@
 name: Deploy (Cloudflare Workers)
 
-# One-click deploy of the cloudflare-rust profile. Prerequisites (once):
-#   1. Cloudflare API token with Workers/R2/D1 edit permissions, plus the
-#      account id, as repo secrets CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID.
-#   2. Provisioned resources:
-#        pnpm --dir apps/worker exec wrangler r2 bucket create brains-data
-#        pnpm --dir apps/worker exec wrangler d1 create brains-index
-#      …then paste the returned database_id into apps/worker/wrangler.toml.
-#   3. Bootstrap all three instance secrets together with the first deploy:
-#        pnpm exec wrangler deploy --secrets-file /private/path/brains-secrets.json
-#      See docs/runbook.md. `secret put` immediately creates and deploys a version.
-#      Subsequent workflow deploys retain the existing required secrets.
+# Local and Actions deployments share scripts/cloudflare.py; see docs/cloudflare.md.
+# Provision dedicated R2/D1 once and configure the selected GitHub Environment.
+# Bootstrap all three instance secrets together; later deployments retain them.
 on:
   workflow_dispatch:
     inputs:
+      environment:
+        description: "GitHub Environment containing the target vars and secrets"
+        default: production
+        type: environment
       apply_migrations:
         description: "Apply D1 migrations to the remote index first"
         default: true
         type: boolean
 
 concurrency:
-  group: deploy-production
+  group: deploy-${{ inputs.environment }}
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BRAINS_WORKER_NAME: ${{ vars.BRAINS_WORKER_NAME || 'brains' }}
+      BRAINS_R2_BUCKET: ${{ vars.BRAINS_R2_BUCKET || 'brains-data' }}
+      BRAINS_D1_DATABASE: ${{ vars.BRAINS_D1_DATABASE || 'brains-index' }}
+      BRAINS_D1_DATABASE_ID: ${{ vars.BRAINS_D1_DATABASE_ID }}
+      BRAINS_BASE_URL: ${{ vars.BRAINS_BASE_URL }}
+      BRAINS_CUSTOM_DOMAIN: ${{ vars.BRAINS_CUSTOM_DOMAIN }}
+      BRAINS_CUSTOM_DOMAIN_ZONE_ID: ${{ vars.BRAINS_CUSTOM_DOMAIN_ZONE_ID }}
+      VAULT_ID: ${{ vars.VAULT_ID || 'default' }}
+      MAX_TEXT_BYTES: ${{ vars.MAX_TEXT_BYTES || '262144' }}
+      MAX_ATTACHMENT_BYTES: ${{ vars.MAX_ATTACHMENT_BYTES || '8388608' }}
+      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
+      SEMANTIC_SEARCH: ${{ vars.SEMANTIC_SEARCH || 'off' }}
+      BRAINS_APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
+      BRAINS_ADMIN_TOKEN: ${{ secrets.BRAINS_ADMIN_TOKEN }}
+      TOKEN_REGISTRY_JSON: ${{ secrets.TOKEN_REGISTRY_JSON }}
+      SESSION_SIGNING_KEY: ${{ secrets.SESSION_SIGNING_KEY }}
+      CURSOR_SIGNING_KEY: ${{ secrets.CURSOR_SIGNING_KEY }}
     steps:
       - uses: actions/checkout@v7
       - name: Install the repository Rust toolchain
@@ -37,23 +56,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Build web and install Worker build tool
-        run: |
-          pnpm --dir apps/web build
-          cargo install worker-build --locked --version 0.8.7
-      - name: Apply remote D1 migrations
-        if: inputs.apply_migrations
-        working-directory: apps/worker
-        run: pnpm exec wrangler d1 migrations apply BRAINS_INDEX --remote
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Deploy worker (Wrangler builds wasm once)
-        working-directory: apps/worker
-        run: pnpm exec wrangler deploy
-        env:
-          RUSTFLAGS: --cfg getrandom_backend="wasm_js"
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Done
-        run: echo "worker deployed; open the URL from the wrangler output above"
+      - name: Install the Worker build tool
+        run: cargo install worker-build --locked --version 0.8.7
+      - name: Check, migrate, deploy and verify the Worker
+        run: pnpm cloudflare:deploy

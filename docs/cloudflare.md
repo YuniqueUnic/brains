@@ -1,0 +1,113 @@
+# Deploy the existing Brains Worker
+
+Cloudflare runs the Brains Worker API and web app, with R2 for versioned content and D1 for the rebuildable index. The full `bsx` client runs on your machine and connects through a remote profile. Document conversion and URL import run in that client; they do not require a cloud converter.
+
+The deployed core includes file and attachment storage, conditional writes, history, restore/trash, metadata filters, literal/FTS search, and the APIs used by archive, working-copy and sync commands. Semantic retrieval, Workers AI, Vectorize, cloud document conversion and Browser Rendering are not implemented by this Worker. Setting `SEMANTIC_SEARCH=on` does not enable them. See [capabilities](capabilities.md).
+
+## Requirements
+
+- Node.js 22+, Python 3.11+, pnpm and the repository Rust/Wasm toolchain.
+- A Cloudflare account with R2 and D1 enabled. Local deployment can use Wrangler OAuth login or an API token; GitHub Actions requires an API token allowed to deploy Workers and manage the target R2/D1 resources.
+- A dedicated R2 bucket and D1 database for this instance. D1 indexes paths without a vault column: changing `VAULT_ID` does not isolate a shared database.
+- The expected Worker URL, normally `https://<worker>.<account-subdomain>.workers.dev` or your configured custom domain.
+
+Local deployment and GitHub Actions use the same `scripts/cloudflare.py` entry point. It reads the existing Wrangler TOML and generates a temporary deployment config; you do not edit a database ID into tracked files. Node's built-in dotenv loader reads the root `.env`, with inherited environment variables taking precedence.
+
+The Worker configuration enables invocation logs and sampled traces. Request query strings are redacted from these logs. Inspect the Worker logs in the Cloudflare Dashboard when investigating a failure that does not reproduce locally.
+
+## First deployment
+
+From the repository root:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm cloudflare:init
+```
+
+`init` creates the ignored root `.env` from [.env.example](../.env.example), generates an admin token, hashed token registry and two signing keys, and fills the credential placeholders in that file with owner-only permissions. The template remains empty; the initialized `.env` contains the real values. It never prints credentials, rotates existing complete secrets, creates cloud resources or deploys. Retain the same credentials for subsequent deployments. If you supply a custom registry, keep an enabled admin token for verification.
+
+Fill `CLOUDFLARE_ACCOUNT_ID` in `.env`. For local deployment, authenticate Wrangler in your browser, or set `CLOUDFLARE_API_TOKEN` instead. Cloudflare MCP authentication is separate from Wrangler authentication:
+
+```sh
+pnpm cloudflare:wrangler login
+pnpm cloudflare:wrangler whoami
+```
+
+Create the resources once with Wrangler, using your chosen names. The wrapper loads root dotenv credentials before invoking Wrangler; these commands modify the cloud account:
+
+```sh
+pnpm cloudflare:wrangler r2 bucket create brains-data
+pnpm cloudflare:wrangler d1 create brains-index
+```
+
+Fill the returned D1 ID into `BRAINS_D1_DATABASE_ID`, check the resource names, and set `BRAINS_BASE_URL` to the intended instance URL. Resource creation uses the official Wrangler commands rather than a second infrastructure implementation. Existing dedicated resources can be reused by configuring their names and real ID; `local` is rejected.
+
+For a custom domain, set `BRAINS_CUSTOM_DOMAIN` to the hostname and `BRAINS_CUSTOM_DOMAIN_ZONE_ID` to its Cloudflare zone ID, then set `BRAINS_BASE_URL` to that hostname's HTTPS origin. The deployment configuration declares this Worker custom domain and disables `workers.dev` and preview URLs, so later deployments retain the selected public entry point. The zone must belong to the selected account, and the hostname must be available for this Worker. Cloudflare provisions the DNS record and certificate. See [Workers custom domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/).
+
+Install the build tool, then check and deploy:
+
+```sh
+mbx install worker-build --locked --version 0.8.7
+pnpm cloudflare:check
+pnpm cloudflare:deploy
+```
+
+`check` builds the web app and Worker, runs Wrangler's local dry run and the existing isolated Worker smoke suite. It makes no cloud changes. `deploy` performs those same checks, applies remote D1 migrations unless disabled, deploys the checked inputs without rebuilding Rust, then verifies the configured live URL. You can run `deploy` directly; a separate `check` is useful for review before any remote write.
+
+Three app secrets are sent together with the code through `deploy --secrets-file`. Cloudflare management credentials and the plaintext admin token are never included in that file. If all three app secrets are omitted in an update, Wrangler retains the previous values; partial sets are rejected. Do not use the whole root `.env` as a Worker secrets file. [Cloudflare secrets](https://developers.cloudflare.com/workers/configuration/secrets/)
+
+## Configuration
+
+| Input | Purpose |
+| --- | --- |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account that owns this instance and its resources. |
+| `CLOUDFLARE_API_TOKEN` | Deployment credential for GitHub Actions or token-based local deployment. Optional locally when Wrangler is logged in through OAuth; separate from application authentication. |
+| `BRAINS_WORKER_NAME`, `BRAINS_R2_BUCKET` | Worker and existing dedicated R2 bucket names. |
+| `BRAINS_D1_DATABASE`, `BRAINS_D1_DATABASE_ID` | Existing D1 database name and real ID. |
+| `BRAINS_BASE_URL` | Expected instance URL, used for post-deployment verification. |
+| `BRAINS_CUSTOM_DOMAIN`, `BRAINS_CUSTOM_DOMAIN_ZONE_ID` | Optional hostname and its zone ID for a Worker custom domain. Set both when using a custom domain. |
+| `BRAINS_ADMIN_TOKEN` | Private client login token used for authenticated verification; never uploaded as plaintext. |
+| `TOKEN_REGISTRY_JSON` | Worker registry containing token hashes, scopes and enabled flags. |
+| `SESSION_SIGNING_KEY`, `CURSOR_SIGNING_KEY` | Different 32-byte keys, each encoded as 64 hex characters. |
+| `VAULT_ID` | Single vault managed by this instance. |
+| `MAX_TEXT_BYTES` | Text indexing threshold; larger content can still be stored up to the attachment limit. |
+| `MAX_ATTACHMENT_BYTES` | Maximum stored content size. |
+| `ALLOWED_ORIGINS` | Optional comma-separated origins for cross-origin cookie flows; empty means same-origin only. |
+| `SEMANTIC_SEARCH` | `off` records an operator-disabled reason; all values still report semantic retrieval unavailable. |
+| `BRAINS_APPLY_MIGRATIONS` | `true` by default; `false` skips remote migration application. |
+
+There is no `FULL_MODE` or generic Worker `BRAINS_DISABLE` switch. Native compile-time features and server advertisement switches are not Worker runtime controls. Every deployment derives ordinary variables from this configuration, so Dashboard-only changes may be overwritten. [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
+
+## GitHub Actions
+
+Create a GitHub Environment such as `production`, then configure these environment or repository secrets:
+
+```text
+CLOUDFLARE_ACCOUNT_ID
+CLOUDFLARE_API_TOKEN
+BRAINS_ADMIN_TOKEN
+TOKEN_REGISTRY_JSON
+SESSION_SIGNING_KEY
+CURSOR_SIGNING_KEY
+```
+
+Use the values generated by local initialization; do not regenerate them on every run. Set the non-secret inputs from the table as Environment variables. Worker/bucket/database names, vault and size limits have the defaults shown in `.env.example`; D1 ID and base URL must be supplied.
+
+Run **Deploy (Cloudflare Workers)** with the selected GitHub Environment. The workflow remains manually triggered, serializes deployments per environment, and uses the same `pnpm cloudflare:deploy` command as local deployment. It installs the frozen dependencies and pinned Worker build tool. Separate environments need their own Worker, R2, D1 and secrets. [Cloudflare GitHub Actions guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
+
+## Verify and connect bsx
+
+```sh
+pnpm cloudflare:verify
+bsx profile add cloud --url https://<worker>.<account-subdomain>.workers.dev
+# Supply the admin token privately through stdin:
+bsx --profile cloud login --stdin-token
+bsx --profile cloud capabilities
+bsx --profile cloud whoami
+```
+
+Verification checks the web page, health, authenticated runtime capabilities, the expected vault, a real D1 index query and an R2 store listing. Authentication is sent only to the configured origin and redirects are rejected; cloud deployment requires HTTPS. The standalone verifier also permits HTTP loopback for isolated local checks. Verification is read-only and does not claim a write/restore, exact deployed-SHA or production-load test. The isolated smoke suite separately exercises conditional writes, conflicts, search, trash, restore and history.
+
+Deployment does not migrate a local library, change its default profile or synchronize it. Full-history migration is a separate explicit operation: retain a source archive and verify the empty destination and import before switching use. See the [runbook](runbook.md) and [portable workflow](portable-workflow.md).
+
+For an intentional reuse of already-built Worker/Web inputs, the helper accepts `--skip-build`. An alternative dotenv path can be supplied with `--env-file /private/path/.env`; this also makes isolated configuration checks independent of the root `.env`.

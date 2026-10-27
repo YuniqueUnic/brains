@@ -10,7 +10,7 @@ instance, and `bsx capabilities --json` prints it for any profile.
 | Capability | Standalone `bsx` (local profile) | `brains-server` (native, release build) | Docker image | Worker (`cloudflare-rust`) |
 |---|---|---|---|---|
 | Literal search | yes | yes | yes | yes |
-| Full-text search (FTS) | yes (Tantivy-backed, opt-in) | yes (Tantivy-backed, default on) | yes | yes (SQLite FTS5 on D1) |
+| Full-text search (FTS) | yes (Tantivy-backed, default on) | yes (Tantivy-backed, default on) | yes | yes (SQLite FTS5 on D1) |
 | Hybrid ranked search | yes | yes | yes | yes, degraded: semantic explicitly unavailable |
 | Semantic search | declared unavailable (no embedding provider yet) | declared unavailable | declared unavailable | declared unavailable ([roadmap issue](https://github.com/YuniqueUnic/brains/issues/40)) |
 | Document conversion (`bsx convert`) | yes | advertised (conversion runs client-side) | advertised | not advertised (the Worker build has no converter; `bsx convert` still works against it) |
@@ -22,8 +22,8 @@ instance, and `bsx capabilities --json` prints it for any profile.
 
 "Declared" capabilities on servers are an advertisement: the web app and
 agents read them to decide what to offer. `bsx convert` and `bsx import-url`
-always run in the CLI against existing APIs, so the server's declaration is
-the only thing to control.
+always run in the CLI against existing file APIs. Server declarations guide
+clients that read them; they are not an execution or permission gate for CLI conversion.
 
 ## Where a capability comes from
 
@@ -38,7 +38,7 @@ Three layers, in order of authority:
    `BRAINS_DISABLE`, comma-separated) stops *advertising* a capability.
    Only two names are accepted, because only those can be withheld honestly:
    - `document_conversion` — the server only advertises conversion; the
-     CLI performs it, so not advertising it fully disables the flow.
+      CLI performs it independently, so hiding it does not disable CLI conversion.
    - `semantic` — hides the semantic block from hybrid-search clients.
    `semantic_search` is accepted as an alias of `semantic`. Any other name
    (for example `fts`) fails startup: FTS is a compile-time store capability

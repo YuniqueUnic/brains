@@ -28,6 +28,7 @@ brainstore-design
 /compose.override.yaml
 /.env
 /.env.*
+!/.env.example
 /secrets/
 
 # Local runtimes & stores (never commit knowledge data or local state)

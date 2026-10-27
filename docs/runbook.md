@@ -136,6 +136,8 @@ Worker 包含 `build/`（含 shim、JS、Wasm）、`web/dist/`、`migrations/d1/
 
 **2. Cloudflare Worker 部署（`.github/workflows/deploy.yml`）**：首次部署与后续工作流部署分开准备。
 
+推荐入口已统一为根 `.env` 加 `pnpm cloudflare:init`／`cloudflare:check`／`cloudflare:deploy`，本地和 GitHub Actions 共用实现；完整配置、一次性资源准备与验收见 [Cloudflare deployment](cloudflare.md)。下列手动 Wrangler 步骤仍可用于直接操作和排障。
+
 | 前置 | 要求 |
 |---|---|
 | 账号权限 | Cloudflare API token 具有目标账号 Workers/R2/D1 编辑权限，已确认 account ID |
@@ -154,7 +156,7 @@ pnpm --dir apps/worker exec wrangler r2 bucket create brains-data
 pnpm --dir apps/worker exec wrangler d1 create brains-index
 # 将返回的 D1 ID 填入配置，并准备上述私有 secret 文件后：
 pnpm --dir apps/web build
-mbx install worker-build --locked
+mbx install worker-build --locked --version 0.8.7
 pnpm --dir apps/worker exec wrangler d1 migrations apply BRAINS_INDEX --remote
 RUSTFLAGS='--cfg getrandom_backend="wasm_js"' \
   pnpm --dir apps/worker exec wrangler deploy --secrets-file /absolute/private/brains-secrets.json
@@ -177,7 +179,7 @@ bsx --profile home export ./before-cloud.archive --format archive
 bsx --profile cloud import ./before-cloud.archive --format archive --dry-run
 bsx --profile cloud import ./before-cloud.archive --format archive
 bsx --profile home sync --remote-profile cloud verify
-bsx profile use cloud --verify-with local
+bsx profile use cloud --verify-with home
 ```
 
 归档导入会验证全部历史、blob、HEAD 与重建后的索引；目标必须为空或是同一归档的精确历史前缀。`sync verify` 与受验证切主关注当前状态，不能替代 archive 的完整历史验收。切主只在命令与人工读回验收均通过后执行；保留本地源库与迁移归档。更完整的语义和故障恢复见 [可移植工作流](portable-workflow.md)。

@@ -4,6 +4,18 @@ name = "brains"
 main = "build/worker/shim.mjs"
 compatibility_date = "2026-10-07"
 
+[observability]
+enabled = true
+redact_query_string = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.1
+
 [build]
 command = "worker-build --release"
 

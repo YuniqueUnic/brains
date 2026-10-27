@@ -11,6 +11,9 @@ Documentation for the Brains repository, written against the code as it is
 | [editor-search.md](editor-search.md) | Source tags, search commands, and editor width |
 | [releasing.md](releasing.md) | Unified versions and release workflows |
 | [capabilities.md](capabilities.md) | Capability matrix per runtime, compile features, `BRAINS_DISABLE`, how state changes propagate |
+| [cloudflare.md](cloudflare.md) | Existing Worker deployment through shared dotenv/Actions configuration, bootstrap and verification |
+| [cloudflare-ai-plan.md](cloudflare-ai-plan.md) | Proposed cloud conversion, URL import, AI Search, Gateway, MCP and tracing design; pending review |
+| [cloudflare-quotas.md](cloudflare-quotas.md) | Proposed composable resource rules, full Cloudflare quota coverage, configurable model/dimensions and budget admission |
 | [native-release.md](native-release.md) | Release archives: install, `bsx update` self-upgrade, cargo-binstall, first server run |
 | [docker.md](docker.md) | Compose deployment: volumes, users, secrets, HTTPS, capability switches |
 | [turso.md](turso.md) | Native Turso FTS and optional Tantivy: build switches, query syntax, index rebuild |

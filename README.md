@@ -96,6 +96,8 @@ See the [runbook](docs/runbook.md) for server startup, auth, backups and recover
 
 ## Cloudflare local simulation (no cloud account needed)
 
+For a real Cloudflare deployment, use the [dotenv and GitHub Actions deployment guide](docs/cloudflare.md). Local and Actions deployment share one entry point; `bsx` remains the client.
+
 The same axum layer runs as a Worker over R2 (content) + D1 (rebuildable index). `wrangler dev` executes it in a local workerd with simulated R2/D1 — the protocol behavior is the production behavior:
 
 ```bash
