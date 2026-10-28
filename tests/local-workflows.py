@@ -5,9 +5,9 @@ Build brains-cli and brains-server first. Every scenario owns disposable stores,
 profiles and processes; no real user data, credentials or external service is used.
 """
 
-import fcntl
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -100,9 +100,12 @@ class LocalWorkflows(unittest.TestCase):
         self.assertIn(b"Edited", cli("local", "diff", "a.md", "--from", original, "--to", changed))
         self.assertEqual(cli("local", "show", "a.md", "--revision", original), (source / "a.md").read_bytes())
         cli("local", "restore", "a.md", "--revision", original, "--if-revision", changed)
-        editor = self.root / "editor"
-        editor.write_text('#!/bin/sh\nprintf "# Edited locally\\n" > "$1"\n')
-        editor.chmod(0o755)
+        editor = self.root / ("editor.cmd" if os.name == "nt" else "editor")
+        if os.name == "nt":
+            editor.write_bytes(b'@echo off\r\n> "%~1" echo # Edited locally\r\n')
+        else:
+            editor.write_text('#!/bin/sh\nprintf "# Edited locally\\n" > "$1"\n')
+            editor.chmod(0o755)
         cli.env["EDITOR"] = str(editor)
         cli("local", "edit", "b.md", "--if-revision", cli.stat("local", "b.md")["revision"])
         cli("local", "cp", "b.md", "copy.md", "--if-revision", cli.stat("local", "b.md")["revision"])
@@ -120,7 +123,10 @@ class LocalWorkflows(unittest.TestCase):
         destination = self.root / "export"
         cli("local", "export", destination)
         self.assertEqual((destination / "a.md").read_bytes(), (source / "a.md").read_bytes())
-        self.assertTrue((destination / "run.sh").stat().st_mode & 0o111)
+        if os.name == "nt":
+            self.assertEqual((destination / "run.sh").read_bytes(), (source / "run.sh").read_bytes())
+        else:
+            self.assertTrue((destination / "run.sh").stat().st_mode & 0o111)
         self.assertFalse((destination / "raw.bin").exists())
         snapshot = {
             "entries": [{key: item[key] for key in ("path", "generation", "state")}
@@ -195,24 +201,27 @@ class LocalWorkflows(unittest.TestCase):
     def test_waiting_cli_excludes_second_cli_and_server(self):
         """Given a CLI waiting for stdin, aliases cannot bypass its directory lock."""
         cli = self.cli
-        alias = self.root / "alias"
-        alias.symlink_to(self.data, target_is_directory=True)
+        if os.name == "nt":
+            # A path alias without requiring symlink privileges on Windows.
+            alias = self.data / ".." / self.data.name
+        else:
+            alias = self.root / "alias"
+            alias.symlink_to(self.data, target_is_directory=True)
         cli("local", "profile", "add", "alias", "--data-dir", alias)
         writer = subprocess.Popen([str(CLI_BIN), "--profile", "local",
             "put", "held.md", "--create"], env=cli.env,
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
-            with (self.data / ".brains.lock").open("rb") as lock:
-                deadline = time.monotonic() + 10
-                while True:
-                    self.assertIsNone(writer.poll())
-                    try:
-                        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                        fcntl.flock(lock, fcntl.LOCK_UN)
-                    except BlockingIOError:
-                        break
-                    self.assertLess(time.monotonic(), deadline)
-                    time.sleep(0.01)
+            deadline = time.monotonic() + 10
+            while True:
+                self.assertIsNone(writer.poll())
+                probe = subprocess.run([str(CLI_BIN), "--profile", "alias", "ls"],
+                    env=cli.env, capture_output=True, timeout=10)
+                if probe.returncode == 6 and b"in use" in probe.stderr:
+                    break
+                self.assertEqual(probe.returncode, 0, probe.stderr)
+                self.assertLess(time.monotonic(), deadline)
+                time.sleep(0.01)
             cli("alias", "ls", expected=6)
             server = subprocess.run([str(SERVER_BIN),
                 "--data-dir", str(alias), "--no-seed"], capture_output=True, timeout=10)

@@ -52,8 +52,10 @@ impl Config {
         if let Ok(path) = std::env::var("BRAIN_CONFIG") {
             return PathBuf::from(path);
         }
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        PathBuf::from(home).join(".brains").join("config.json")
+        std::env::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".brains")
+            .join("config.json")
     }
 
     pub fn load() -> Result<Self, String> {
@@ -129,6 +131,7 @@ pub(crate) fn write_json_atomic(
         let mut file = options.open(&temporary)?;
         file.write_all(&bytes)?;
         file.sync_all()?;
+        drop(file);
         std::fs::rename(&temporary, path)?;
         #[cfg(unix)]
         std::fs::File::open(parent)?.sync_all()?;

@@ -26,6 +26,11 @@ bin-dir = "brains-{ version }-linux-x64/{ bin }{ binary-ext }"
 pkg-url = "{ repo }/releases/download/v{ version }/brains-{ version }-linux-arm64.{ archive-format }"
 bin-dir = "brains-{ version }-linux-arm64/{ bin }{ binary-ext }"
 
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+pkg-url = "{ repo }/releases/download/v{ version }/brains-{ version }-windows-x64.{ archive-format }"
+bin-dir = "brains-{ version }-windows-x64/{ bin }{ binary-ext }"
+
 [features]
 default = ["fts", "convert"]
 fts = ["brains-local/fts"]

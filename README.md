@@ -165,7 +165,7 @@ bash tests/worker-smoke.sh                                               # again
 | [ci.yml](.github/workflows/ci.yml) | push / PR | fmt · check · clippy `-D warnings` · Rust tests · SDK codegen drift check · wasm check · JS/TS lint · web build · screenplay E2E (native **and** Worker) · workerd business smoke |
 | [pages.yml](.github/workflows/pages.yml) | push / PR / manual | builds the demo and runs 6 browser scenarios; only `main` deploys to Pages. |
 | [release-please.yml](.github/workflows/release-please.yml) | `main` push / manual | one release PR updates all product versions; merging creates the tag and release notes, then dispatches the asset build. See [releasing](docs/releasing.md). |
-| [release.yml](.github/workflows/release.yml) | dispatch from `main`, with an existing release tag as input | builds CLI+server (macOS arm64/x64, Linux musl), web dist and Worker bundle, verifies the tag and uploads assets with SHA-256s. |
+| [release.yml](.github/workflows/release.yml) | dispatch from `main`, with an existing release tag as input | builds CLI+server (macOS arm64/x64, Linux musl, Windows x64), web dist and Worker bundle, verifies the tag and uploads assets with SHA-256s. |
 | [deploy.yml](.github/workflows/deploy.yml) | manual dispatch | builds the Worker and deploys to Cloudflare (`wrangler deploy` + remote D1 migrations). Requires `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` secrets and the one-time provisioning documented in the file header |
 | dependabot | weekly | cargo · npm · actions updates |
 
@@ -175,7 +175,7 @@ bash tests/worker-smoke.sh                                               # again
 
 - local-rust profile: **complete and verified** (P0 + patch/copy/move/diff/export, lifecycle metadata, hybrid search, document conversion, URL import, quality checks, working copy).
 - cloudflare-rust profile: **implemented and verified under local workerd and on isolated Cloudflare resources**, including real R2/D1 operations, conversion, URL import, semantic retrieval and read-only MCP. Production rollout, Access SSO and sustained Free-tier CPU performance remain separate checks; see the [verification record](docs/cloudflare-verification.md).
-- Windows and non-Chromium browsers are untested; no long-running concurrency soak yet.
+- Windows x64 has native CI for CLI/server workflows and ZIP packaging; see [native releases](docs/native-release.md) for NTFS, update and durability requirements. Windows ARM64, Windows service installation and non-Chromium browsers are not covered; no long-running concurrency soak yet.
 
 ## License
 

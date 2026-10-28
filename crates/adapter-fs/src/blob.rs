@@ -30,7 +30,7 @@ impl FsBlobStore {
         if file_name.contains('/') {
             return Err(DomainError::Internal(format!("malformed blob key: {key}")));
         }
-        Ok(self.store.blobs_dir().join(revision).join(file_name))
+        crate::paths::join(&self.store.blobs_dir().join(revision), file_name)
     }
 }
 

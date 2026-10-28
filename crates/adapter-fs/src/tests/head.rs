@@ -134,3 +134,36 @@ async fn cross_task_cas_admits_exactly_one_writer() {
         "exactly one CAS with the same base token may commit"
     );
 }
+
+#[cfg(windows)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn concurrent_case_aliases_cannot_replace_each_other() {
+    for paths in [["notes/A.md", "notes/a.md"], ["Folder/a.md", "folder/b.md"]] {
+        let (_dir, store) = temp_store();
+        let heads = std::sync::Arc::new(FsHeadStore::new(store));
+        let ready = std::sync::Arc::new(std::sync::Barrier::new(2));
+        let mut writers = Vec::new();
+        for path in paths {
+            let heads = heads.clone();
+            let ready = ready.clone();
+            writers.push(tokio::spawn(async move {
+                let key = VaultPath::new(path).unwrap();
+                let head = head_for(path, 1, &HexId::generate());
+                ready.wait();
+                heads.cas(&key, &ExpectedHead::Absent, &head).await
+            }));
+        }
+        let mut committed = 0;
+        for writer in writers {
+            match writer.await.unwrap() {
+                Ok(CasOutcome::Committed) => committed += 1,
+                Err(brains_domain::DomainError::InvalidArgument(_)) => {}
+                outcome => panic!("unexpected alias outcome: {outcome:?}"),
+            }
+        }
+        assert_eq!(committed, 1);
+        let rows = heads.list(None, None, 10).await.unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(paths.contains(&rows[0].head.path.as_str()));
+    }
+}

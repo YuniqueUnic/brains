@@ -109,8 +109,6 @@ fn put_cat_search_rm_exit_code_contract() {
         .args([
             "put",
             "notes/a.md",
-            "--from",
-            "/dev/stdin",
             "--if-revision",
             &rev,
             "--content-type",
@@ -133,8 +131,6 @@ fn put_cat_search_rm_exit_code_contract() {
         .args([
             "put",
             "notes/a.md",
-            "--from",
-            "/dev/stdin",
             "--if-revision",
             &rev,
             "--content-type",
@@ -191,8 +187,6 @@ fn export_produces_a_readable_working_tree() {
                 "--create",
                 "--content-type",
                 "text/markdown",
-                "--from",
-                "/dev/stdin",
             ])
             .stdin(Stdio::piped())
             .spawn()
