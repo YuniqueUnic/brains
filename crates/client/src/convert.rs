@@ -23,11 +23,15 @@ pub struct ConvertReport {
 /// revision or new converter output) writes a NEW revision of the SAME
 /// companion path, never a new path; an unchanged regeneration reports the
 /// existing revision and writes nothing.
-pub async fn convert_attachment<C: DocumentConverter>(
+pub fn convert_attachment<C: DocumentConverter>(
     client: &dyn Library,
     converter: &C,
     path: &str,
     to: Option<&str>,
+    run_conversion: impl FnOnce(
+        &[u8],
+        &str,
+    ) -> brains_domain::DomainResult<brains_ports::ConvertedDocument>,
 ) -> ClientResult<ConvertReport> {
     let invalid = |error: brains_domain::DomainError| ClientError {
         status: 400,
@@ -65,15 +69,12 @@ pub async fn convert_attachment<C: DocumentConverter>(
         Err(ClientError { status: 404, .. }) => None,
         Err(error) => return Err(error),
     };
-    let converted = converter
-        .convert(&bytes, &media)
-        .await
-        .map_err(|error| ClientError {
-            status: 422,
-            code: Some(error.code().into()),
-            message: error.to_string(),
-            current_revision: None,
-        })?;
+    let converted = run_conversion(&bytes, &media).map_err(|error| ClientError {
+        status: 422,
+        code: Some(error.code().into()),
+        message: error.to_string(),
+        current_revision: None,
+    })?;
     if converted.markdown.trim().is_empty() {
         return Err(ClientError::transport(
             "converter returned empty Markdown".into(),

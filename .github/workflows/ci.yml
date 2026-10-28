@@ -171,6 +171,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: windows-x64
+          cache-on-failure: true
       - name: Check and lint native crates
         run: |
           cargo check --locked -p brains-cli -p brains-server --all-targets --all-features

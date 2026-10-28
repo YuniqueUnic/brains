@@ -283,7 +283,7 @@ impl Library for BrainClient {
         let bytes = response
             .bytes()
             .map_err(|e| ClientError::transport(e.to_string()))?;
-        Ok((bytes.to_vec(), etag))
+        Ok((bytes.to_vec(), etag.trim_matches('"').to_owned()))
     }
 
     /// PUT one file's content. The SHA-256 digest is always computed locally

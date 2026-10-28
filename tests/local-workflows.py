@@ -160,6 +160,32 @@ class LocalWorkflows(unittest.TestCase):
         """Given repeated relations, editing a note updates search and replaces old links."""
         exercise_repeated_relations(self.cli, "local")
 
+    def test_local_conversion_keeps_source_and_reuses_companion(self):
+        cli = self.cli
+        original = b"<h1>Local conversion</h1><p>Original content.</p>"
+        cli("local", "put", "document.html", "--create", data=original)
+        cli("local", "convert", "document.html")
+        first = cli.stat("local", "document.html.md")
+        self.assertIn(b"Original content", cli("local", "cat", "document.html.md"))
+        cli("local", "convert", "document.html")
+        self.assertEqual(cli.stat("local", "document.html.md")["revision"], first["revision"])
+        cli.put("local", "document.html", b"<h1>Local conversion</h1><p>Changed content.</p>")
+        cli("local", "convert", "document.html")
+        self.assertEqual(cli.stat("local", "document.html.md")["generation"], 2)
+        self.assertIn(b"Changed content", cli("local", "cat", "document.html.md"))
+
+    def test_native_http_conversion_keeps_blocking_io_outside_converter_runtime(self):
+        cli = self.cli
+        with native_server(self.root, self.data, "default") as (url, token):
+            cli.remote("hosted", url, token)
+            cli("hosted", "put", "sample.html", "--create",
+                data=b"<h1>Remote conversion</h1><p>Original content.</p>")
+            cli("hosted", "convert", "sample.html")
+            first = cli.stat("hosted", "sample.html.md")["revision"]
+            cli("hosted", "convert", "sample.html")
+            self.assertEqual(cli.stat("hosted", "sample.html.md")["revision"], first)
+            self.assertIn(b"Original content", cli("hosted", "cat", "sample.html.md"))
+
     def test_archive_then_collaborate_with_two_servers(self):
         """Given offline history, restore it on A, edit A, then sync local and B."""
         cli = self.cli
