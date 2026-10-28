@@ -132,7 +132,7 @@ impl Library for LocalClient {
             self.vault
                 .read_file(&self.principal, &VaultPath::new(path)?),
         )?;
-        Ok((file.bytes, format!("\"{}\"", file.head.revision)))
+        Ok((file.bytes, file.head.revision.as_str().to_owned()))
     }
     fn put_content(
         &self,

@@ -71,12 +71,12 @@ class WindowsWorkflows(unittest.TestCase):
         signing_key = (self.data / "secret.key").read_bytes()
         with native_server(self.root, self.data, "default", self.server,
                            token=token, register_token=False) as (url, _):
-            cli.remote("server", url, token)
-            self.assertEqual(cli.stat("server", "资料/note.md")["revision"], current)
-            self.assertEqual(cli("server", "show", "资料/note.md", "--revision", first),
+            cli.remote("restarted", url, token)
+            self.assertEqual(cli.stat("restarted", "资料/note.md")["revision"], current)
+            self.assertEqual(cli("restarted", "show", "资料/note.md", "--revision", first),
                              "缓存 first\n".encode())
             hits = [json.loads(line) for line in
-                    cli("server", "search", "second", "--mode", "fts", "--json").splitlines()]
+                    cli("restarted", "search", "second", "--mode", "fts", "--json").splitlines()]
             self.assertEqual(len(hits), 1)
             self.assertEqual(hits[0]["indexed_revision"], current)
         self.assertEqual((self.data / "auth.json").read_bytes(), auth)

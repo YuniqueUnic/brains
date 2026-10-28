@@ -51,6 +51,7 @@ pub trait Library: crate::archive::ArchiveEndpoint {
     fn session(&self) -> ClientResult<Session>;
     fn list_files(&self, query: &brains_application::listing::ListQuery) -> ClientResult<FilePage>;
     fn get_meta(&self, path: &str) -> ClientResult<Entry>;
+    /// Stored bytes and the unquoted revision ID; HTTP ETag syntax stays in transport.
     fn get_raw(&self, path: &str) -> ClientResult<(Vec<u8>, String)>;
     fn put_content(
         &self,

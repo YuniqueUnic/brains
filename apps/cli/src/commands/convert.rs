@@ -13,16 +13,21 @@ pub(crate) fn convert(client: &dyn Library, path: &str, to: Option<&str>) -> Cli
     }
     #[cfg(feature = "convert")]
     {
+        use brains_ports::DocumentConverter;
         // Xberg's async pipeline needs a real tokio context; the rest of the
-        // flow is the synchronous Library API.
+        // Library flow stays outside it, including blocking HTTP operations.
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .map_err(|e| ClientError::transport(e.to_string()))?;
         let converter = brains_adapter_convert::XbergConverter::new();
-        let report = runtime.block_on(brains_client::convert::convert_attachment(
-            client, &converter, path, to,
-        ))?;
+        let report = brains_client::convert::convert_attachment(
+            client,
+            &converter,
+            path,
+            to,
+            |bytes, media| runtime.block_on(converter.convert(bytes, media)),
+        )?;
         print_report(&report);
         Ok(0)
     }
