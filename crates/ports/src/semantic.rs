@@ -26,5 +26,8 @@ pub trait SemanticRetriever: Send + Sync {
         revision: Option<&'a str>,
     ) -> BoxFuture<'a, DomainResult<()>>;
     fn query<'a>(&'a self, text: &'a str) -> BoxFuture<'a, DomainResult<SemanticCandidates>>;
+    /// An explicit whole-vault maintenance request may resume paused work,
+    /// including deletion jobs whose source HEAD has already been purged.
+    fn retry_failed(&self, limit: usize) -> BoxFuture<'_, DomainResult<usize>>;
     fn reconcile(&self) -> BoxFuture<'_, DomainResult<usize>>;
 }

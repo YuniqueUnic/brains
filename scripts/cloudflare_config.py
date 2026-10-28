@@ -23,6 +23,23 @@ def structured_setting(env, name):
 
 
 def compose_services(config, env):
+    if env.get("BRAINS_WORKER_LOG_SAMPLE_RATE"):
+        rate = float(env["BRAINS_WORKER_LOG_SAMPLE_RATE"])
+        if not 0 <= rate <= 1:
+            raise ValueError("BRAINS_WORKER_LOG_SAMPLE_RATE must be between 0 and 1")
+        config.setdefault("observability", {}).setdefault("logs", {})["head_sampling_rate"] = rate
+    for setting, field in (("BRAINS_WORKER_CPU_MS", "cpu_ms"),
+                           ("BRAINS_WORKER_SUBREQUESTS", "subrequests")):
+        if env.get(setting):
+            value = int(env[setting])
+            if value <= 0:
+                raise ValueError(f"{setting} must be a positive integer")
+            config.setdefault("limits", {})[field] = value
+    if env.get("BRAINS_R2_LIST_PAGE_MAX"):
+        pages = int(env["BRAINS_R2_LIST_PAGE_MAX"])
+        if pages <= 0:
+            raise ValueError("BRAINS_R2_LIST_PAGE_MAX must be positive")
+        config["vars"]["R2_LIST_PAGE_MAX"] = str(pages)
     services = structured_setting(env, "BRAINS_CLOUD_CONFIG")
     profile = structured_setting(env, "BRAINS_RESOURCE_PROFILE")
     account = env.get("BRAINS_RESOURCE_ACCOUNT") or env.get("CLOUDFLARE_ACCOUNT_ID")

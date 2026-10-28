@@ -40,6 +40,8 @@ def stop_group(process):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--protocol", choices=("http", "https"), default="http")
+    parser.add_argument("--entrypoint", type=Path,
+                        help="local-only fixture module wrapping the built Worker")
     parser.add_argument(
         "--resource-profile",
         type=Path,
@@ -54,8 +56,10 @@ def main():
     worker = repo / "apps/worker"
     wrangler = worker / "node_modules/wrangler/bin/wrangler.js"
     config = tomllib.loads((worker / "wrangler.toml").read_text())
-    main_file = (worker / config["main"]).resolve()
+    main_file = args.entrypoint.resolve() if args.entrypoint else (worker / config["main"]).resolve()
     assets = (worker / config["assets"]["directory"]).resolve()
+    if args.entrypoint:
+        config["assets"]["run_worker_first"] = True
     if (
         not main_file.is_file()
         or not (assets / "index.html").is_file()

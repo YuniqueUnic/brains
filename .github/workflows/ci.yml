@@ -334,6 +334,8 @@ jobs:
         run: python3 scripts/run-workerd.py -- bash tests/http-sdk/run.sh
       - name: Resource settings and quota recovery
         run: python3 scripts/run-workerd.py -- python3 tests/resource-settings.py
+      - name: Cost amplification and managed-job recovery
+        run: python3 scripts/run-workerd.py --entrypoint tests/fixtures/cloudflare-cost-worker.mjs -- python3 tests/cloudflare-cost-workflows.py
       - uses: actions/download-artifact@v8
         with:
           name: native-full

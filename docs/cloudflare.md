@@ -4,6 +4,8 @@ Cloudflare runs the Brains API and web app, with R2 for versioned content and D1
 
 Core-only deployments retain file storage, conditional writes, history, trash/restore, lexical search, archive and sync. Cloud services are opt-in: a switch alone does not mount a provider or create an index. AI Search uses managed vectors; standalone Vectorize, Browser Run and answer generation are separate extensions. See [capabilities](capabilities.md) and [cloud architecture](cloudflare-ai-plan.md).
 
+Read [cost amplification and controls](cloudflare-cost-safety.md) before enabling background services or increasing invocation/scan limits. The application ledger is not an account-wide spending cap.
+
 ## Requirements
 
 - Node.js 22+, Python 3.11+, pnpm and the repository Rust/Wasm toolchain.
@@ -13,7 +15,7 @@ Core-only deployments retain file storage, conditional writes, history, trash/re
 
 Local deployment and GitHub Actions use the same `scripts/cloudflare.py` entry point. It reads the existing Wrangler TOML and generates a temporary deployment config; you do not edit a database ID into tracked files. Node's built-in dotenv loader reads the root `.env`, with inherited environment variables taking precedence.
 
-The Worker configuration enables invocation logs and sampled traces. Request query strings are redacted from these logs. Inspect the Worker logs in the Cloudflare Dashboard when investigating a failure that does not reproduce locally.
+The Worker configuration samples invocation logs and traces at 0.1 by default, with independent settings. Request query strings are redacted from these logs. Inspect the Worker logs in the Cloudflare Dashboard when investigating a failure that does not reproduce locally.
 
 ## First deployment
 

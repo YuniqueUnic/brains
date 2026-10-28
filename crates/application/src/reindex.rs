@@ -47,6 +47,11 @@ where
             }
         };
         let heads = self.heads.list(None, after.as_deref(), limit).await?;
+        if after.is_none()
+            && let Some(semantic) = &self.semantic
+        {
+            semantic.retry_failed(limit).await?;
+        }
         let mut failed = Vec::new();
         let mut last_path: Option<String> = None;
         for stored in &heads {
