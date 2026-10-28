@@ -301,7 +301,7 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
     let response = router.call(req).await?;
     if let Some(semantic) = semantic.filter(|_| mutated && response.status().is_success()) {
         ctx.wait_until(async move {
-            let _ = semantic.reconcile().await;
+            let _ = semantic.reconcile(semantic.background_work(), 1).await;
         });
     }
     Ok(response)
@@ -321,6 +321,6 @@ async fn scheduled(_event: worker::ScheduledEvent, env: Env, _ctx: worker::Sched
     if let Ok(state) = build_state(&env, security, Vec::new()).await
         && let Some(semantic) = &state.vault.semantic
     {
-        let _ = semantic.reconcile().await;
+        let _ = semantic.reconcile(semantic.background_work(), 1).await;
     }
 }

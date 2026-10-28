@@ -230,17 +230,21 @@ export const demoApi = {
       source: query.source ?? "store", consistency: "per_file",
     };
   },
-  async readRaw(path: string): Promise<{ bytes: Uint8Array; etag: string }> {
+  async readRaw(path: string, signal?: AbortSignal): Promise<{ bytes: Uint8Array; etag: string; mediaType: string }> {
+    signal?.throwIfAborted();
     await latency();
+    signal?.throwIfAborted();
     const top = head(requireLive(path));
-    return { bytes: top.content!.bytes.slice(), etag: top.revision };
+    return { bytes: top.content!.bytes.slice(), etag: top.revision, mediaType: top.content!.media_type };
   },
   async readText(path: string): Promise<{ text: string; etag: string }> {
-    const { bytes, etag } = await this.readRaw(path);
-    return { text: new TextDecoder().decode(bytes), etag };
+    const { bytes, etag, mediaType } = await this.readRaw(path);
+    if (!isTextMedia(mediaType)) throw new ApiError(415, "UNSUPPORTED_MEDIA_TYPE", "The file is not text");
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), etag };
   },
-  async readMeta(path: string): Promise<Entry> {
+  async readMeta(path: string, signal?: AbortSignal): Promise<Entry> {
     await latency();
+    signal?.throwIfAborted();
     return headEntry(path, requireLive(path));
   },
   async saveText(path: string, body: string, precondition: Precondition, _operationId?: string): Promise<MutationResult> {
@@ -262,8 +266,9 @@ export const demoApi = {
     store.delete(path);
     return { path, purged: true, index_state: "ready", operation_id: nextRevision() };
   },
-  async history(path: string, _cursor?: string | null): Promise<HistoryPage> {
+  async history(path: string, _cursor?: string | null, signal?: AbortSignal): Promise<HistoryPage> {
     await latency();
+    signal?.throwIfAborted();
     const file = requireFile(path);
     return {
       items: file.revisions.map((rev) => ({

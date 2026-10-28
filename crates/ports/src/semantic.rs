@@ -15,6 +15,13 @@ pub struct SemanticCandidates {
     pub complete: bool,
 }
 
+/// Background processing can remove stale sources without publishing new ones.
+#[derive(Clone, Copy)]
+pub enum SemanticWork {
+    All,
+    Deletions,
+}
+
 /// Managed retrieval publishes source projections, not precomputed vectors.
 pub trait SemanticRetriever: Send + Sync {
     fn capability(&self) -> SemanticCapability;
@@ -29,5 +36,7 @@ pub trait SemanticRetriever: Send + Sync {
     /// An explicit whole-vault maintenance request may resume paused work,
     /// including deletion jobs whose source HEAD has already been purged.
     fn retry_failed(&self, limit: usize) -> BoxFuture<'_, DomainResult<usize>>;
-    fn reconcile(&self) -> BoxFuture<'_, DomainResult<usize>>;
+    fn background_work(&self) -> SemanticWork;
+    fn reconcile(&self, work: SemanticWork, limit: usize) -> BoxFuture<'_, DomainResult<usize>>;
+    fn states(&self) -> BoxFuture<'_, DomainResult<std::collections::BTreeMap<String, u64>>>;
 }

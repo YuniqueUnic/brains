@@ -84,7 +84,10 @@ def compose_services(config, env):
                 "namespace": env.get("BRAINS_AI_SEARCH_NAMESPACE", "default"),
             }
         ]
+        publication = semantic.get("publication", "automatic")
+        if publication not in ("automatic", "manual"):
+            raise ValueError("semantic.publication must be automatic or manual")
         config["triggers"] = {
-            "crons": [env.get("BRAINS_RECONCILE_CRON", "*/5 * * * *")]
+            "crons": [] if publication == "manual" else [env.get("BRAINS_RECONCILE_CRON", "*/5 * * * *")]
         }
     config["vars"]["BRAINS_CLOUD_CONFIG"] = json.dumps(services, separators=(",", ":"))

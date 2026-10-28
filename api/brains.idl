@@ -404,6 +404,15 @@ struct ReindexPage {
     @optional string next_cursor;
 };
 
+// One bounded operator action; zero only reports current queue states.
+struct SemanticReconcileRequest {
+    @optional int64 limit;
+};
+struct SemanticReconcileResult {
+    int64 processed;
+    map<string, uint64> states;
+};
+
 struct Session {
     string actor;
     sequence<string> scopes;
@@ -808,6 +817,10 @@ interface Files {
     ReindexPage reindex(
         @flatten in ReindexRequest body
     ) raises(BadRequest, Forbidden, ServiceUnavailable, Internal, QuotaExceeded);
+
+    @post(path = "/maintenance/semantic/reconcile")
+    SemanticReconcileResult reconcile_semantic(@flatten in SemanticReconcileRequest body)
+        raises(BadRequest, Forbidden, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
 
     // Reserved server-side consistency check; answers 501 until delivered
     // (design §22.5).

@@ -10,6 +10,12 @@ import type { brains } from "../../../../sdk/typescript/brains";
 export type Precondition =
   { mode: "create" } | { mode: "update"; baseRevision: string };
 
+export interface FileSnapshot {
+  bytes: Uint8Array;
+  etag: string;
+  mediaType: string;
+}
+
 export interface Entry {
   path: string;
   revision: string;
@@ -337,30 +343,34 @@ const httpApi = {
     });
   },
 
-  async readRaw(path: string): Promise<{ bytes: Uint8Array; etag: string }> {
+  async readRaw(path: string, signal?: AbortSignal): Promise<FileSnapshot> {
     const response = await fetch(
       `/api/v1/file?path=${encodeURIComponent(path)}`,
       {
         credentials: "same-origin",
+        signal,
       },
     );
     if (!response.ok) throw await errorFrom(response);
     const etag = response.headers.get("ETag") ?? "";
+    const mediaType = response.headers.get("X-Brain-Media-Type") ?? "application/octet-stream";
     return {
       bytes: new Uint8Array(await response.arrayBuffer()),
       etag: etag.replace(/"/g, ""),
+      mediaType,
     };
   },
 
   async readText(path: string): Promise<{ text: string; etag: string }> {
-    const { bytes, etag } = await this.readRaw(path);
-    return { text: new TextDecoder().decode(bytes), etag };
+    const { bytes, etag, mediaType } = await this.readRaw(path);
+    if (!isTextMedia(mediaType)) throw new ApiError(415, "UNSUPPORTED_MEDIA_TYPE", "The file is not text");
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), etag };
   },
 
-  async readMeta(path: string): Promise<Entry> {
+  async readMeta(path: string, signal?: AbortSignal): Promise<Entry> {
     return request<Entry>(
       `/file?path=${encodeURIComponent(path)}&format=meta`,
-      {},
+      { signal },
     );
   },
 
@@ -447,10 +457,10 @@ const httpApi = {
     });
   },
 
-  async history(path: string, cursor?: string | null): Promise<HistoryPage> {
+  async history(path: string, cursor?: string | null, signal?: AbortSignal): Promise<HistoryPage> {
     const params = new URLSearchParams({ path });
     if (cursor) params.set("cursor", cursor);
-    return request<HistoryPage>(`/revisions?${params}`, {});
+    return request<HistoryPage>(`/revisions?${params}`, { signal });
   },
 
   async readRevisionText(path: string, revision: string): Promise<string> {

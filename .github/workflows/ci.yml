@@ -96,7 +96,9 @@ jobs:
           pnpm mcp:check
           pnpm --filter brains-mcp build
       - name: Resource ledger business checks
-        run: python3 tests/cloudflare-resources.py
+        run: |
+          python3 tests/cloudflare-resources.py
+          python3 tests/cloudflare-usage.py
       - name: Typecheck e2e suite
         run: pnpm --dir tests/e2e exec tsc --noEmit
 

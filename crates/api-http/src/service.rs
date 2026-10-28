@@ -24,6 +24,7 @@ mod dto;
 mod error;
 mod files;
 mod resources;
+mod semantic;
 mod session;
 mod transfer;
 

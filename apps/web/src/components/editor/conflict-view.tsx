@@ -125,7 +125,11 @@ export function ConflictView({
       if (!stillMine()) return;
       clearDraft(state.path);
       invalidatePreview(state.path);
-      onChange(freshEditorState(state.path, localText, result.revision));
+      const buffered = stateRef.current.kind === "conflict" ? stateRef.current.localText : localText;
+      onChange(buffered === localText ? freshEditorState(state.path, localText, result.revision) : {
+        kind: "dirty", path: state.path, text: buffered,
+        baseText: localText, baseRevision: result.revision,
+      });
     } catch (error) {
       if (!stillMine()) return;
       if (error instanceof ApiError && error.status === 401) {
@@ -133,26 +137,31 @@ export function ConflictView({
         return;
       }
       if (error instanceof ApiError && error.status === 412) {
-        const nextRevision = error.currentRevision ?? state.remoteRevision;
+        let remoteRevision = "(unknown)";
         let remoteText = state.remoteText;
         let notice: string | undefined;
         try {
-          remoteText = (await api.readText(state.path)).text;
+          const snapshot = await api.readText(state.path);
+          remoteText = snapshot.text;
+          remoteRevision = snapshot.etag || "(unknown)";
         } catch {
-          // Never pair a NEW revision with the STALE text the human compared:
-          // keep the old pair together and say why (design §13.2).
+          // A failed read cannot authorize replacing the local draft.
           notice = t("conflictReReadFailed");
         }
+        const latest = stateRef.current;
+        if (!stillMine() || latest.kind !== "conflict") return;
         onChange({
-          ...state,
-          remoteRevision: notice ? state.remoteRevision : nextRevision,
+          ...latest,
+          remoteRevision,
           remoteText,
           notice,
         });
         return;
       }
+      const latest = stateRef.current;
+      if (latest.kind !== "conflict") return;
       onChange({
-        ...state,
+        ...latest,
         notice: error instanceof Error ? error.message : String(error),
       });
     }

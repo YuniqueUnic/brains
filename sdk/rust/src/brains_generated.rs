@@ -556,6 +556,18 @@ pub mod brains {
     }
     impl ReindexPage {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct SemanticReconcileRequest {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub limit: Option<i64>,
+    }
+    impl SemanticReconcileRequest {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct SemanticReconcileResult {
+        pub processed: i64,
+        pub states: ::std::collections::BTreeMap<String, u64>,
+    }
+    impl SemanticReconcileResult {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct Session {
         pub actor: String,
         pub scopes: Vec<String>,
@@ -1651,6 +1663,44 @@ pub mod brains {
         }
     }
     impl From<xidl_rust_axum::Error> for FilesReindexError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    /// Typed error channel for `reconcile_semantic`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum FilesReconcileSemanticError {
+        BadRequest(BadRequest),
+        Forbidden(Forbidden),
+        NotImplemented(NotImplemented),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for FilesReconcileSemanticError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for FilesReconcileSemanticError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for FilesReconcileSemanticError {
         fn from(err: xidl_rust_axum::Error) -> Self {
             Self::Framework(err)
         }
@@ -3414,6 +3464,46 @@ pub mod brains {
                     accepted_inputs: value
                         .accepted_inputs
                         .map(|value| value.into_iter().collect()),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticReconcileRequest {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub limit: Option<i64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticReconcileRequest> for brains_SemanticReconcileRequest {
+            fn from(value: super::SemanticReconcileRequest) -> Self {
+                Self { limit: value.limit }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticReconcileRequest> for super::SemanticReconcileRequest {
+            fn from(value: brains_SemanticReconcileRequest) -> Self {
+                Self { limit: value.limit }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticReconcileResult {
+            pub processed: i64,
+            pub states: ::std::collections::BTreeMap<String, u64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticReconcileResult> for brains_SemanticReconcileResult {
+            fn from(value: super::SemanticReconcileResult) -> Self {
+                Self {
+                    processed: value.processed,
+                    states: value.states.into_iter().collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticReconcileResult> for super::SemanticReconcileResult {
+            fn from(value: brains_SemanticReconcileResult) -> Self {
+                Self {
+                    processed: value.processed,
+                    states: value.states.into_iter().collect(),
                 }
             }
         }
@@ -5348,6 +5438,46 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticReconcileRequest {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub limit: Option<i64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticReconcileRequest> for brains_SemanticReconcileRequest {
+            fn from(value: super::SemanticReconcileRequest) -> Self {
+                Self { limit: value.limit }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticReconcileRequest> for super::SemanticReconcileRequest {
+            fn from(value: brains_SemanticReconcileRequest) -> Self {
+                Self { limit: value.limit }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticReconcileResult {
+            pub processed: i64,
+            pub states: ::std::collections::BTreeMap<String, u64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticReconcileResult> for brains_SemanticReconcileResult {
+            fn from(value: super::SemanticReconcileResult) -> Self {
+                Self {
+                    processed: value.processed,
+                    states: value.states.into_iter().collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticReconcileResult> for super::SemanticReconcileResult {
+            fn from(value: brains_SemanticReconcileResult) -> Self {
+                Self {
+                    processed: value.processed,
+                    states: value.states.into_iter().collect(),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_SourceRef {
             pub id: String,
             #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -5721,6 +5851,8 @@ pub mod brains {
         to: String,
     }
     pub type FilesReindexRequestOutBody = __xidl_out_Files::brains_ReindexRequest;
+    pub type FilesReconcileSemanticRequestOutBody =
+        __xidl_out_Files::brains_SemanticReconcileRequest;
     pub struct FilesClient {
         client: ::xidl_rust_axum::Client,
     }
@@ -9220,6 +9352,127 @@ pub mod brains {
                 }
                 let body = resp.json::<xidl_rust_axum::ErrorBody>().await.ok();
                 Err(FilesReindexError::Framework(
+                    xidl_rust_axum::Error::from_http_response(status, body),
+                ))
+            }
+        }
+        #[allow(
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            unused_variables
+        )]
+        pub async fn reconcile_semantic(
+            &self,
+            body: SemanticReconcileRequest,
+        ) -> Result<SemanticReconcileResult, FilesReconcileSemanticError> {
+            let xidl_path = "/maintenance/semantic/reconcile".to_string();
+            let mut req = self
+                .client
+                .http()
+                .request(
+                    xidl_rust_axum::reqwest::Method::POST,
+                    self.client.url(&xidl_path),
+                )
+                .build()
+                .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+            req.headers_mut().insert(
+                xidl_rust_axum::reqwest::header::ACCEPT,
+                xidl_rust_axum::reqwest::header::HeaderValue::from_str("application/json")
+                    .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?,
+            );
+            let auth_target = &self.client;
+            let _ = auth_target;
+            let body: __xidl_out_Files::brains_SemanticReconcileRequest = body.into();
+            let body = xidl_rust_axum::SerializeFactory::new("application/json").to_vec(&body)?;
+            req.headers_mut().insert(
+                xidl_rust_axum::reqwest::header::CONTENT_TYPE,
+                xidl_rust_axum::reqwest::header::HeaderValue::from_str("application/json")
+                    .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?,
+            );
+            *req.body_mut() = Some(xidl_rust_axum::reqwest::Body::from(body));
+            let resp = self
+                .client
+                .http()
+                .execute(req)
+                .await
+                .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+            if resp.status().is_success() {
+                let body = resp
+                    .bytes()
+                    .await
+                    .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+                let body: __xidl_in_Files::brains_SemanticReconcileResult =
+                    xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&body)?;
+                Ok(body.into())
+            } else {
+                let status = resp.status();
+                if status.as_u16() == 400 {
+                    let headers = resp.headers().clone();
+                    let mut value: BadRequest = resp.json::<BadRequest>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception BadRequest body: {err}"),
+                        )
+                    })?;
+                    return Err(FilesReconcileSemanticError::BadRequest(value));
+                }
+                if status.as_u16() == 403 {
+                    let headers = resp.headers().clone();
+                    let mut value: Forbidden = resp.json::<Forbidden>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception Forbidden body: {err}"),
+                        )
+                    })?;
+                    return Err(FilesReconcileSemanticError::Forbidden(value));
+                }
+                if status.as_u16() == 501 {
+                    let headers = resp.headers().clone();
+                    let mut value: NotImplemented =
+                        resp.json::<NotImplemented>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception NotImplemented body: {err}"),
+                            )
+                        })?;
+                    return Err(FilesReconcileSemanticError::NotImplemented(value));
+                }
+                if status.as_u16() == 503 {
+                    let headers = resp.headers().clone();
+                    let mut value: ServiceUnavailable =
+                        resp.json::<ServiceUnavailable>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception ServiceUnavailable body: {err}"),
+                            )
+                        })?;
+                    return Err(FilesReconcileSemanticError::ServiceUnavailable(value));
+                }
+                if status.as_u16() == 500 {
+                    let headers = resp.headers().clone();
+                    let mut value: Internal = resp.json::<Internal>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception Internal body: {err}"),
+                        )
+                    })?;
+                    return Err(FilesReconcileSemanticError::Internal(value));
+                }
+                if status.as_u16() == 429 {
+                    let headers = resp.headers().clone();
+                    let mut value: QuotaExceeded =
+                        resp.json::<QuotaExceeded>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception QuotaExceeded body: {err}"),
+                            )
+                        })?;
+                    return Err(FilesReconcileSemanticError::QuotaExceeded(value));
+                }
+                let body = resp.json::<xidl_rust_axum::ErrorBody>().await.ok();
+                Err(FilesReconcileSemanticError::Framework(
                     xidl_rust_axum::Error::from_http_response(status, body),
                 ))
             }

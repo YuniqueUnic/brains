@@ -1683,6 +1683,36 @@
         ],
         "type": "object"
       },
+      "brains.SemanticReconcileRequest": {
+        "properties": {
+          "limit": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "brains.SemanticReconcileResult": {
+        "properties": {
+          "processed": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "states": {
+            "additionalProperties": {
+              "format": "int64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "object"
+          }
+        },
+        "required": [
+          "processed",
+          "states"
+        ],
+        "type": "object"
+      },
       "brains.ServiceUnavailable": {
         "properties": {
           "error": {
@@ -4049,6 +4079,96 @@
               }
             },
             "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Files"
+        ]
+      }
+    },
+    "/maintenance/semantic/reconcile": {
+      "post": {
+        "operationId": "brains.Files.reconcile_semantic",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/brains.SemanticReconcileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.SemanticReconcileResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.BadRequest"
+                }
+              }
+            },
+            "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Internal"
+                }
+              }
+            },
+            "description": "Error: Internal"
+          },
+          "501": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.NotImplemented"
+                }
+              }
+            },
+            "description": "Error: NotImplemented"
           },
           "503": {
             "content": {

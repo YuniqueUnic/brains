@@ -120,6 +120,38 @@ assert not any(item["key"] == "p1/" + created["revision"] + ".md" for item in cl
 request("GET", route("cost/remove.md"), expected=404)
 print("purged-source cleanup failure pauses, then explicit bounded retry deletes the provider object", flush=True)
 
+# Manual mode queues current sources and cleans removals without publishing.
+control("publication", {"mode": "manual"})
+before = control()
+manual = put("manual/current.md", "# Manual source\nUpload only on explicit maintenance.")
+assert control()["calls"]["upload"] == before["calls"]["upload"]
+assert states(control("tick"), "manual/current.md") == ["pending"]
+report = request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 0})[0]
+assert report["processed"] == 0 and report["states"]["pending"] == 1
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 3}, expected=400)
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 1}, authenticated=False, expected=401)
+control("arm")
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 2})
+assert control()["calls"]["upload"] == before["calls"]["upload"] + 1
+control("arm")
+ready = request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 2})[0]
+assert ready["states"]["ready"] >= 1
+assert states(control(), "manual/current.md") == ["ready"]
+# A delayed deletion meeting the live source is requeued, never uploaded.
+control("invalidate-live", {"path": "manual/current.md"})
+before = control()
+after = control("tick")
+assert states(after, "manual/current.md") == ["pending"]
+assert before["calls"] == after["calls"]
+updated = request("PUT", route("manual/current.md"), b"Updated manual source",
+                  {"Content-Type": "text/markdown", "If-Match": '\"' + manual["revision"] + '\"'})[0]
+assert control()["calls"]["upload"] == before["calls"]["upload"]
+assert sorted(states(control(), "manual/current.md")) == ["deleted", "pending"]
+request("DELETE", route("manual/current.md"), headers={"If-Match": '\"' + updated["revision"] + '\"'})
+assert states(control("tick"), "manual/current.md") == ["deleted", "deleted"]
+control("publication", {"mode": "automatic"})
+print("manual publication: bounded explicit refresh, read-only progress, no automatic upload, deletion-only cleanup", flush=True)
+
 for start in range(0, 1001, 50):
     control("seed-scan", {"start": start, "count": min(50, 1001 - start)})
 before = control()

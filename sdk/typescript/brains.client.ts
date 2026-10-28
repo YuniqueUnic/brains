@@ -627,6 +627,32 @@ import {
             return ifaceSchemas.models.brains.ReindexPageSchema.parse(deserialize(responseBody, ifaceSchemas.models.brains.ReindexPageSchema)) as types.brains.ReindexPage;
         }
 
+                async reconcile_semantic(body: types.brains.SemanticReconcileRequest): Promise<types.brains.SemanticReconcileResult> {
+                    const parsed = ifaceSchemas.brains.FilesReconcileSemanticRequestSchema.parse({ "body": body });
+                    let xidlPath = "/maintenance/semantic/reconcile";
+                    const query = new URLSearchParams();
+                    const headers = new Headers(this.defaultHeaders);
+                    const cookies: string[] = [];
+                    applyCookies(headers, cookies);
+                    applyClientAuth(xidlPath, query, headers, this.auth, []);
+                    const queryString = query.toString();
+                    if (queryString.length > 0) {
+                        xidlPath = `${xidlPath}?${queryString}`;
+                    }
+                    const url = joinUrl(this.baseUrl, xidlPath);
+                    const xidlBody = parsed["body"];
+            headers.set("Content-Type", "application/json");
+
+            headers.set("Accept", "application/json");
+            const resp = await this.fetchImpl(url, { method: "POST", headers, body: encodeRequestBody(xidlBody, "application/json", this.codecs, ifaceSchemas.models.brains.SemanticReconcileRequestSchema) });
+            if (!resp.ok) {
+                await this.throwReconcileSemanticError(resp);
+
+            }
+            const responseBody = await decodeOptionalResponseBody(resp, "application/json", this.codecs);
+            return ifaceSchemas.models.brains.SemanticReconcileResultSchema.parse(deserialize(responseBody, ifaceSchemas.models.brains.SemanticReconcileResultSchema)) as types.brains.SemanticReconcileResult;
+        }
+
                 async validate(): Promise<void> {
                     let xidlPath = "/maintenance/validate";
                     const query = new URLSearchParams();
@@ -2445,6 +2471,77 @@ import {
                     if (!decoded.success) throw await parseXidlError(resp);
                     const body = decoded.data;
                     throw new $xidlErrors.Forbidden({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 503) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.ServiceUnavailable({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 500) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Internal({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 429) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.QuotaExceeded({
+                        "error": body["error"] as never,
+                        });
+                }
+                throw await parseXidlError(resp);
+            }
+
+            async throwReconcileSemanticError(resp: Response): Promise<never> {
+                const status = resp.status;
+                if (status === 400) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.BadRequest({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 403) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.Forbidden({
+                        "error": body["error"] as never,
+                        });
+                }
+                if (status === 501) {
+                    const bodySchema = z.object({ "error": ifaceSchemas.models.brains.ErrorDetailSchema,  });
+                    const rawBody = await resp.clone().json().catch(() => undefined);
+                    if (rawBody == null || rawBody["error"] === undefined) throw await parseXidlError(resp);
+                    const decoded = bodySchema.safeParse(deserialize(rawBody, bodySchema));
+                    if (!decoded.success) throw await parseXidlError(resp);
+                    const body = decoded.data;
+                    throw new $xidlErrors.NotImplemented({
                         "error": body["error"] as never,
                         });
                 }

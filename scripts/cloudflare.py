@@ -19,6 +19,8 @@ from cloudflare_mcp import initialize_mcp, deploy_mcp
 from cloudflare_setup import provision
 from cloudflare_actions import configure as configure_actions
 from cloudflare_credentials import sync_admin_token
+from cloudflare_usage import synchronize as synchronize_usage
+from cloudflare_search import refresh as refresh_search
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -433,6 +435,8 @@ def main():
             "types",
             "github-configure",
             "sync-admin-token",
+            "usage",
+            "refresh-search",
         ),
     )
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
@@ -441,6 +445,12 @@ def main():
     parser.add_argument(
         "--skip-build", action="store_true", help="use already built Worker/Web assets"
     )
+    parser.add_argument("--apply", action="store_true", help="apply an explicit D1 usage calibration")
+    parser.add_argument("--snapshot", type=Path, help="fresh provider observation JSON, for Analytics-read via another authorized tool")
+    parser.add_argument("--receipt", type=Path, help="private calibration receipt path (new file)")
+    parser.add_argument("--max-pages", type=int, default=64, help="semantic refresh source page bound")
+    parser.add_argument("--max-steps", type=int, default=120, help="semantic reconciliation request bound")
+    parser.add_argument("--timeout", type=int, default=900, help="semantic refresh time bound in seconds")
     args, extra = parser.parse_known_args()
     if extra and args.command != "wrangler":
         parser.error("unrecognized arguments: " + " ".join(extra))
@@ -458,6 +468,11 @@ def main():
             configure_actions(env, args.github_repository, args.github_environment)
         elif args.command == "types":
             binding_types(env)
+        elif args.command == "refresh-search":
+            refresh_search(base_url(env), env["BRAINS_ADMIN_TOKEN"], urllib.request.build_opener(NoRedirect()),
+                           max_pages=args.max_pages, max_steps=args.max_steps, timeout=args.timeout)
+        elif args.command == "usage":
+            synchronize_usage(env, apply=args.apply, snapshot_file=args.snapshot, receipt=args.receipt)
         elif args.command == "provision":
             provision(env)
         elif args.command == "mcp-init":

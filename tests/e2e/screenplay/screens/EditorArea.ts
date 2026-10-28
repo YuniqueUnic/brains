@@ -14,6 +14,8 @@ export const EditorArea = {
     PageElement.located(By.css(".cm-content")).describedAs("editor content"),
   trashCurrentButton: () =>
     PageElement.located(By.css('[data-testid="trash-current"]')).describedAs("trash current button"),
+  historyToggle: () =>
+    PageElement.located(By.css('[data-testid="history-toggle"]')).describedAs("expand revision history"),
   historyList: () =>
     PageElement.located(By.css('[data-testid="history-list"]')).describedAs("history list"),
   restoreRevisionButtons: () =>

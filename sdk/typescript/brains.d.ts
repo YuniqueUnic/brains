@@ -349,6 +349,13 @@ export namespace brains {
         failed: Array<ReindexFailure>;
         next_cursor?: string;
     }
+    export interface SemanticReconcileRequest {
+        limit?: number;
+    }
+    export interface SemanticReconcileResult {
+        processed: number;
+        states: Record<string, number>;
+    }
     export interface Session {
         actor: string;
         scopes: Array<string>;

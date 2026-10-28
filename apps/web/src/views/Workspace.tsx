@@ -207,40 +207,30 @@ export default function Workspace({
   // ---- Open / guard ------------------------------------------------------
 
   const openRunRef = useRef(0);
+  const openControllerRef = useRef<AbortController | null>(null);
+  useEffect(() => () => openControllerRef.current?.abort(), []);
   const openFile = useCallback(async (path: string) => {
     const runId = openRunRef.current + 1;
     openRunRef.current = runId;
-    const stale = () => openRunRef.current !== runId;
+    openControllerRef.current?.abort();
+    const controller = new AbortController();
+    openControllerRef.current = controller;
+    const stale = () => openRunRef.current !== runId || controller.signal.aborted;
     setSelected(new Set([path]));
     setEditor({ kind: "loading", path });
     try {
       // Text-only editor: refuse binary media instead of decoding bytes into
       // mojibake that a later save would corrupt (design §13.3).
-      const meta = await api.readMeta(path);
+      const snapshot = await api.readRaw(path, controller.signal);
       if (stale()) return;
-      if (!isTextMedia(meta.media_type)) {
-        setBanner(t("bannerBinary", { path, mediaType: meta.media_type }));
+      if (!isTextMedia(snapshot.mediaType)) {
+        setBanner(t("bannerBinary", { path, mediaType: snapshot.mediaType }));
         setEditor({ kind: "empty" });
         return;
       }
-      const { text, etag } = await api.readText(path);
-      if (stale()) return;
-      // The two calls are separate: if the file moved between them, reopen
-      // once against the truth.
-      const latest = await api.readMeta(path);
-      if (stale()) return;
-      if (latest.revision !== etag) {
-        if (!isTextMedia(latest.media_type)) {
-          setBanner(t("bannerReplacedBinary", { path }));
-          setEditor({ kind: "empty" });
-          return;
-        }
-        const fresh = await api.readText(path);
-        if (stale()) return;
-        setEditor({ kind: "clean", path, text: fresh.text, baseText: fresh.text, baseRevision: fresh.etag });
-        return;
-      }
-      setEditor({ kind: "clean", path, text, baseText: text, baseRevision: etag });
+      // The body, media type and revision belong to the same immutable snapshot.
+      const text = new TextDecoder("utf-8", { fatal: true }).decode(snapshot.bytes);
+      setEditor({ kind: "clean", path, text, baseText: text, baseRevision: snapshot.etag });
     } catch (error) {
       if (stale()) return;
       if (error instanceof ApiError && error.status === 410) {
@@ -261,6 +251,7 @@ export default function Workspace({
         if (!isFileOpen(path)) void openFile(path);
       } else {
         openRunRef.current += 1;
+        openControllerRef.current?.abort();
         changeEditor({ kind: "empty" });
         setSelected(new Set());
       }
@@ -482,15 +473,15 @@ export default function Workspace({
   }, [closeProperties, isMobile, mobileTab, setMobileTab, mode, activeEditorPath]);
 
   const restoreRevision = (path: string, revision: string, baseRevision: string) => {
-    if (editorRef.current.kind !== "clean") {
+    const original = editorRef.current;
+    if (original.kind !== "clean") {
       setBanner(t("blockedRestore"));
       return;
     }
     void (async () => {
       try {
         await api.restore(path, revision, baseRevision);
-        const { text, etag } = await api.readText(path);
-        setEditor({ kind: "clean", path, text, baseText: text, baseRevision: etag });
+        if (editorRef.current === original) await openFile(path);
         // Success confirmation rides the toast channel; banner stays for
         // blocking/system-level states only.
         toast.success(t("bannerRestoredShort"));
@@ -747,7 +738,7 @@ export default function Workspace({
             name={t("mobileTabs")}
             files={sidebarPane}
             editor={mainPane}
-            info={propertiesPane}
+            info={mobileTab === "info" ? propertiesPane : null}
           />
         </div>
       ) : (

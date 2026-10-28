@@ -6,6 +6,7 @@ const items = new Map();
 const calls = { upload: 0, info: 0, list: 0, delete: 0 };
 let nextStatus = "queued";
 let deleteFails = false;
+let publication = "automatic";
 
 function testEnv(env) {
   const provider = {
@@ -37,7 +38,7 @@ function testEnv(env) {
   };
   return {
     ...env, SEMANTIC_SEARCH: "on", R2_LIST_PAGE_MAX: "1",
-    BRAINS_CLOUD_CONFIG: JSON.stringify({ semantic: { instance: "local-cost-fixture" } }),
+    BRAINS_CLOUD_CONFIG: JSON.stringify({ semantic: { instance: "local-cost-fixture", publication } }),
     AI_SEARCH: { get: () => provider },
   };
 }
@@ -73,6 +74,11 @@ export default {
       await env.BRAINS_INDEX.exec("ALTER TABLE resource_settings RENAME TO resource_settings_offline");
     } else if (path === "/_cost/settings-online") {
       await env.BRAINS_INDEX.exec("ALTER TABLE resource_settings_offline RENAME TO resource_settings");
+    } else if (path === "/_cost/publication") {
+      publication = (await request.json()).mode;
+    } else if (path === "/_cost/invalidate-live") {
+      const { path: source } = await request.json();
+      await env.BRAINS_INDEX.prepare("UPDATE semantic_items SET state='deleting',updated_at=0 WHERE path=?1 AND state='ready'").bind(source).run();
     } else if (path === "/_cost/provider") {
       const config = await request.json();
       if (config.status) nextStatus = config.status;
