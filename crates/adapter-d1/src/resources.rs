@@ -17,6 +17,26 @@ impl D1UsageStore {
 }
 
 impl UsageStore for D1UsageStore {
+    fn latest_period_end<'a>(
+        &'a self,
+        rules: &'a [String],
+    ) -> BoxFuture<'a, DomainResult<Option<i64>>> {
+        Box::pin(SendFuture::new(async move {
+            #[derive(serde::Deserialize)]
+            struct Row {
+                end: Option<i64>,
+            }
+            let json =
+                serde_json::to_string(rules).map_err(|e| DomainError::Internal(e.to_string()))?;
+            let rows: Vec<Row> = query_rows(
+                &self.db,
+                "accounted period boundary",
+                "SELECT MAX(reset_at) AS \"end\" FROM resource_usage WHERE rule IN (SELECT value FROM json_each(?1)) AND (consumed>0 OR reserved>0)",
+                &[JsValue::from_str(&json)],
+            ).await?;
+            Ok(rows.first().and_then(|r| r.end))
+        }))
+    }
     fn accounting_bounds(&self) -> (u64, u64) {
         (64, 32)
     }

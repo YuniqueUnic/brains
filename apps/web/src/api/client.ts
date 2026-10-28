@@ -7,7 +7,8 @@ import type { brains } from "../../../../sdk/typescript/brains";
  * explicit revision precondition; nothing reads-and-overwrites silently.
  */
 
-export type Precondition = { mode: "create" } | { mode: "update"; baseRevision: string };
+export type Precondition =
+  { mode: "create" } | { mode: "update"; baseRevision: string };
 
 export interface Entry {
   path: string;
@@ -34,7 +35,12 @@ export interface NoteMeta {
   stale_after?: string;
   generated?: { by: string; at?: string };
   verified: { by: string; at?: string }[];
-  sources: { id: string; resource?: string; title?: string; last_modified?: string }[];
+  sources: {
+    id: string;
+    resource?: string;
+    title?: string;
+    last_modified?: string;
+  }[];
 }
 
 export interface MutationResult extends Entry {
@@ -57,7 +63,12 @@ export interface RevisionDto {
   action: "put" | "trash" | "restore" | "copy";
   actor?: string;
   created_at: string;
-  content?: { size: number; sha256: string; media_type: string; executable: boolean };
+  content?: {
+    size: number;
+    sha256: string;
+    media_type: string;
+    executable: boolean;
+  };
   restores_revision?: string;
   commit_state?: "reachable" | "unknown";
 }
@@ -114,7 +125,12 @@ export class ApiError extends Error {
   readonly status: number;
   readonly code: string;
   readonly currentRevision?: string;
-  constructor(status: number, code: string, message: string, currentRevision?: string) {
+  constructor(
+    status: number,
+    code: string,
+    message: string,
+    currentRevision?: string,
+  ) {
     super(message);
     this.status = status;
     this.code = code;
@@ -139,7 +155,11 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
   if (csrfToken && method !== "GET" && method !== "HEAD") {
     headers.set("X-CSRF-Token", csrfToken);
   }
-  const response = await fetch(`/api/v1${path}`, { ...init, headers, credentials: "same-origin" });
+  const response = await fetch(`/api/v1${path}`, {
+    ...init,
+    headers,
+    credentials: "same-origin",
+  });
   if (response.status === 204) return undefined as T;
   const text = await response.text();
   let body: unknown = undefined;
@@ -149,8 +169,11 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
     body = undefined;
   }
   if (!response.ok) {
-    const detail = (body as { error?: { code?: string; message?: string; current_revision?: string } })
-      ?.error;
+    const detail = (
+      body as {
+        error?: { code?: string; message?: string; current_revision?: string };
+      }
+    )?.error;
     throw new ApiError(
       response.status,
       detail?.code ?? "UNKNOWN",
@@ -244,13 +267,30 @@ const httpApi = {
     return request("/capabilities", {});
   },
   convertDocument(path: string, to?: string): Promise<brains.ConversionResult> {
-    return request("/files/convert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path, to }) });
+    return request("/files/convert", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path, to }),
+    });
   },
   importUrl(url: string, path: string): Promise<brains.UrlImportResult> {
-    return request("/files/import-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, path }) });
+    return request("/files/import/url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, path }),
+    });
   },
   resourceStatus(): Promise<brains.ResourceReport> {
     return request("/resources", {});
+  },
+  updateResourceSettings(
+    input: brains.ResourceSettingsInput,
+  ): Promise<brains.ResourceReport> {
+    return request("/resources/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
   },
   fileUrl(path: string): string {
     const url = new URL("/api/v1/file", window.location.origin);
@@ -291,17 +331,25 @@ const httpApi = {
     stale?: boolean;
   }): Promise<FilePage> {
     return request<FilePage>("/files/query", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(query),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(query),
     });
   },
 
   async readRaw(path: string): Promise<{ bytes: Uint8Array; etag: string }> {
-    const response = await fetch(`/api/v1/file?path=${encodeURIComponent(path)}`, {
-      credentials: "same-origin",
-    });
+    const response = await fetch(
+      `/api/v1/file?path=${encodeURIComponent(path)}`,
+      {
+        credentials: "same-origin",
+      },
+    );
     if (!response.ok) throw await errorFrom(response);
     const etag = response.headers.get("ETag") ?? "";
-    return { bytes: new Uint8Array(await response.arrayBuffer()), etag: etag.replace(/"/g, "") };
+    return {
+      bytes: new Uint8Array(await response.arrayBuffer()),
+      etag: etag.replace(/"/g, ""),
+    };
   },
 
   async readText(path: string): Promise<{ text: string; etag: string }> {
@@ -310,7 +358,10 @@ const httpApi = {
   },
 
   async readMeta(path: string): Promise<Entry> {
-    return request<Entry>(`/file?path=${encodeURIComponent(path)}&format=meta`, {});
+    return request<Entry>(
+      `/file?path=${encodeURIComponent(path)}&format=meta`,
+      {},
+    );
   },
 
   /**
@@ -368,7 +419,10 @@ const httpApi = {
   ): Promise<MutationResult> {
     return request<MutationResult>(`/file?path=${encodeURIComponent(path)}`, {
       method: "DELETE",
-      headers: { "If-Match": `"${baseRevision}"`, "X-Operation-ID": operationId },
+      headers: {
+        "If-Match": `"${baseRevision}"`,
+        "X-Operation-ID": operationId,
+      },
     });
   },
 
@@ -378,10 +432,18 @@ const httpApi = {
     path: string,
     baseRevision: string,
     operationId: string = randomOperationId(),
-  ): Promise<{ path: string; purged: boolean; index_state: string; operation_id: string }> {
+  ): Promise<{
+    path: string;
+    purged: boolean;
+    index_state: string;
+    operation_id: string;
+  }> {
     return request(`/trash?path=${encodeURIComponent(path)}`, {
       method: "DELETE",
-      headers: { "If-Match": `"${baseRevision}"`, "X-Operation-ID": operationId },
+      headers: {
+        "If-Match": `"${baseRevision}"`,
+        "X-Operation-ID": operationId,
+      },
     });
   },
 
@@ -434,12 +496,20 @@ const httpApi = {
     stale?: boolean;
   }): Promise<SearchPage> {
     return request<SearchPage>("/search", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(query),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(query),
     });
   },
 
-  async links(path: string, direction: "outbound" | "backlinks"): Promise<{ items: LinkItem[] }> {
-    return request(`/links?path=${encodeURIComponent(path)}&direction=${direction}`, {});
+  async links(
+    path: string,
+    direction: "outbound" | "backlinks",
+  ): Promise<{ items: LinkItem[] }> {
+    return request(
+      `/links?path=${encodeURIComponent(path)}&direction=${direction}`,
+      {},
+    );
   },
 
   /** Server-side copy (duplicate): the source keeps its revision. */
@@ -480,7 +550,8 @@ const httpApi = {
 };
 
 async function errorFrom(response: Response): Promise<ApiError> {
-  let detail: { code?: string; message?: string; current_revision?: string } = {};
+  let detail: { code?: string; message?: string; current_revision?: string } =
+    {};
   try {
     detail = (await response.json())?.error ?? {};
   } catch {
@@ -504,5 +575,7 @@ export const api: typeof httpApi = IS_DEMO ? demoApi : httpApi;
 
 async function sha256Hex(buffer: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", buffer);
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(digest), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
 }

@@ -28,23 +28,23 @@ impl D1Index {
                 ("rows_written", meta.rows_written.unwrap_or(0)),
             ] {
                 if amount > 0 {
-                    charges.push(budget.profile.charge(
+                    charges.extend(budget.measured_charge(budget.profile.charge(
                         "d1",
                         metric,
                         amount as f64,
                         &budget.account,
                         UsageEvidence::Exact,
                         now,
-                    )?);
+                    ))?);
                 }
             }
             if let Some(bytes) = meta.size_after {
-                charges.push(budget.profile.capacity(
+                charges.extend(budget.measured_charge(budget.profile.capacity(
                     "d1",
                     "storage",
                     "BRAINS_INDEX",
                     bytes as f64,
-                )?);
+                ))?);
             }
             budget.record(charges).await?;
         }

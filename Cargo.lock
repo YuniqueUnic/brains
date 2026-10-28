@@ -2480,9 +2480,9 @@ checksum = "e4eba85ea1d0a966a983acd07deee566e67395d2d96b6fb39e62b5a833f1eb0b"
 
 [[package]]
 name = "granit-parser"
-version = "1.3.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e20f99e46474f56bd905c56e817ebddcf377a611f94c53ac4649e4d3fa3c0cd0"
+checksum = "da55feca5d1625466bae068f9fd4b87892caeae70c3fe671ddb0f50d41aebf37"
 dependencies = [
  "arraydeque",
  "smallvec",
@@ -5087,9 +5087,9 @@ dependencies = [
 
 [[package]]
 name = "serde-saphyr"
-version = "1.3.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8050abb251097357e24aff63ba2c52a6309ecb7d23a5474023df960a02694d8"
+checksum = "a253edfdea34032da21af84e16fcc94f4c7a6ba237f9f3bc2dbf43cea8535c44"
 dependencies = [
  "annotate-snippets",
  "encoding_rs_io",
@@ -7363,18 +7363,18 @@ dependencies = [
 
 [[package]]
 name = "xidl-http"
-version = "0.99.0"
+version = "0.105.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8b8930511390ecfc23c884b5359cef594916ec6143ff0df63f4361596ed0808"
+checksum = "651465572f137d59c5561fcab2b74df4526d1a202a2d830b9459956ad48f4538"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "xidl-rust-axum"
-version = "0.99.0"
+version = "0.105.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61683e7f29ce20a1b131cf86a529829d68261b6a16ad0d146390fd3ba4da9914"
+checksum = "70d215d679686e4a849dda484b2665481a32cea7195e632e381e7803253d3f7a"
 dependencies = [
  "axum",
  "axum-extra",

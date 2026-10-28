@@ -1,5 +1,6 @@
 import { parseMarkdownDocument } from "../lib/document-metadata";
 import { createMarkdownParser } from "../lib/markdown-parser";
+import { demoResourceStatus, updateDemoResources } from "./demo-resources";
 import { resolveReference } from "../components/markdown/references";
 import {
   ApiError,
@@ -182,7 +183,7 @@ const session: SessionInfo = { actor: "demo", scopes: ["read:/", "write:/", "adm
 
 export const demoApi = {
   async getCapabilities() {
-    return { features: { remote_conversion: false, remote_url_import: false, resource_policy: false } };
+    return { features: { remote_conversion: false, remote_url_import: false, resource_policy: true } };
   },
   async convertDocument(_path: string, _to?: string): Promise<never> {
     throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Cloud conversion is unavailable in the demo.");
@@ -190,9 +191,8 @@ export const demoApi = {
   async importUrl(_url: string, _path: string): Promise<never> {
     throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Cloud URL import is unavailable in the demo.");
   },
-  async resourceStatus(): Promise<never> {
-    throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Resource usage is unavailable in the demo.");
-  },
+  resourceStatus: demoResourceStatus,
+  updateResourceSettings: updateDemoResources,
   fileUrl(path: string): string {
     const url = new URL(window.location.href);
     url.search = "";

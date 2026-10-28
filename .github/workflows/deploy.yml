@@ -4,6 +4,10 @@ name: Deploy (Cloudflare Workers)
 # Provision dedicated R2/D1 once and configure the selected GitHub Environment.
 # Bootstrap all three instance secrets together; later deployments retain them.
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       environment:
@@ -20,13 +24,14 @@ on:
         type: boolean
 
 concurrency:
-  group: deploy-${{ inputs.environment }}
+  group: deploy-${{ inputs.environment || 'production' }}
   cancel-in-progress: false
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_sha == github.sha)
     runs-on: ubuntu-24.04
-    environment: ${{ inputs.environment }}
+    environment: ${{ inputs.environment || 'production' }}
     permissions:
       contents: read
     env:
@@ -52,13 +57,15 @@ jobs:
       BRAINS_RESOURCE_PROFILE: ${{ vars.BRAINS_RESOURCE_PROFILE }}
       BRAINS_AI_SEARCH_NAMESPACE: ${{ vars.BRAINS_AI_SEARCH_NAMESPACE || 'default' }}
       BRAINS_RECONCILE_CRON: ${{ vars.BRAINS_RECONCILE_CRON || '*/5 * * * *' }}
-      BRAINS_APPLY_MIGRATIONS: ${{ inputs.apply_migrations }}
+      BRAINS_APPLY_MIGRATIONS: ${{ github.event_name == 'workflow_run' || inputs.apply_migrations }}
       BRAINS_ADMIN_TOKEN: ${{ secrets.BRAINS_ADMIN_TOKEN }}
       TOKEN_REGISTRY_JSON: ${{ secrets.TOKEN_REGISTRY_JSON }}
       SESSION_SIGNING_KEY: ${{ secrets.SESSION_SIGNING_KEY }}
       CURSOR_SIGNING_KEY: ${{ secrets.CURSOR_SIGNING_KEY }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Install the repository Rust toolchain
         run: rustup show
       - uses: Swatinem/rust-cache@v2

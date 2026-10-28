@@ -1,11 +1,7 @@
 use crate::{DomainError, resources::*};
 
 fn profile() -> ResourceProfile {
-    ResourceProfile::parse(include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../docs/examples/cloudflare-free-2026-10-27.json"
-    )))
-    .unwrap()
+    ResourceProfile::parse(CLOUDFLARE_FREE_PROFILE).unwrap()
 }
 
 #[test]

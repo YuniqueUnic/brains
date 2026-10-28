@@ -4,8 +4,8 @@
   "type": "module",
   "dependencies": {
     "zod": "^4.4.3",
-    "xidl-typescript-client": "0.99.0",
-    "xidl-typescript-codec": "0.99.0"
+    "xidl-typescript-client": "0.105.2",
+    "xidl-typescript-codec": "0.105.2"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",

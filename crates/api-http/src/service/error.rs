@@ -321,6 +321,18 @@ error_from_domain!(
     [Forbidden, NotImplemented, ServiceUnavailable, Internal]
 );
 error_from_domain!(
+    update_resource_settings_error,
+    FilesUpdateResourceSettingsError,
+    [
+        BadRequest,
+        Forbidden,
+        PreconditionFailed,
+        NotImplemented,
+        ServiceUnavailable,
+        Internal
+    ]
+);
+error_from_domain!(
     convert_document_error,
     FilesConvertDocumentError,
     [

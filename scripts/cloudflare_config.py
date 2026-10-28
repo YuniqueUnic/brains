@@ -25,14 +25,15 @@ def structured_setting(env, name):
 def compose_services(config, env):
     services = structured_setting(env, "BRAINS_CLOUD_CONFIG")
     profile = structured_setting(env, "BRAINS_RESOURCE_PROFILE")
+    account = env.get("BRAINS_RESOURCE_ACCOUNT") or env.get("CLOUDFLARE_ACCOUNT_ID")
+    if account:
+        config["vars"]["BRAINS_RESOURCE_ACCOUNT"] = account
     if profile is not None:
         for key in ("profile", "rules"):
             if key not in profile:
                 raise ValueError(f"Resource profile requires {key}")
-        account = env.get("BRAINS_RESOURCE_ACCOUNT") or env.get("CLOUDFLARE_ACCOUNT_ID")
         if not account:
             raise ValueError("Set CLOUDFLARE_ACCOUNT_ID or BRAINS_RESOURCE_ACCOUNT")
-        config["vars"]["BRAINS_RESOURCE_ACCOUNT"] = account
         # Each Worker var is limited to 5 KB. ASCII JSON chunks keep byte
         # boundaries explicit without changing the user's profile structure.
         encoded = json.dumps(profile, separators=(",", ":"), ensure_ascii=True)

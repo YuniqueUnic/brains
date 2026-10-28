@@ -2,10 +2,12 @@
 
 mod profile;
 mod quantity;
+mod settings;
 mod window;
 
 pub use profile::*;
 pub use quantity::*;
+pub use settings::*;
 pub use window::*;
 
 use serde::{Deserialize, Serialize};

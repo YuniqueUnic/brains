@@ -23,7 +23,7 @@ pub enum Window {
     },
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageWindow {
     pub start: i64,
     pub end: Option<i64>,

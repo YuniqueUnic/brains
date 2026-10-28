@@ -17,6 +17,8 @@ import urllib.request
 from cloudflare_config import compose_services
 from cloudflare_mcp import initialize_mcp, deploy_mcp
 from cloudflare_setup import provision
+from cloudflare_actions import configure as configure_actions
+from cloudflare_credentials import sync_admin_token
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -425,9 +427,13 @@ def main():
             "mcp-deploy",
             "mcp-verify",
             "types",
+            "github-configure",
+            "sync-admin-token",
         ),
     )
     parser.add_argument("--env-file", type=Path, default=ROOT / ".env")
+    parser.add_argument("--github-repository")
+    parser.add_argument("--github-environment", default="production")
     parser.add_argument(
         "--skip-build", action="store_true", help="use already built Worker/Web assets"
     )
@@ -438,6 +444,14 @@ def main():
         env = load_environment(args.env_file.resolve())
         if args.command == "init":
             initialize(args.env_file.resolve(), env)
+        elif args.command == "sync-admin-token":
+            sync_admin_token(args.env_file.resolve(), env)
+            instance_secrets(env)
+        elif args.command == "github-configure":
+            instance_secrets(env)
+            if not args.github_repository:
+                raise ValueError("Set --github-repository to the deployment repository")
+            configure_actions(env, args.github_repository, args.github_environment)
         elif args.command == "types":
             binding_types(env)
         elif args.command == "provision":

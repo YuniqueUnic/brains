@@ -204,7 +204,7 @@ impl Library for BrainClient {
         };
         let response = self.send(
             self.http
-                .post(self.url("/api/v1/files/import-url", ""))
+                .post(self.url("/api/v1/files/import/url", ""))
                 .json(&body),
         )?;
         self.expect_json(response)

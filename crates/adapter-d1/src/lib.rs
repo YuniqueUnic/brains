@@ -6,6 +6,7 @@
 
 mod metered;
 pub mod resources;
+pub mod settings;
 
 use brains_domain::path::normalize_prefix;
 use std::future::Future;

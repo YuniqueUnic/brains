@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use brains_adapter_cloudflare::{CloudConverter, CloudSemantic, PublicUrlFetcher, SemanticConfig};
 use brains_adapter_d1::resources::D1UsageStore;
+use brains_adapter_d1::settings::D1ResourceSettingsStore;
 use brains_adapter_r2::R2ContentStore;
 use brains_application::resources::ResourceBudget;
 use brains_domain::{DomainError, DomainResult, resources::ResourceProfile};
@@ -20,12 +21,17 @@ struct ServiceConfig {
 }
 
 /// Only the composition root reads deployment configuration.
-pub fn configure(env: &Env, vault: &mut WorkerVault, store: R2ContentStore) -> DomainResult<()> {
+pub async fn configure(
+    env: &Env,
+    vault: &mut WorkerVault,
+    store: R2ContentStore,
+) -> DomainResult<()> {
     let config: ServiceConfig = match env.var("BRAINS_CLOUD_CONFIG") {
         Ok(raw) => serde_json::from_str(&raw.to_string())
             .map_err(|e| DomainError::InvalidArgument(format!("cloud configuration: {e}")))?,
         Err(_) => ServiceConfig::default(),
     };
+    let mut deployed = None;
     if let Ok(count) = env.var("BRAINS_RESOURCE_PROFILE_COUNT") {
         let count = count
             .to_string()
@@ -45,33 +51,37 @@ pub fn configure(env: &Env, vault: &mut WorkerVault, store: R2ContentStore) -> D
                     .to_string(),
             );
         }
-        let profile = ResourceProfile::parse(&raw)?;
-        let db = env
-            .d1("BRAINS_INDEX")
-            .map_err(|e| DomainError::IndexUnavailable(e.to_string()))?;
-        let account = env
-            .var("BRAINS_RESOURCE_ACCOUNT")
-            .map(|v| v.to_string())
-            .unwrap_or_else(|_| "deployment".into());
-        vault.resources = Some(Arc::new(ResourceBudget::new(
-            profile,
-            account,
-            Arc::new(D1UsageStore::new(db)),
-        )));
+        deployed = Some(ResourceProfile::parse(&raw)?);
     }
-    let store = if let Some(budget) = &vault.resources {
-        let store = store.with_budget(budget.clone());
-        vault.heads = store.clone();
-        vault.revisions = store.clone();
-        vault.blobs = store.clone();
-        let db = env
-            .d1("BRAINS_INDEX")
-            .map_err(|e| DomainError::IndexUnavailable(e.to_string()))?;
-        vault.index = brains_adapter_d1::D1Index::new(db).with_budget(budget.clone());
-        store
-    } else {
-        store
+    let database = || {
+        env.d1("BRAINS_INDEX")
+            .map_err(|e| DomainError::IndexUnavailable(e.to_string()))
     };
+    let control = brains_application::resource_settings::ResourceControl::load(
+        deployed,
+        Arc::new(D1ResourceSettingsStore::new(database()?)),
+        Arc::new(D1UsageStore::new(database()?)),
+    )
+    .await?;
+    let account = env
+        .var("BRAINS_RESOURCE_ACCOUNT")
+        .map(|v| v.to_string())
+        .unwrap_or_else(|_| "deployment".into());
+    let budget = Arc::new(
+        ResourceBudget::new(
+            control.settings.profile.clone(),
+            account,
+            control.usage.clone(),
+        )
+        .with_enforcement(control.settings.enforced),
+    );
+    vault.resources = Some(budget.clone());
+    vault.resource_control = Some(Arc::new(control));
+    let store = store.with_budget(budget.clone());
+    vault.heads = store.clone();
+    vault.revisions = store.clone();
+    vault.blobs = store.clone();
+    vault.index = brains_adapter_d1::D1Index::new(database()?).with_budget(budget.clone());
     if config.document_conversion {
         env.ai("AI").map_err(|_| {
             DomainError::ResourcePolicy("AI binding is required for cloud conversion".into())
@@ -94,13 +104,14 @@ pub fn configure(env: &Env, vault: &mut WorkerVault, store: R2ContentStore) -> D
             .var("SEMANTIC_SEARCH")
             .is_ok_and(|v| v.to_string().eq_ignore_ascii_case("off"))
     {
-        let budget = vault.resources.clone().ok_or_else(|| {
-            DomainError::ResourcePolicy("semantic retrieval requires a resource profile".into())
-        })?;
-        let db = env
-            .d1("BRAINS_INDEX")
-            .map_err(|e| DomainError::IndexUnavailable(e.to_string()))?;
-        let semantic = CloudSemantic::new(env.clone(), db, store, config, &vault.vault, budget)?;
+        let semantic = CloudSemantic::new(
+            env.clone(),
+            database()?,
+            store,
+            config,
+            &vault.vault,
+            budget,
+        )?;
         vault.semantic = Some(Arc::new(semantic) as Arc<dyn SemanticRetriever>);
     }
     Ok(())

@@ -5,6 +5,7 @@ mod commit;
 mod content;
 mod patch;
 mod reindex;
+mod resources;
 mod search;
 mod seed;
 mod support;

@@ -5,6 +5,8 @@
   "version": "0.6.1",
   "scripts": {
     "cloudflare:init": "python3 scripts/cloudflare.py init",
+    "cloudflare:sync-admin-token": "python3 scripts/cloudflare.py sync-admin-token",
+    "cloudflare:github-configure": "python3 scripts/cloudflare.py github-configure",
     "cloudflare:check": "python3 scripts/cloudflare.py check",
     "cloudflare:deploy": "python3 scripts/cloudflare.py deploy",
     "cloudflare:verify": "python3 scripts/cloudflare.py verify",

@@ -111,7 +111,33 @@ struct AdmissionState {
     @optional double remaining;
     @optional int64 reset_at;
 };
+struct ResourcePolicyDefaults {
+    @optional double fraction;
+    @optional string when_exhausted;
+    @optional string when_charge_unknown;
+};
+struct ResourceBillingCycle {
+    string id;
+    @optional int64 start;
+    @optional int64 end;
+};
+struct ResourceSettingsSummary {
+    string revision;
+    boolean enforced;
+    string source;
+    ResourcePolicyDefaults policy;
+    sequence<ResourceBillingCycle> billing_cycles;
+};
+struct ResourceRuleUpdate { string id; ResourceLimit limit; ResourcePolicy policy; };
+struct ResourceSettingsInput {
+    string expected_revision;
+    boolean enforced;
+    ResourcePolicyDefaults policy;
+    sequence<ResourceRuleUpdate> rules;
+    sequence<ResourceBillingCycle> billing_cycles;
+};
 struct ResourceReport {
+    ResourceSettingsSummary settings;
     ResourceCapability profile;
     sequence<ResourceRule> rules;
     sequence<ResourceUsage> usage;
@@ -625,11 +651,15 @@ interface Files {
     @get(path = "/resources")
     ResourceReport resource_status() raises(Forbidden, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
 
+    @put(path = "/resources/settings")
+    ResourceReport update_resource_settings(@flatten in ResourceSettingsInput body)
+        raises(BadRequest, Forbidden, PreconditionFailed, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
+
     @post(path = "/files/convert")
     ConversionResult convert_document(@flatten in ConversionInput body)
         raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
 
-    @post(path = "/files/import-url")
+    @post(path = "/files/import/url")
     UrlImportResult import_url(@flatten in UrlImportInput body)
         raises(BadRequest, Forbidden, NotFound, Gone, PreconditionFailed, PayloadTooLarge, UnprocessableEntity, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
 
