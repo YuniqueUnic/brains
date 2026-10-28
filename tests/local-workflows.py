@@ -309,7 +309,8 @@ class LocalWorkflows(unittest.TestCase):
         cli("local", "ls", expected=2)
         del cli.env["BRAINS_URL"]
         cli("local", "login", "--stdin-token", data=b"unused", expected=2)
-        self.assertEqual(cli.config.stat().st_mode & 0o777, 0o600)
+        if os.name != "nt":
+            self.assertEqual(cli.config.stat().st_mode & 0o777, 0o600)
         cli("local", "seed")
         self.assertIn(b"0 seeded", cli("local", "seed"))
 
