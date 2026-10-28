@@ -23,6 +23,19 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.8.0](https://github.com/YuniqueUnic/brains/compare/v0.7.0...v0.8.0) (2026-10-28)
+
+
+### Features
+
+* **windows:** support native CLI and server workflows ([dea57a8](https://github.com/YuniqueUnic/brains/commit/dea57a84b3c0c8365ee1dd3d4946b8f0a5a60c04))
+
+
+### Bug Fixes
+
+* **cloudflare:** bound metered work and pause failed background jobs ([cbc7cf7](https://github.com/YuniqueUnic/brains/commit/cbc7cf795916b6ebaae8ee56ee713dcc4f8ccb84))
+* **convert:** separate revision IDs and blocking library IO ([9a22c3b](https://github.com/YuniqueUnic/brains/commit/9a22c3bf0a920d01af2d9d20e64740f1eda8a09a))
+
 ## [0.7.0](https://github.com/YuniqueUnic/brains/compare/v0.6.1...v0.7.0) (2026-10-28)
 
 
