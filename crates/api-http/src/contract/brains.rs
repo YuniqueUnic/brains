@@ -556,6 +556,18 @@ pub mod brains {
     }
     impl ReindexPage {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct SemanticReconcileRequest {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub limit: Option<i64>,
+    }
+    impl SemanticReconcileRequest {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct SemanticReconcileResult {
+        pub processed: i64,
+        pub states: ::std::collections::BTreeMap<String, u64>,
+    }
+    impl SemanticReconcileResult {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct Session {
         pub actor: String,
         pub scopes: Vec<String>,
@@ -933,6 +945,10 @@ pub mod brains {
             &self,
             body: ReindexRequest,
         ) -> ::std::result::Result<ReindexPage, FilesReindexError>;
+        async fn reconcile_semantic(
+            &self,
+            body: SemanticReconcileRequest,
+        ) -> ::std::result::Result<SemanticReconcileResult, FilesReconcileSemanticError>;
         async fn validate(&self) -> ::std::result::Result<(), FilesValidateError>;
     }
     /// Typed error channel for `resource_status`: one variant per
@@ -5712,6 +5728,167 @@ pub mod brains {
             }
         }
     }
+    /// Typed error channel for `reconcile_semantic`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum FilesReconcileSemanticError {
+        BadRequest(BadRequest),
+        Forbidden(Forbidden),
+        NotImplemented(NotImplemented),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for FilesReconcileSemanticError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for FilesReconcileSemanticError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for FilesReconcileSemanticError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    impl ::xidl_rust_axum::axum::response::IntoResponse for FilesReconcileSemanticError {
+        fn into_response(self) -> ::xidl_rust_axum::axum::response::Response {
+            match self {
+                Self::Framework(err) => {
+                    ::xidl_rust_axum::axum::response::IntoResponse::into_response(err)
+                }
+                Self::BadRequest(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(400u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Forbidden(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(403u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::NotImplemented(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(501u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::ServiceUnavailable(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(503u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Internal(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+            }
+        }
+    }
     /// Typed error channel for `validate`: one variant per
     /// declared `raises(...)` exception, plus the runtime fallback.
     #[derive(Debug)]
@@ -7518,6 +7695,46 @@ pub mod brains {
                     accepted_inputs: value
                         .accepted_inputs
                         .map(|value| value.into_iter().collect()),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticReconcileRequest {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub limit: Option<i64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticReconcileRequest> for brains_SemanticReconcileRequest {
+            fn from(value: super::SemanticReconcileRequest) -> Self {
+                Self { limit: value.limit }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticReconcileRequest> for super::SemanticReconcileRequest {
+            fn from(value: brains_SemanticReconcileRequest) -> Self {
+                Self { limit: value.limit }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticReconcileResult {
+            pub processed: i64,
+            pub states: ::std::collections::BTreeMap<String, u64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticReconcileResult> for brains_SemanticReconcileResult {
+            fn from(value: super::SemanticReconcileResult) -> Self {
+                Self {
+                    processed: value.processed,
+                    states: value.states.into_iter().collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticReconcileResult> for super::SemanticReconcileResult {
+            fn from(value: brains_SemanticReconcileResult) -> Self {
+                Self {
+                    processed: value.processed,
+                    states: value.states.into_iter().collect(),
                 }
             }
         }
@@ -9452,6 +9669,46 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticReconcileRequest {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub limit: Option<i64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticReconcileRequest> for brains_SemanticReconcileRequest {
+            fn from(value: super::SemanticReconcileRequest) -> Self {
+                Self { limit: value.limit }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticReconcileRequest> for super::SemanticReconcileRequest {
+            fn from(value: brains_SemanticReconcileRequest) -> Self {
+                Self { limit: value.limit }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_SemanticReconcileResult {
+            pub processed: i64,
+            pub states: ::std::collections::BTreeMap<String, u64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::SemanticReconcileResult> for brains_SemanticReconcileResult {
+            fn from(value: super::SemanticReconcileResult) -> Self {
+                Self {
+                    processed: value.processed,
+                    states: value.states.into_iter().collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_SemanticReconcileResult> for super::SemanticReconcileResult {
+            fn from(value: brains_SemanticReconcileResult) -> Self {
+                Self {
+                    processed: value.processed,
+                    states: value.states.into_iter().collect(),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_SourceRef {
             pub id: String,
             #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -10782,6 +11039,52 @@ pub mod brains {
             }
         }
     }
+    pub type FilesReconcileSemanticRequestInBody = __xidl_in_Files::brains_SemanticReconcileRequest;
+    #[derive(::serde::Deserialize)]
+    struct FilesReconcileSemanticRequest {
+        body: __xidl_in_Files::brains_SemanticReconcileRequest,
+    }
+    #[allow(clippy::manual_async_fn, unused_mut)]
+    impl<S> ::xidl_rust_axum::axum::extract::FromRequest<S> for FilesReconcileSemanticRequest
+    where
+        S: Send + Sync,
+    {
+        type Rejection = ::xidl_rust_axum::Error;
+        fn from_request(
+            req: ::xidl_rust_axum::axum::extract::Request,
+            state: &S,
+        ) -> impl ::core::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+            async move {
+                let (mut parts, body) = req.into_parts();
+                let _ = &body;
+                let _ = state;
+                let xidl_headers = &parts.headers;
+                let _ = xidl_headers;
+                if !::xidl_rust_axum::http::content_type_matches(xidl_headers, "application/json") {
+                    return Err(::xidl_rust_axum::Error::unsupported_media_type());
+                }
+                let xidl_body_bytes = <::xidl_rust_axum::axum::body::Bytes as ::xidl_rust_axum::axum::extract::FromRequest<
+                    S,
+                >>::from_request(
+                        ::xidl_rust_axum::axum::extract::Request::from_parts(
+                            parts,
+                            body,
+                        ),
+                        state,
+                    )
+                    .await
+                    .map_err(|err| ::xidl_rust_axum::Error::new(
+                        err.status().as_u16(),
+                        err.body_text(),
+                    ))?;
+                let xidl_body: FilesReconcileSemanticRequestInBody =
+                    ::xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&xidl_body_bytes)?;
+                let body = xidl_body;
+                Ok(Self { body })
+            }
+        }
+    }
     pub struct FilesServer<T> {
         inner: ::std::sync::Arc<T>,
     }
@@ -10863,6 +11166,10 @@ pub mod brains {
                 .route(
                     "/maintenance/reindex",
                     xidl_rust_axum::axum::routing::post(Self::reindex),
+                )
+                .route(
+                    "/maintenance/semantic/reconcile",
+                    xidl_rust_axum::axum::routing::post(Self::reconcile_semantic),
                 )
                 .route(
                     "/maintenance/validate",
@@ -12156,6 +12463,54 @@ pub mod brains {
                 Ok(resp_value) => {
                     let mut resp = {
                         let body_value: __xidl_out_Files::brains_ReindexPage = resp_value.into();
+                        let _ = &body_value;
+                        let body = xidl_rust_axum::SerializeFactory::new("application/json")
+                            .to_vec(&body_value)?;
+                        ::xidl_rust_axum::axum::response::Response::builder()
+                            .status(
+                                ::xidl_rust_axum::axum::http::StatusCode::from_u16(200).unwrap(),
+                            )
+                            .header(
+                                ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                                "application/json",
+                            )
+                            .body(::xidl_rust_axum::axum::body::Body::from(body))
+                            .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?
+                    };
+                    resp
+                }
+                Err(err) => ::xidl_rust_axum::axum::response::IntoResponse::into_response(err),
+            };
+            Ok(resp)
+        }
+        #[allow(
+            clippy::let_and_return,
+            clippy::needless_return,
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            clippy::let_unit_value,
+            unused_variables
+        )]
+        async fn reconcile_semantic(
+            ::xidl_rust_axum::axum::extract::State(svc): ::xidl_rust_axum::axum::extract::State<
+                ::std::sync::Arc<T>,
+            >,
+            headers: ::xidl_rust_axum::axum::http::HeaderMap,
+            uri: ::xidl_rust_axum::axum::http::Uri,
+            request: FilesReconcileSemanticRequest,
+        ) -> ::xidl_rust_axum::Result<::xidl_rust_axum::axum::response::Response> {
+            let _ = &headers;
+            if !xidl_rust_axum::http::accepts_media_type(&headers, "application/json") {
+                return Err(xidl_rust_axum::Error::not_acceptable());
+            }
+            let FilesReconcileSemanticRequest { body } = request;
+            let body: SemanticReconcileRequest = body.into();
+            let mut resp = match svc.reconcile_semantic(body).await {
+                Ok(resp_value) => {
+                    let mut resp = {
+                        let body_value: __xidl_out_Files::brains_SemanticReconcileResult =
+                            resp_value.into();
                         let _ = &body_value;
                         let body = xidl_rust_axum::SerializeFactory::new("application/json")
                             .to_vec(&body_value)?;

@@ -61,3 +61,27 @@ export const SeedImageViaApi = (path: string) => Task.where(`#actor seeds the im
     if (response.status !== 200) throw new Error(`image seed failed: HTTP ${response.status}`);
   }),
 );
+
+/** A history fixture built through real conditional writes. */
+export const SeedRevisionHistory = (path: string, count: number) => Task.where(
+  `#actor seeds ${count} revisions of ${path}`,
+  Interaction.where("#actor creates an immutable revision chain", async actor => {
+    const api = CallBrainsApi.as(actor);
+    let revision: string | undefined;
+    for (let generation = 1; generation <= count; generation++) {
+      const response = await api.putText(path, `Revision ${generation}`, revision);
+      if (!response.ok) throw new Error(`history seed failed: HTTP ${response.status}`);
+      revision = (await response.json()).revision;
+    }
+  }),
+);
+
+export const AnotherClientReplacesWithBinary = (path: string) => Task.where(
+  `#actor's rival client replaces ${path} with a binary file`,
+  Interaction.where("#actor writes an unreadable remote revision", async actor => {
+    const api = CallBrainsApi.as(actor);
+    const current = await api.getText(`file?path=${encodeURIComponent(path)}`);
+    const response = await api.replaceWithBinary(path, new TextEncoder().encode("Opaque remote payload"), current.revision);
+    if (!response.ok) throw new Error(`binary replacement failed: HTTP ${response.status}`);
+  }),
+);

@@ -57,6 +57,7 @@ describe("trash and restore", () => {
       Ensure.eventually(EditorStatus(), SAVED).timeoutAfter(Duration.ofSeconds(10)),
       // History lives in the on-demand properties panel (⌘I, design §43).
       Press.the("ControlOrMeta+i").in(EditorArea.content()),
+      Click.on(EditorArea.historyToggle()),
     );
 
     // History renders newest-first and refreshes after each save: once
@@ -64,7 +65,6 @@ describe("trash and restore", () => {
     // [gen3=第二版, gen2=第一版, gen1=空(新建占位)]. Restoring gen2 must land
     // 第一版内容 in the editor as a NEW generation — HEAD moves forward,
     // never backward.
-    // TEMP-DEBUG: record mutation traffic inside the page
     await actor.attemptsTo(
       Ensure.eventually(Text.of(EditorArea.historyList()), includes("gen 3"))
         .timeoutAfter(Duration.ofSeconds(10)),

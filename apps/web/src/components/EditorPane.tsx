@@ -417,8 +417,11 @@ export default function EditorPane({
       const buffered = stateRef.current.kind === "saving" ? stateRef.current.text : current.text;
       if (error instanceof ApiError && error.status === 412) {
         let remoteText = "";
+        let remoteRevision = "(unknown)";
         try {
-          remoteText = (await api.readText(current.path)).text;
+          const snapshot = await api.readText(current.path);
+          remoteText = snapshot.text;
+          remoteRevision = snapshot.etag || "(unknown)";
         } catch {
           remoteText = t("conflictRemotePlaceholder");
         }
@@ -428,7 +431,7 @@ export default function EditorPane({
           path: current.path,
           localText: buffered,
           baseText: current.baseText,
-          remoteRevision: error.currentRevision ?? "(unknown)",
+          remoteRevision,
           remoteText,
         };
         onStateChange(conflict);

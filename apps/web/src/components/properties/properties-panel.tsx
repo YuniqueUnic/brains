@@ -1,6 +1,6 @@
 import { MarkdownContent, type MarkdownContext } from "../markdown/markdown-content";
-import { ArchiveRestore, Eye, History, Link2, ListTree, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArchiveRestore, Link2, ListTree, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type Entry, type RevisionDto } from "../../api/client";
 import { previewFor, revisionPreviewFor, type FilePreview } from "./preview";
@@ -26,6 +26,7 @@ import {
   DialogTitle,
 } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { RevisionHistory } from "./revision-history";
 
 /*
  * Properties (DESIGN.md §43, #49): transient context opened with ⌘I / the
@@ -57,29 +58,6 @@ function BacklinkItem({ source, onOpenFile, context }: { source: string; onOpenF
   );
 }
 
-/** Hoverable wrapper giving a history row the same rendered preview popover. */
-function HistoryRowTooltip({
-  path,
-  revision,
-  mediaType,
-  children,
-  context,
-}: {
-  path: string;
-  revision: string;
-  mediaType?: string;
-  children: React.ReactNode;
-  context: MarkdownContext;
-}) {
-  return (
-    <HoverPreview
-      context={{ ...context, path }}
-      load={() => revisionPreviewFor(path, revision, mediaType)}
-      trigger={<div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>}
-    />
-  );
-}
-
 export function PropertiesPanel({
   path,
   entry,
@@ -102,82 +80,73 @@ export function PropertiesPanel({
   const { t } = useTranslation("info");
   const context = { files, onOpen: onOpenFile, onTag: onOpenTag };
   const [fetchedMeta, setFetchedMeta] = useState<Entry | null>(null);
-  // Prefer the listing entry, but never let its missing projection hide
-  // lifecycle facts the metadata read provides.
-  const meta = entry?.meta ? entry : fetchedMeta;
-  const [history, setHistory] = useState<RevisionDto[] | null>(null);
+  const selectedRevision = revision ?? entry?.revision ?? null;
+  const entryState = entry?.state;
+  const hasProjectedMeta = Boolean(entry?.meta);
+  const meta = entry?.meta ? entry : fetchedMeta?.path === path ? fetchedMeta : entry ?? null;
   // null = still loading (skeleton); loads that FAIL set the error flag so
   // the section says so instead of posing as an empty result.
   const [links, setLinks] = useState<{ outbound: number; backlinks: string[] } | null>(null);
   const [linksError, setLinksError] = useState(false);
   const [metaError, setMetaError] = useState(false);
-  const [historyError, setHistoryError] = useState(false);
-  // 查看: rendered/raw content of an old revision. 恢复: destructive, confirmed.
+  // Revision previews are read-only; restoring requires confirmation.
   const [viewing, setViewing] = useState<({ rev: RevisionDto } & FilePreview) | null>(null);
   const [viewMode, setViewMode] = useState<"preview" | "code">("preview");
   const [confirming, setConfirming] = useState<RevisionDto | null>(null);
 
+  const pathRef = useRef(path);
+  pathRef.current = path;
+  const previewRunRef = useRef(0);
+  const closePreview = () => {
+    previewRunRef.current += 1;
+    setViewing(null);
+  };
+
   useEffect(() => {
     setFetchedMeta(null);
-    setHistory(null);
     setLinks(null);
     setViewing(null);
     setConfirming(null);
-    if (!path) {
-      setHistory(null);
-      return;
-    }
+    previewRunRef.current += 1;
+    if (!path) return;
     let alive = true;
-    // While any section is in flight its slot shows a skeleton, never a
-    // misleading "empty" state.
+    const controller = new AbortController();
     setMetaError(false);
-    setHistoryError(false);
     setLinksError(false);
-    // The workspace listing already owns metadata for live and trashed
-    // files, but store listings carry no lifecycle projection (issue #13):
-    // fetch whenever the entry has no meta — except trashed paths, whose
-    // metadata read is a 410 by design (the tombstone owns the path).
-    if ((!entry || !entry.meta) && entry?.state !== "trashed") {
-      api.readMeta(path).then(
-        (entry) => alive && setFetchedMeta(entry),
+    // Fetch lifecycle metadata only when the visible panel needs its projection.
+    // Trashed paths use their listing tombstone; a raw metadata read returns 410.
+    if (!hasProjectedMeta && entryState !== "trashed") {
+      api.readMeta(path, controller.signal).then(
+        result => alive && setFetchedMeta(result),
         () => {
-          if (!alive) return;
-          setFetchedMeta(null);
-          setMetaError(true);
+          if (alive) setMetaError(true);
         },
       );
     }
-    collectHistory(path).then(
-      (items) => alive && setHistory(items),
-      () => {
-        if (!alive) return;
-        setHistory([]);
-        setHistoryError(true);
-      },
-    );
     Promise.all([api.links(path, "outbound"), api.links(path, "backlinks")]).then(
-      ([out, back]) =>
-        alive &&
-        setLinks({
-          outbound: out.items.length,
-          backlinks: back.items.map((item) => item.source),
-        }),
+      ([out, back]) => alive && setLinks({
+        outbound: out.items.length,
+        backlinks: back.items.map(item => item.source),
+      }),
       () => alive && setLinksError(true),
     );
     return () => {
       alive = false;
+      controller.abort();
+      previewRunRef.current += 1;
     };
-  }, [path, revision, entry, entry?.meta]);
-  const historyLoading = path !== null && history === null;
-  const historyItems = history ?? [];
+  }, [path, selectedRevision, entryState, hasProjectedMeta]);
 
   const openRevisionView = (rev: RevisionDto) => {
     if (!path) return;
+    const requestedPath = path;
+    const run = ++previewRunRef.current;
     setViewing({ rev, kind: "binary" });
     setViewMode("preview");
+    const current = () => pathRef.current === requestedPath && previewRunRef.current === run;
     void revisionPreviewFor(path, rev.revision, rev.content?.media_type ?? "application/octet-stream").then(
-      content => setViewing({ rev, ...content }),
-      () => setViewing({ rev, kind: "binary" }),
+      content => { if (current()) setViewing({ rev, ...content }); },
+      () => { if (current()) setViewing({ rev, kind: "binary" }); },
     );
   };
 
@@ -205,7 +174,7 @@ export function PropertiesPanel({
           <p className="text-xs">{t("noSelection")}</p>
         </div>
       ) : (
-        <div key={path} aria-busy={meta === null || historyLoading} className="pane-in min-h-0 flex-1 overflow-auto px-3 py-3">
+        <div key={path} aria-busy={meta === null && !metaError} className="pane-in min-h-0 flex-1 overflow-auto px-3 py-3">
           <section>
             <SectionTitle icon={<ListTree className="size-3.5 stroke-[1.5]" />} label={t("general")} />
             {meta === null && !metaError && (
@@ -303,96 +272,19 @@ export function PropertiesPanel({
             )}
           </section>
 
-          <section className="mt-4">
-            <SectionTitle icon={<History className="size-3.5 stroke-[1.5]" />} label={t("history")} />
-            <ul className="space-y-0.5" data-testid="history-list">
-              {historyLoading &&
-                [0, 1, 2].map((i) => (
-                  <li key={i} className="flex items-center gap-2 px-1.5 py-1">
-                    <Skeleton className="h-3 w-12" />
-                    <Skeleton className="h-3 w-10" />
-                    <Skeleton className="h-3 flex-1" />
-                  </li>
-                ))}
-              {historyItems.map((rev) => (
-                <li
-                  key={rev.revision}
-                  className="flex items-center gap-2 rounded-md px-1.5 py-1 text-xs hover:bg-muted/70"
-                >
-                  {rev.revision === revision ? (
-                    <>
-                      <span className="shrink-0 font-mono text-meta text-muted-foreground">
-                        gen {rev.generation}
-                      </span>
-                      <span className="shrink-0">{actionLabel(t, rev.action)}</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-meta-sm text-faint">
-                        {formatDateTime(rev.created_at)}
-                      </span>
-                      <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-meta-xs text-primary">
-                        {t("current")}
-                      </span>
-                    </>
-                  ) : rev.action === "trash" ? (
-                    // A tombstone has no content to restore; the trash view's
-                    // restore walks history for the newest contentful revision.
-                    <>
-                      <span className="shrink-0 font-mono text-meta text-muted-foreground">
-                        gen {rev.generation}
-                      </span>
-                      <span className="shrink-0">{actionLabel(t, rev.action)}</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-meta-sm text-faint">
-                        {formatDateTime(rev.created_at)}
-                      </span>
-                      <span className="shrink-0 text-meta-xs text-muted-foreground">
-                        {t("tombstone")}
-                      </span>
-                    </>
-                  ) : (
-                    <HistoryRowTooltip context={context} path={path} revision={rev.revision} mediaType={rev.content?.media_type}>
-                      <span className="shrink-0 font-mono text-meta text-muted-foreground">
-                        gen {rev.generation}
-                      </span>
-                      <span className="shrink-0">{actionLabel(t, rev.action)}</span>
-                      <span className="min-w-0 flex-1 truncate font-mono text-meta-sm text-faint">
-                        {formatDateTime(rev.created_at)}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-0.5">
-                        <button
-                          data-testid={`view-revision-gen-${rev.generation}`}
-                          onClick={() => openRevisionView(rev)}
-                          aria-label={t("viewRevision")}
-                          title={t("viewRevision")}
-                          className="hit inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-meta-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
-                        >
-                          <Eye className="size-3 stroke-[1.5]" />
-                          {t("viewRevision")}
-                        </button>
-                        <button
-                          data-testid={`restore-revision-gen-${rev.generation}`}
-                          onClick={() => setConfirming(rev)}
-                          className="hit inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-meta-sm text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-2 focus-visible:outline-ring/70"
-                        >
-                          <ArchiveRestore className="size-3 stroke-[1.5]" />
-                          {t("restoreRevision")}
-                        </button>
-                      </span>
-                    </HistoryRowTooltip>
-                  )}
-                </li>
-              ))}
-              {!historyLoading && historyError && (
-                <li className="px-1.5 text-meta text-muted-foreground">{t("loadFailed")}</li>
-              )}
-              {!historyLoading && !historyError && historyItems.length === 0 && (
-                <li className="px-1.5 text-meta text-muted-foreground">{t("noHistory")}</li>
-              )}
-            </ul>
-          </section>
+          <RevisionHistory
+            key={path}
+            path={path}
+            revision={selectedRevision}
+            context={context}
+            onView={openRevisionView}
+            onRestore={setConfirming}
+          />
         </div>
       )}
 
-      {/* 查看: read-only rendering of an old revision. */}
-      <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
+      {/* Read-only rendering of an old revision. */}
+      <Dialog open={viewing !== null} onOpenChange={(open) => !open && closePreview()}>
         <DialogContent data-testid="revision-view-dialog" className="flex max-h-[80vh] w-[min(44rem,94vw)] flex-col">
           <DialogHeader>
             <DialogTitle>
@@ -440,7 +332,7 @@ export function PropertiesPanel({
             )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewing(null)}>
+            <Button variant="outline" onClick={closePreview}>
               {t("close")}
             </Button>
             {viewing && viewing.rev.action !== "trash" && viewing.rev.revision !== revision && (
@@ -449,7 +341,7 @@ export function PropertiesPanel({
                 data-testid="restore-from-view"
                 onClick={() => {
                   setConfirming(viewing.rev);
-                  setViewing(null);
+                  closePreview();
                 }}
               >
                 <ArchiveRestore />
@@ -460,7 +352,7 @@ export function PropertiesPanel({
         </DialogContent>
       </Dialog>
 
-      {/* 恢复: destructive → confirmed (design §59 danger levels). */}
+      {/* Restoring an old revision requires explicit confirmation. */}
       <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
         <AlertDialogContent data-testid="restore-revision-confirm">
           <AlertDialogTitle>{t("restoreConfirmTitle")}</AlertDialogTitle>
@@ -507,28 +399,8 @@ function kindLabel(t: (key: string) => string, kind: string | undefined): string
   return kind ?? "-";
 }
 
-/** Server actions ("put"/"restore"/"trash") in UI words; unknown stays raw. */
-function actionLabel(t: (key: string) => string, action: string): string {
-  if (action === "put") return t("actionPut");
-  if (action === "restore") return t("actionRestore");
-  if (action === "trash") return t("actionTrash");
-  return action;
-}
-
 function formatSize(size: number): string {
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
-}
-
-async function collectHistory(path: string, maxPages = 10): Promise<RevisionDto[]> {
-  const items: RevisionDto[] = [];
-  let cursor: string | null | undefined = undefined;
-  for (let page = 0; page < maxPages; page += 1) {
-    const result = await api.history(path, cursor ?? undefined);
-    items.push(...result.items);
-    if (!result.next_cursor) break;
-    cursor = result.next_cursor;
-  }
-  return items;
 }

@@ -2,8 +2,9 @@
   "document_conversion": true,
   "url_import": true,
   "semantic": {
+    "publication": "manual",
     "instance": "brains-notes",
-    "embedding_model": "@cf/qwen/qwen3-embedding-0.6b",
+    "embedding_model": "@cf/baai/bge-m3",
     "dimensions": 1024,
     "ranking": {
       "candidate_limit": 50,

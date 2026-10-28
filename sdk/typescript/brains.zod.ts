@@ -701,6 +701,20 @@ import { xjson } from "xidl-typescript-codec";
 
         });
 
+        export const SemanticReconcileRequestSchema = z.object({
+
+                limit: z.coerce.number().int().nullish().transform((value) => value ?? undefined)
+
+        });
+
+        export const SemanticReconcileResultSchema = z.object({
+
+                processed: z.coerce.number().int(),
+
+                states: z.record(z.string(), z.coerce.number().int().nonnegative())
+
+        });
+
         export const SessionSchema = z.object({
 
                 actor: z.coerce.string(),

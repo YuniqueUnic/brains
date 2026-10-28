@@ -289,6 +289,18 @@ error_from_domain!(
     [BadRequest, Forbidden, ServiceUnavailable, Internal]
 );
 
+error_from_domain!(
+    reconcile_semantic_error,
+    FilesReconcileSemanticError,
+    [
+        BadRequest,
+        Forbidden,
+        NotImplemented,
+        ServiceUnavailable,
+        Internal
+    ]
+);
+
 // HEAD has no JSON body, so its declared exceptions carry the error code.
 pub(crate) fn head_file_error(error: DomainError) -> contract::FilesHeadFileError {
     macro_rules! failure {

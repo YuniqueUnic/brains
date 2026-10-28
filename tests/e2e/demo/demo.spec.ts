@@ -62,6 +62,7 @@ describe("Public browser demo", () => {
     await actor.attemptsTo(RewriteNote("第二版内容"));
     await expect(page.getByTestId("editor-status")).toHaveText("已发布");
     await page.getByRole("button", { name: "属性", exact: true }).click();
+    await page.getByTestId("history-toggle").click();
     await expect(page.getByTestId("history-list")).toContainText("gen 3");
     await page.getByTestId("restore-revision-gen-2").click();
     await page.getByTestId("restore-revision-confirm-yes").click();

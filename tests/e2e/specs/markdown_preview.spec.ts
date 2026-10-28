@@ -514,6 +514,7 @@ describe("Markdown metadata and reference previews", () => {
       .getByTestId("editor-pane")
       .getByRole("button", { name: "属性", exact: true })
       .click();
+    await page.getByTestId("history-toggle").click();
     await page
       .getByTestId("history-list")
       .getByText("gen 1", { exact: true })

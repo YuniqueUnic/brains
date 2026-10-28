@@ -178,6 +178,11 @@ import { xjson } from "xidl-typescript-codec";
         });
     export type FilesReindexRequest = z.infer<typeof FilesReindexRequestSchema>;
 
+    export const FilesReconcileSemanticRequestSchema = z.object({
+            body: models.brains.SemanticReconcileRequestSchema,
+        });
+    export type FilesReconcileSemanticRequest = z.infer<typeof FilesReconcileSemanticRequestSchema>;
+
     export const ArchivesArchiveRevisionRequestSchema = z.object({
             path: z.coerce.string(),
             revision: z.coerce.string(),

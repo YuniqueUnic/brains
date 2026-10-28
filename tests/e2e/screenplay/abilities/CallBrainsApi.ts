@@ -53,6 +53,15 @@ export class CallBrainsApi extends Ability {
     });
   }
 
+  async replaceWithBinary(path: string, body: Uint8Array, baseRevision: string): Promise<Response> {
+    return fetch(`${this.baseUrl}/api/v1/file?path=${encodeURIComponent(path)}`, {
+      method: "PUT",
+      headers: { Authorization: `Bearer ${this.token}`, "Content-Type": "application/octet-stream",
+        "If-Match": `"${baseRevision}"`, "X-Content-SHA256": createHash("sha256").update(body).digest("hex") },
+      body: body as unknown as BodyInit,
+    });
+  }
+
   async createText(path: string, body: string): Promise<Response> {
     return this.putText(path, body);
   }

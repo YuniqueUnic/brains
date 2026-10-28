@@ -1,56 +1,21 @@
 """Provision dedicated upload-only AI Search resources using the official API."""
 
-import json
-import urllib.error
 import urllib.parse
-import urllib.request
 
+from cloudflare_api import CloudflareApi
 from cloudflare_config import structured_setting
 
-
 def provision(env):
-    for name in ("CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID"):
-        if not env.get(name):
-            raise ValueError(
-                f"{name} is required for provisioning; Wrangler OAuth remains sufficient for deployment"
-            )
+    request = CloudflareApi(env).request
     services = structured_setting(env, "BRAINS_CLOUD_CONFIG") or {}
     semantic = services.get("semantic")
     if not semantic:
         raise ValueError("Configure semantic.instance before provisioning")
     gateway = env.get("BRAINS_AI_GATEWAY_ID", "brains-notes")
-    account = urllib.parse.quote(env["CLOUDFLARE_ACCOUNT_ID"], safe="")
     namespace = urllib.parse.quote(
         env.get("BRAINS_AI_SEARCH_NAMESPACE", "default"), safe=""
     )
     instance = urllib.parse.quote(semantic["instance"], safe="")
-    base = f"https://api.cloudflare.com/client/v4/accounts/{account}"
-
-    def request(method, path, body=None, missing=False):
-        req = urllib.request.Request(
-            base + path,
-            method=method,
-            headers={
-                "Authorization": "Bearer " + env["CLOUDFLARE_API_TOKEN"],
-                "Content-Type": "application/json",
-            },
-            data=None if body is None else json.dumps(body).encode(),
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = json.load(response)
-        except urllib.error.HTTPError as error:
-            if missing and error.code == 404:
-                return None
-            raise ValueError(
-                f"Cloudflare provisioning {method} {path}: HTTP {error.code}; verify AI Search and AI Gateway permissions"
-            ) from error
-        if not data.get("success"):
-            raise ValueError(
-                f"Cloudflare rejected {method} {path}; inspect the resource in the dashboard"
-            )
-        return data["result"]
-
     gateway_path = "/ai-gateway/gateways/" + urllib.parse.quote(gateway, safe="")
     existing = request("GET", gateway_path, missing=True)
     if existing is None:
@@ -76,7 +41,7 @@ def provision(env):
         )
     path = f"/ai-search/namespaces/{namespace}/instances"
     existing = request("GET", path + "/" + instance, missing=True)
-    model = semantic.get("embedding_model", "@cf/qwen/qwen3-embedding-0.6b")
+    model = semantic.get("embedding_model", "@cf/baai/bge-m3")
     if existing is None:
         request(
             "POST",
@@ -84,6 +49,9 @@ def provision(env):
             {
                 "id": semantic["instance"],
                 "embedding_model": model,
+                "index_method": {"vector": True, "keyword": False},
+                "chunk_size": 512,
+                "chunk_overlap": 0,
                 "ai_gateway_id": gateway,
                 "cache": False,
                 "score_threshold": 0,
@@ -95,6 +63,13 @@ def provision(env):
     elif (
         existing.get("embedding_model") != model
         or existing.get("source")
+        or existing.get("index_method") != {"vector": True, "keyword": False}
+        or existing.get("chunk_size") != 512
+        or existing.get("chunk_overlap") != 0
+        or existing.get("rewrite_query")
+        or existing.get("reranking")
+        or existing.get("cache")
+        or existing.get("score_threshold") != 0
         or existing.get("ai_gateway_id") != gateway
         or existing.get("public_endpoint_params", {}).get("enabled")
     ):

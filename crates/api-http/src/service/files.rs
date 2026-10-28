@@ -768,6 +768,15 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
         })
     }
 
+    async fn reconcile_semantic(
+        &self,
+        body: contract::SemanticReconcileRequest,
+    ) -> Result<contract::SemanticReconcileResult, contract::FilesReconcileSemanticError> {
+        super::semantic::reconcile(&self.state, body)
+            .await
+            .map_err(|e| reconcile_semantic_error(e, current().request_id.as_str()))
+    }
+
     async fn validate(&self) -> Result<(), contract::FilesValidateError> {
         let ctx = current();
         let err = DomainError::CapabilityUnsupported("server_side_validate");

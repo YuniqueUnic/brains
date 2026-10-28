@@ -9,7 +9,7 @@ use brains_domain::{
 };
 use brains_ports::{
     FileProjection, HeadStore,
-    semantic::{SemanticCandidate, SemanticCandidates, SemanticRetriever},
+    semantic::{SemanticCandidate, SemanticCandidates, SemanticRetriever, SemanticWork},
 };
 use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
@@ -26,13 +26,23 @@ pub struct SemanticConfig {
     pub embedding_model: String,
     pub dimensions: Option<usize>,
     #[serde(default)]
+    pub publication: PublicationMode,
+    #[serde(default)]
     pub external_usage: brains_domain::resources::AdmissionAction,
     #[serde(default)]
     pub ranking: RankingPolicy,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PublicationMode {
+    #[default]
+    Automatic,
+    Manual,
+}
+
 fn default_model() -> String {
-    "@cf/qwen/qwen3-embedding-0.6b".into()
+    "@cf/baai/bge-m3".into()
 }
 
 impl SemanticConfig {
@@ -163,6 +173,13 @@ impl CloudSemantic {
         let live = current.as_ref().is_some_and(|head| {
             head.head.state == HeadState::Live && head.head.revision.as_str() == item.revision
         });
+        // A delayed removal can meet a recreated live HEAD. Leave publication
+        // for an explicit refresh (manual mode) or an automatic publication job.
+        if live && item.state == "deleting" {
+            return self
+                .state(item, "pending", item.item_id.as_deref(), None)
+                .await;
+        }
         let remote = self.remote(item).await?;
         if !live {
             if let Some(remote) = remote {
@@ -368,13 +385,50 @@ impl SemanticRetriever for CloudSemantic {
         }))
     }
 
-    fn reconcile(&self) -> BoxFuture<'_, DomainResult<usize>> {
+    fn background_work(&self) -> SemanticWork {
+        match self.config.publication {
+            PublicationMode::Automatic => SemanticWork::All,
+            PublicationMode::Manual => SemanticWork::Deletions,
+        }
+    }
+
+    fn states(&self) -> BoxFuture<'_, DomainResult<std::collections::BTreeMap<String, u64>>> {
+        Box::pin(SendFuture::new(async move {
+            #[derive(Deserialize)]
+            struct Count {
+                state: String,
+                count: u64,
+            }
+            let rows: Vec<Count> = self.db.query(
+                "semantic progress",
+                "SELECT state,COUNT(*) AS count FROM semantic_items WHERE space=?1 GROUP BY state",
+                &[js(&self.space)],
+            ).await?;
+            Ok(rows.into_iter().map(|row| (row.state, row.count)).collect())
+        }))
+    }
+
+    fn reconcile(&self, work: SemanticWork, limit: usize) -> BoxFuture<'_, DomainResult<usize>> {
         Box::pin(SendFuture::new(async move {
             // updated_at also leases one job. Scheduled and request reconciliation
             // share the claim, and an interrupted Worker makes it eligible again.
-            let items:Vec<Item>=self.db.execute_returning("claim semantic projection","UPDATE semantic_items SET updated_at=unixepoch()+90 WHERE (space,revision) IN (SELECT space,revision FROM semantic_items WHERE space=?1 AND state IN ('pending','queued','deleting') AND updated_at<unixepoch()-30 ORDER BY updated_at LIMIT 1) RETURNING revision,path,body,item_id,state",&[js(&self.space)]).await?;
             let mut processed = 0;
-            for item in items {
+            for _ in 0..limit {
+                let sql = match work {
+                    SemanticWork::All => {
+                        "UPDATE semantic_items SET updated_at=unixepoch()+90 WHERE (space,revision) IN (SELECT space,revision FROM semantic_items WHERE space=?1 AND state IN ('pending','queued','deleting') AND updated_at<unixepoch()-30 ORDER BY updated_at LIMIT 1) RETURNING revision,path,body,item_id,state"
+                    }
+                    SemanticWork::Deletions => {
+                        "UPDATE semantic_items SET updated_at=unixepoch()+90 WHERE (space,revision) IN (SELECT space,revision FROM semantic_items WHERE space=?1 AND state='deleting' AND updated_at<unixepoch()-30 ORDER BY updated_at LIMIT 1) RETURNING revision,path,body,item_id,state"
+                    }
+                };
+                let items: Vec<Item> = self
+                    .db
+                    .execute_returning("claim semantic projection", sql, &[js(&self.space)])
+                    .await?;
+                let Some(item) = items.into_iter().next() else {
+                    break;
+                };
                 match self.process(&item).await {
                     Ok(()) => processed += 1,
                     Err(error) => {

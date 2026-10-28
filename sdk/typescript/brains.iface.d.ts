@@ -119,6 +119,9 @@ export namespace brains {
     export interface FilesReindexRequest {
         body: types.brains.ReindexRequest;
     }
+    export interface FilesReconcileSemanticRequest {
+        body: types.brains.SemanticReconcileRequest;
+    }
     export interface ArchivesArchiveRevisionRequest {
         path: string;
         revision: string;
