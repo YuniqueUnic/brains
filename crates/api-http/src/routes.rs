@@ -12,7 +12,7 @@ use axum::http::{HeaderValue, Method, StatusCode, header};
 use axum::middleware::Next;
 use axum::response::Response;
 
-use crate::auth::{AuthSource, guard_cookie_mutation, origin_allowed};
+use crate::auth::AuthSource;
 use crate::context::{RequestContext, scope};
 use crate::error;
 use crate::state::{Blob, Head, Idx, Rev, SharedState};
@@ -84,32 +84,19 @@ async fn authenticate<H: Head, R: Rev, B: Blob, I: Idx>(
     // The nest strips the /api/v1 prefix before this middleware runs.
     let session_create = request.method() == Method::POST && request.uri().path() == "/session";
 
-    let source = match AuthSource::from_request(state.security.as_ref(), &headers) {
+    let source = match AuthSource::authorize_request(
+        state.security.as_ref(),
+        &headers,
+        request.method(),
+        session_create,
+        &state.allowed_origins,
+    ) {
         Ok(source) => source,
+        Err(brains_domain::DomainError::Forbidden(message)) => {
+            return error::forbidden(message, &request_id);
+        }
         Err(err) => return error::unauthorized(err.to_string(), &request_id),
     };
-
-    if session_create {
-        // Origin is validated whenever a browser sends one (§15.2); plain
-        // HTTP clients without an Origin are not CSRF material.
-        if let Some(origin) = headers.get(header::ORIGIN).and_then(|v| v.to_str().ok())
-            && !origin_allowed(origin, &headers, &state.allowed_origins)
-        {
-            return error::forbidden(format!("origin {origin} is not allowed"), &request_id);
-        }
-    } else if matches!(
-        request.method().as_str(),
-        "POST" | "PUT" | "PATCH" | "DELETE"
-    ) && let AuthSource::Cookie(_, cookie) = &source
-        && let Err(err) = guard_cookie_mutation(
-            state.security.as_ref(),
-            &headers,
-            cookie,
-            &state.allowed_origins,
-        )
-    {
-        return error::forbidden(err.to_string(), &request_id);
-    }
 
     request.extensions_mut().insert(request_id.clone());
     let mut response = scope(

@@ -145,6 +145,8 @@ assert request("GET", "/api/v1/file?path=resource-proof.md")[0] == 429
 assert request("GET", "/api/v1/session")[0] == 200
 assert request("GET", "/api/v1/capabilities")[0] == 200
 assert request("GET", "/healthz")[0] == 200
+for path in ("/api/v1/session", "/api/v1/capabilities", "/api/v1/resources"):
+    assert request("GET", path, token=READER)[0] == 429, path
 status, session = request(
     "POST", "/api/v1/session", {"token": OWNER}, headers={"Origin": BASE}
 )
@@ -155,7 +157,7 @@ report = save(
 )
 assert request("GET", "/api/v1/file?path=resource-proof.md")[0] == 200
 print(
-    "Zero-budget rejection keeps login, capabilities, health and admin repair available: PASS",
+    "Zero budget blocks readers while health and owner login/repair remain available: PASS",
     flush=True,
 )
 

@@ -100,6 +100,7 @@ async fn build_report(
         usage: wire(usage)?,
         limitations: vec![
             "Review current provider pricing, billing windows and account-shared usage.".into(),
+            "Unauthenticated traffic and health checks incur platform request/CPU cost outside the application ledger.".into(),
             "Managed ingestion and opaque model costs require a bound or explicit observation policy.".into(),
             "Stored content and provider background work can consume allowance after requests stop.".into(),
         ],

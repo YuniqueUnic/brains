@@ -98,6 +98,8 @@ See the [runbook](docs/runbook.md) for server startup, auth, backups and recover
 
 For a real Cloudflare deployment, use the [dotenv and GitHub Actions deployment guide](docs/cloudflare.md). Local and Actions deployments share one entry point. Optional cloud conversion, URL import, quota admission and managed semantic retrieval use the same protected API; see [cloud architecture](docs/cloudflare-ai-plan.md).
 
+Review [cost amplification and controls](docs/cloudflare-cost-safety.md) before enabling managed services or increasing limits. It covers reported billing incidents, authentication before metered work, bounded scans, failed-job recovery and the limits of application accounting.
+
 The same axum layer runs as a Worker over R2 (content) + D1 (rebuildable index). `wrangler dev` executes it in a local workerd with simulated R2/D1 — the protocol behavior is the production behavior:
 
 ```bash

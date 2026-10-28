@@ -26,6 +26,7 @@ pub struct R2ContentStore {
     bucket: Bucket,
     vault: String,
     budget: Option<Arc<ResourceBudget>>,
+    list_page_max: usize,
 }
 
 impl R2ContentStore {
@@ -34,6 +35,7 @@ impl R2ContentStore {
             bucket,
             vault: vault.into(),
             budget: None,
+            list_page_max: 4,
         }
     }
 
@@ -42,7 +44,21 @@ impl R2ContentStore {
         self
     }
 
+    /// Bound raw key scans independently of the returned logical page size.
+    pub fn with_list_page_max(mut self, pages: usize) -> DomainResult<Self> {
+        if pages == 0 {
+            return Err(DomainError::InvalidArgument(
+                "R2_LIST_PAGE_MAX must be positive".into(),
+            ));
+        }
+        self.list_page_max = pages;
+        Ok(self)
+    }
+
     async fn charge(&self, metric: &str, amount: usize) -> DomainResult<()> {
+        if amount == 0 {
+            return Ok(());
+        }
         if let Some(budget) = &self.budget {
             budget.debit("r2", metric, amount as f64).await?;
         }
@@ -252,7 +268,7 @@ impl HeadStore for R2ContentStore {
         SendFuture::new(async move {
             let mut candidates: Vec<String> = Vec::new();
             let mut r2_cursor: Option<String> = None;
-            loop {
+            for page in 0..self.list_page_max {
                 let mut options = bucket.list().prefix(scan_prefix.clone()).limit(1000);
                 if let Some(cursor) = &r2_cursor {
                     options = options.cursor(cursor.clone());
@@ -272,7 +288,19 @@ impl HeadStore for R2ContentStore {
                 if !objects.truncated() {
                     break;
                 }
-                r2_cursor = objects.cursor();
+                if page + 1 == self.list_page_max {
+                    return Err(DomainError::ResourcePolicy(format!(
+                        "HEAD listing exceeds R2_LIST_PAGE_MAX={}; narrow the prefix or review the scan budget before increasing it",
+                        self.list_page_max
+                    )));
+                }
+                let next = objects.cursor().filter(|next| !next.is_empty());
+                if next.is_none() || next == r2_cursor {
+                    return Err(DomainError::StorageUnavailable(
+                        "R2 listing cursor did not advance".into(),
+                    ));
+                }
+                r2_cursor = next;
             }
 
             let mut paths: Vec<VaultPath> = candidates

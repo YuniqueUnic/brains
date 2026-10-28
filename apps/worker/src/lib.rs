@@ -10,10 +10,10 @@ use std::sync::Arc;
 
 use brains_adapter_d1::D1Index;
 use brains_adapter_r2::R2ContentStore;
-use brains_api_http::auth::Security;
+use brains_api_http::auth::{AuthSource, Security};
 use brains_api_http::state::AppState;
 use brains_application::Vault;
-use brains_domain::{Capabilities, CursorSigner, Limits};
+use brains_domain::{AccessLevel, Capabilities, CursorSigner, Limits};
 
 use axum::response::IntoResponse;
 use security::EnvSecurity;
@@ -59,9 +59,21 @@ fn plain_error(status: u16, message: &str) -> FetchResponse {
         .into_response()
 }
 
+fn load_security(env: &Env) -> Result<Arc<dyn Security>, Box<FetchResponse>> {
+    let key = security::hex_key(&str_var(env, "SESSION_SIGNING_KEY")?, "SESSION_SIGNING_KEY")
+        .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
+    let security = EnvSecurity::from_registry_json(&str_var(env, "TOKEN_REGISTRY_JSON")?, key)
+        .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
+    Ok(Arc::new(security))
+}
+
 /// Assemble the cloudflare profile (design §22.1): R2 content store + D1
 /// index + secret-backed security, per request bindings.
-async fn build_state(env: &Env) -> StateResult {
+async fn build_state(
+    env: &Env,
+    security: Arc<dyn Security>,
+    allowed_origins: Vec<String>,
+) -> StateResult {
     let vault_name = str_var(env, "VAULT_ID")?;
     let bucket = env
         .bucket("BRAINS_BUCKET")
@@ -76,17 +88,21 @@ async fn build_state(env: &Env) -> StateResult {
         reindex_page_max: 2,
         ..Limits::default()
     };
-    let session_key =
-        security::hex_key(&str_var(env, "SESSION_SIGNING_KEY")?, "SESSION_SIGNING_KEY")
-            .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
     let cursor_key = security::hex_key(&str_var(env, "CURSOR_SIGNING_KEY")?, "CURSOR_SIGNING_KEY")
         .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
-    let security: Arc<dyn Security> = Arc::new(
-        EnvSecurity::from_registry_json(&str_var(env, "TOKEN_REGISTRY_JSON")?, session_key)
-            .map_err(|e| plain_error(500, &e.to_string()))?,
-    );
 
-    let store = R2ContentStore::new(bucket, vault_name.clone());
+    let mut store = R2ContentStore::new(bucket, vault_name.clone());
+    if let Ok(pages) = env.var("R2_LIST_PAGE_MAX") {
+        let pages = pages.to_string().parse::<usize>().map_err(|_| {
+            Box::new(plain_error(
+                500,
+                "R2_LIST_PAGE_MAX must be a positive integer",
+            ))
+        })?;
+        store = store
+            .with_list_page_max(pages)
+            .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
+    }
     let mut vault: WorkerVault = Vault::new(
         store.clone(),
         store.clone(),
@@ -144,21 +160,7 @@ async fn build_state(env: &Env) -> StateResult {
         security,
         limits,
         capabilities,
-        // Cross-origin cookie flows are a deploy-time allowlist (design §5.2):
-        // optional comma-separated ALLOWED_ORIGINS var, same-origin only when
-        // unset.
-        allowed_origins: env
-            .var("ALLOWED_ORIGINS")
-            .ok()
-            .map(|list| {
-                list.to_string()
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|origin| !origin.is_empty())
-                    .map(str::to_owned)
-                    .collect()
-            })
-            .unwrap_or_default(),
+        allowed_origins,
         // Static assets come from the ASSETS binding, not the filesystem.
         web_dist: None,
     }))
@@ -185,20 +187,67 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
     if !path.starts_with("/api/") && path != "/api" && path != "/healthz" {
         return Ok(axum::http::StatusCode::NOT_FOUND.into_response());
     }
-    let state = match build_state(&env).await {
+    // Liveness does not read configuration, D1, R2 or the usage ledger.
+    if path == "/healthz" {
+        return Ok(match *req.method() {
+            axum::http::Method::GET => brains_api_http::error::healthz().await,
+            axum::http::Method::HEAD => axum::http::StatusCode::OK.into_response(),
+            _ => (
+                axum::http::StatusCode::METHOD_NOT_ALLOWED,
+                [("Allow", "GET, HEAD")],
+            )
+                .into_response(),
+        });
+    }
+    let allowed_origins: Vec<String> = env
+        .var("ALLOWED_ORIGINS")
+        .ok()
+        .map(|list| {
+            list.to_string()
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    let security = match load_security(&env) {
+        Ok(security) => security,
+        Err(response) => return Ok(*response),
+    };
+    let session_create = req.method() == axum::http::Method::POST && path == "/api/v1/session";
+    let auth = match AuthSource::authorize_request(
+        security.as_ref(),
+        req.headers(),
+        req.method(),
+        session_create,
+        &allowed_origins,
+    ) {
+        Ok(auth) => auth,
+        Err(error) => {
+            let id = brains_domain::HexId::generate().as_str().to_owned();
+            return Ok(match error {
+                brains_domain::DomainError::Forbidden(message) => {
+                    brains_api_http::error::forbidden(message, &id)
+                }
+                error => brains_api_http::error::unauthorized(error.to_string(), &id),
+            });
+        }
+    };
+    let state = match build_state(&env, security, allowed_origins).await {
         Ok(state) => state,
         Err(response) => return Ok(*response),
     };
     // Administration stays available to repair exhausted budgets. Its requests
     // are observed, while the API still requires admin authentication and CSRF.
-    let administration = matches!(
-        path.as_str(),
-        "/healthz"
-            | "/api/v1/resources"
-            | "/api/v1/resources/settings"
-            | "/api/v1/session"
-            | "/api/v1/capabilities"
-    );
+    let administration = auth.principal().allows(AccessLevel::Admin, "")
+        && matches!(
+            path.as_str(),
+            "/api/v1/resources"
+                | "/api/v1/resources/settings"
+                | "/api/v1/session"
+                | "/api/v1/capabilities"
+        );
     if let Some(budget) = &state.vault.resources
         && let Err(error) = if administration {
             budget.observe_request().await
@@ -230,19 +279,27 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
         )
             .into_response());
     }
-    let mutated = !matches!(
-        *req.method(),
-        axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
-    ) && !matches!(
-        path.as_str(),
-        "/api/v1/search" | "/api/v1/files/query" | "/api/v1/session"
+    let mutated = matches!(
+        (req.method().as_str(), path.as_str()),
+        ("PUT" | "PATCH" | "DELETE", "/api/v1/file")
+            | ("DELETE", "/api/v1/trash")
+            | (
+                "POST",
+                "/api/v1/restore"
+                    | "/api/v1/copy"
+                    | "/api/v1/move"
+                    | "/api/v1/files/convert"
+                    | "/api/v1/files/import/url"
+                    | "/api/v1/maintenance/reindex"
+                    | "/api/v1/maintenance/archive/head"
+            )
     );
     let semantic = state.vault.semantic.clone();
     let mut router = brains_api_http::routes::build_router(state);
     // `Router::call` is infallible: it resolves to the §11.3 error mapping
     // inside the shared axum layer.
     let response = router.call(req).await?;
-    if let Some(semantic) = semantic.filter(|_| mutated) {
+    if let Some(semantic) = semantic.filter(|_| mutated && response.status().is_success()) {
         ctx.wait_until(async move {
             let _ = semantic.reconcile().await;
         });
@@ -252,7 +309,16 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
 
 #[worker::event(scheduled)]
 async fn scheduled(_event: worker::ScheduledEvent, env: Env, _ctx: worker::ScheduleContext) {
-    if let Ok(state) = build_state(&env).await
+    if env
+        .var("SEMANTIC_SEARCH")
+        .is_ok_and(|v| v.to_string().eq_ignore_ascii_case("off"))
+    {
+        return;
+    }
+    let Ok(security) = load_security(&env) else {
+        return;
+    };
+    if let Ok(state) = build_state(&env, security, Vec::new()).await
         && let Some(semantic) = &state.vault.semantic
     {
         let _ = semantic.reconcile().await;

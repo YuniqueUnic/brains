@@ -188,15 +188,16 @@ impl CloudSemantic {
                 "queued" | "running" => {
                     return self.state(item, "queued", Some(&remote.id), None).await;
                 }
-                _ => {
+                "error" | "skipped" | "outdated" if item.state == "pending" => {
+                    // Only an explicit publication/maintenance request resets
+                    // a rejected remote item. A queued poll never recreates it.
                     JsFuture::from(bindings::delete_item(
-                        self.env.as_ref(),
-                        &self.config.instance,
-                        &remote.id,
-                    ))
-                    .await
-                    .map_err(|e| service_error("reset failed semantic item", e))?;
+                        self.env.as_ref(), &self.config.instance, &remote.id,
+                    )).await.map_err(|e| service_error("reset explicitly retried semantic item", e))?;
                 }
+                status => return self.state(item, "failed", Some(&remote.id), Some(
+                    &format!("AI Search item stopped with status {status}; fix its source or provider configuration before explicit reindex")
+                )).await,
             }
         }
         // Source bytes are an estimate, not provider billable tokens.
@@ -356,23 +357,36 @@ impl SemanticRetriever for CloudSemantic {
             Ok(SemanticCandidates { items, complete })
         }))
     }
+    fn retry_failed(&self, limit: usize) -> BoxFuture<'_, DomainResult<usize>> {
+        Box::pin(SendFuture::new(async move {
+            let rows: Vec<serde_json::Value> = self.db.execute_returning(
+                "resume paused semantic work",
+                "UPDATE semantic_items SET state=CASE WHEN state='delete_failed' THEN 'deleting' ELSE 'pending' END,item_id=NULL,last_error=NULL,updated_at=0 WHERE (space,revision) IN (SELECT space,revision FROM semantic_items WHERE space=?1 AND state IN ('failed','blocked','delete_failed') ORDER BY updated_at,revision LIMIT ?2) RETURNING revision",
+                &[js(&self.space), JsValue::from_f64(limit as f64)],
+            ).await?;
+            Ok(rows.len())
+        }))
+    }
+
     fn reconcile(&self) -> BoxFuture<'_, DomainResult<usize>> {
         Box::pin(SendFuture::new(async move {
             // updated_at also leases one job. Scheduled and request reconciliation
             // share the claim, and an interrupted Worker makes it eligible again.
-            let items:Vec<Item>=self.db.execute_returning("claim semantic projection","UPDATE semantic_items SET updated_at=unixepoch()+90 WHERE (space,revision) IN (SELECT space,revision FROM semantic_items WHERE space=?1 AND state IN ('pending','queued','deleting','blocked') AND updated_at<unixepoch()-30 ORDER BY updated_at LIMIT 1) RETURNING revision,path,body,item_id,state",&[js(&self.space)]).await?;
+            let items:Vec<Item>=self.db.execute_returning("claim semantic projection","UPDATE semantic_items SET updated_at=unixepoch()+90 WHERE (space,revision) IN (SELECT space,revision FROM semantic_items WHERE space=?1 AND state IN ('pending','queued','deleting') AND updated_at<unixepoch()-30 ORDER BY updated_at LIMIT 1) RETURNING revision,path,body,item_id,state",&[js(&self.space)]).await?;
             let mut processed = 0;
             for item in items {
                 match self.process(&item).await {
                     Ok(()) => processed += 1,
                     Err(error) => {
-                        let state = if matches!(
+                        let state = if item.state == "deleting" {
+                            "delete_failed"
+                        } else if matches!(
                             error,
                             DomainError::ResourcePolicy(_) | DomainError::QuotaExceeded { .. }
                         ) {
                             "blocked"
                         } else {
-                            &item.state
+                            "failed"
                         };
                         self.state(&item, state, None, Some(&error.to_string()))
                             .await?;

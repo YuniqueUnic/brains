@@ -200,6 +200,34 @@ pub enum AuthSource {
 }
 
 impl AuthSource {
+    /// Authenticate and apply browser guards before any storage I/O. Both
+    /// native middleware and the Worker entrypoint use the same policy.
+    pub fn authorize_request(
+        security: &dyn Security,
+        headers: &axum::http::HeaderMap,
+        method: &axum::http::Method,
+        session_create: bool,
+        allowed_origins: &[String],
+    ) -> DomainResult<Self> {
+        let source = Self::from_request(security, headers)?;
+        if session_create {
+            if let Some(origin) = headers
+                .get(axum::http::header::ORIGIN)
+                .and_then(|value| value.to_str().ok())
+                && !origin_allowed(origin, headers, allowed_origins)
+            {
+                return Err(DomainError::Forbidden(format!(
+                    "origin {origin} is not allowed"
+                )));
+            }
+        } else if matches!(method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE")
+            && let Self::Cookie(_, cookie) = &source
+        {
+            guard_cookie_mutation(security, headers, cookie, allowed_origins)?;
+        }
+        Ok(source)
+    }
+
     pub fn from_request(
         security: &dyn Security,
         headers: &axum::http::HeaderMap,
@@ -480,10 +508,11 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> DomainResult<()> {
             use std::os::unix::fs::OpenOptionsExt;
             options.mode(0o600);
         }
-        let mut file = options.open(&temporary)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
-        drop(file);
+        {
+            let mut file = options.open(&temporary)?;
+            file.write_all(bytes)?;
+            file.sync_all()?;
+        }
         std::fs::rename(&temporary, path)?;
         #[cfg(unix)]
         std::fs::File::open(parent)?.sync_all()?;

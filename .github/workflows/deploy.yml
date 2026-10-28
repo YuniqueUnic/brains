@@ -57,6 +57,10 @@ jobs:
       BRAINS_RESOURCE_PROFILE: ${{ vars.BRAINS_RESOURCE_PROFILE }}
       BRAINS_AI_SEARCH_NAMESPACE: ${{ vars.BRAINS_AI_SEARCH_NAMESPACE || 'default' }}
       BRAINS_RECONCILE_CRON: ${{ vars.BRAINS_RECONCILE_CRON || '*/5 * * * *' }}
+      BRAINS_R2_LIST_PAGE_MAX: ${{ vars.BRAINS_R2_LIST_PAGE_MAX || '4' }}
+      BRAINS_WORKER_CPU_MS: ${{ vars.BRAINS_WORKER_CPU_MS }}
+      BRAINS_WORKER_SUBREQUESTS: ${{ vars.BRAINS_WORKER_SUBREQUESTS }}
+      BRAINS_WORKER_LOG_SAMPLE_RATE: ${{ vars.BRAINS_WORKER_LOG_SAMPLE_RATE || '0.1' }}
       BRAINS_APPLY_MIGRATIONS: ${{ github.event_name == 'workflow_run' || inputs.apply_migrations }}
       BRAINS_ADMIN_TOKEN: ${{ secrets.BRAINS_ADMIN_TOKEN }}
       TOKEN_REGISTRY_JSON: ${{ secrets.TOKEN_REGISTRY_JSON }}
