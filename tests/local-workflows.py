@@ -6,6 +6,7 @@ profiles and processes; no real user data, credentials or external service is us
 """
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
@@ -236,30 +237,33 @@ class LocalWorkflows(unittest.TestCase):
         cli("local", "profile", "add", "alias", "--data-dir", alias)
         writer = subprocess.Popen([str(CLI_BIN), "--profile", "local",
             "put", "held.md", "--create"], env=cli.env,
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try:
-            deadline = time.monotonic() + 10
-            while True:
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            pipesize=4096)
+        # More than the pipe capacity on supported runners: completing this
+        # write proves bsx has locked the store and started reading stdin.
+        # Keep stdin open so the command cannot publish or release its lock.
+        prefix = b" " * 131072
+
+        def send_prefix():
+            writer.stdin.write(prefix)
+            writer.stdin.flush()
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            try:
+                pool.submit(send_prefix).result(timeout=10)
                 self.assertIsNone(writer.poll())
-                probe = subprocess.run([str(CLI_BIN), "--profile", "alias", "ls"],
-                    env=cli.env, capture_output=True, timeout=10)
-                if probe.returncode == 6 and b"in use" in probe.stderr:
-                    break
-                self.assertEqual(probe.returncode, 0, probe.stderr)
-                self.assertLess(time.monotonic(), deadline)
-                time.sleep(0.01)
-            cli("alias", "ls", expected=6)
-            server = subprocess.run([str(SERVER_BIN),
-                "--data-dir", str(alias), "--no-seed"], capture_output=True, timeout=10)
-            self.assertEqual(server.returncode, 2)
-            self.assertIn(b"in use", server.stderr)
-            writer.communicate(b"held bytes", timeout=10)
-            self.assertEqual(writer.returncode, 0)
-        finally:
-            if writer.poll() is None:
-                writer.kill()
-                writer.communicate()
-        self.assertEqual(cli("alias", "cat", "held.md"), b"held bytes")
+                cli("alias", "ls", expected=6)
+                server = subprocess.run([str(SERVER_BIN),
+                    "--data-dir", str(alias), "--no-seed"], capture_output=True, timeout=10)
+                self.assertEqual(server.returncode, 2)
+                self.assertIn(b"in use", server.stderr)
+                writer.communicate(b"held bytes", timeout=10)
+                self.assertEqual(writer.returncode, 0)
+            finally:
+                if writer.poll() is None:
+                    writer.kill()
+                    writer.communicate()
+        self.assertEqual(cli("alias", "cat", "held.md"), prefix + b"held bytes")
 
     def test_index_is_rebuilt_only_after_all_content_is_readable(self):
         """Given an old root index and a missing blob, fail then recover without history loss."""
