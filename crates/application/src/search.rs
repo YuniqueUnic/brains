@@ -280,19 +280,32 @@ where
             .filter(|row| row.match_pos > 0)
             .map(|row| vec![row.path, row.revision, row.snippet])
             .collect();
-        // Retriever 2: FTS (tokenized, ranked). An unavailable engine is
-        // reported and the rest still answer.
-        let fts = self
-            .index
-            .search_fts(
-                &query.q,
-                query.prefix.as_deref(),
-                &query.tags,
-                &meta,
-                0,
-                query.scan_limit,
-            )
-            .await;
+        // Hybrid accepts natural language; only explicit FTS mode accepts
+        // the backend's query grammar. Plain words work in FTS5 and Tantivy.
+        let fts_query = query
+            .q
+            .split(|character: char| {
+                !character.is_alphanumeric()
+                    && !unicode_normalization::char::is_combining_mark(character)
+            })
+            .filter(|word| !word.is_empty())
+            .map(str::to_lowercase)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let fts = if fts_query.is_empty() {
+            Ok(Vec::new())
+        } else {
+            self.index
+                .search_fts(
+                    &fts_query,
+                    query.prefix.as_deref(),
+                    &query.tags,
+                    &meta,
+                    0,
+                    query.scan_limit,
+                )
+                .await
+        };
         let fts_truncated;
         let fts: Vec<Vec<String>> = match fts {
             Ok(rows) => {

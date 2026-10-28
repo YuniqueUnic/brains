@@ -3,13 +3,19 @@
 import application from "../../apps/worker/build/worker/shim.mjs";
 
 const items = new Map();
-const calls = { upload: 0, info: 0, list: 0, delete: 0 };
+const calls = { upload: 0, info: 0, list: 0, delete: 0, search: 0 };
 let nextStatus = "queued";
 let deleteFails = false;
 let publication = "automatic";
+let lastQuery;
 
 function testEnv(env) {
   const provider = {
+    async search({ query }) {
+      calls.search++;
+      lastQuery = query;
+      return { chunks: [] };
+    },
     items: {
       async list({ key, source }) {
         calls.list++;
@@ -98,6 +104,6 @@ export default {
       const result = await env.BRAINS_INDEX.prepare(`EXPLAIN QUERY PLAN SELECT revision FROM semantic_items WHERE space=?1 AND state IN (${states}) AND updated_at<unixepoch()-30 ORDER BY updated_at,revision LIMIT 1`).bind("fixture").all();
       plans.push(...result.results.map(row => row.detail));
     }
-    return Response.json({ calls, jobs: jobs.results, usage: usage.results, items: [...items.values()], plans });
+    return Response.json({ calls, lastQuery, jobs: jobs.results, usage: usage.results, items: [...items.values()], plans });
   },
 };
