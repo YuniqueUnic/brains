@@ -31,7 +31,7 @@ export async function searchQuery(env, name, query, limit, threshold) {
 
 /** @param {CloudBindings} env @param {string} name @param {string} key */
 export async function findItem(env, name, key) {
-  const page = await instance(env, name).items.list({ search: key, per_page: 50 });
+  const page = await instance(env, name).items.list({ key, source: "builtin", per_page: 1 });
   return page.result.find(item => item.key === key) ?? null;
 }
 
@@ -40,11 +40,6 @@ export async function uploadItem(env, name, key, body) {
   return tracing.enterSpan("brains.semantic.publish", () => instance(env, name).items.upload(key, body));
 }
 
-/** @param {CloudBindings} env @param {string} name @param {string} id */
-export async function itemInfo(env, name, id) {
-  try { return await instance(env, name).items.get(id).info(); }
-  catch (error) { if (error instanceof Error && "status" in error && error.status === 404) return null; throw error; }
-}
 /** @param {CloudBindings} env @param {string} name @param {string} id */
 export async function deleteItem(env, name, id) {
   return tracing.enterSpan("brains.semantic.remove", () => instance(env, name).items.delete(id));

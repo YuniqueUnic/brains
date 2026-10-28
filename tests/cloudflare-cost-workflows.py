@@ -152,6 +152,21 @@ assert states(control("tick"), "manual/current.md") == ["deleted", "deleted"]
 control("publication", {"mode": "automatic"})
 print("manual publication: bounded explicit refresh, read-only progress, no automatic upload, deletion-only cleanup", flush=True)
 
+control("publication", {"mode": "manual"})
+created = put("manual/provider-recovery.md", "# Stable source identity")
+control("arm")
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 2})
+assert states(control(), "manual/provider-recovery.md") == ["queued"]
+control("drop-provider-item", {"revision": created["revision"]})
+control("arm")
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 2})
+assert states(control(), "manual/provider-recovery.md") == ["queued"]
+control("arm")
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 2})
+assert states(control(), "manual/provider-recovery.md") == ["ready"]
+control("publication", {"mode": "automatic"})
+print("cached provider item removed while queued: recover by immutable source key and finish indexing", flush=True)
+
 for start in range(0, 1001, 50):
     control("seed-scan", {"start": start, "count": min(50, 1001 - start)})
 before = control()

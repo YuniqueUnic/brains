@@ -142,24 +142,13 @@ impl CloudSemantic {
     }
 
     async fn remote(&self, item: &Item) -> DomainResult<Option<RemoteItem>> {
-        let result = match &item.item_id {
-            Some(id) => {
-                JsFuture::from(bindings::item_info(
-                    self.env.as_ref(),
-                    &self.config.instance,
-                    id,
-                ))
-                .await
-            }
-            None => {
-                JsFuture::from(bindings::find_item(
-                    self.env.as_ref(),
-                    &self.config.instance,
-                    &item_key(&item.revision),
-                ))
-                .await
-            }
-        }
+        // The immutable source key survives provider retries and replacement IDs.
+        let result = JsFuture::from(bindings::find_item(
+            self.env.as_ref(),
+            &self.config.instance,
+            &item_key(&item.revision),
+        ))
+        .await
         .map_err(|e| service_error("lookup semantic item", e))?;
         if result.is_null() || result.is_undefined() {
             Ok(None)
