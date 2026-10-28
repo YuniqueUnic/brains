@@ -176,6 +176,44 @@ impl BrainClient {
 }
 
 impl Library for BrainClient {
+    fn convert_document(
+        &self,
+        path: &str,
+        to: Option<&str>,
+    ) -> ClientResult<crate::convert::ConvertReport> {
+        let body = brains_sdk::ConversionInput {
+            path: path.into(),
+            to: to.map(str::to_owned),
+        };
+        let response = self.send(
+            self.http
+                .post(self.url("/api/v1/files/convert", ""))
+                .json(&body),
+        )?;
+        self.expect_json(response)
+    }
+
+    fn import_public_url(
+        &self,
+        url: &str,
+        path: &str,
+    ) -> ClientResult<brains_sdk::UrlImportResult> {
+        let body = brains_sdk::UrlImportInput {
+            url: url.into(),
+            path: path.into(),
+        };
+        let response = self.send(
+            self.http
+                .post(self.url("/api/v1/files/import-url", ""))
+                .json(&body),
+        )?;
+        self.expect_json(response)
+    }
+
+    fn resource_status(&self) -> ClientResult<brains_sdk::ResourceReport> {
+        let response = self.send(self.http.get(self.url("/api/v1/resources", "")))?;
+        self.expect_json(response)
+    }
     fn capabilities(&self) -> ClientResult<Capabilities> {
         let response = self.send(self.http.get(self.url("/api/v1/capabilities", "")))?;
         self.expect_json(response)
@@ -494,6 +532,8 @@ impl From<DomainError> for ClientError {
             DomainError::PreconditionRequired => 428,
             DomainError::CapabilityUnsupported(_) => 501,
             DomainError::IndexUnavailable(_) | DomainError::StorageUnavailable(_) => 503,
+            DomainError::QuotaExceeded { .. } => 429,
+            DomainError::ResourcePolicy(_) => 503,
             DomainError::Internal(_) => 500,
         };
         Self {

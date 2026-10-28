@@ -143,7 +143,7 @@ where
         match query.mode {
             SearchMode::Literal => self.search_literal(query, meta, building).await,
             SearchMode::Fts => self.search_fts(query, meta, building).await,
-            SearchMode::Hybrid => self.search_hybrid(query, meta, building).await,
+            SearchMode::Hybrid => self.search_hybrid(principal, query, meta, building).await,
         }
     }
 
@@ -255,6 +255,7 @@ where
     /// complete candidate sets of all retrievers.
     async fn search_hybrid(
         &self,
+        principal: &Principal,
         query: SearchQuery,
         meta: brains_ports::MetaFilter,
         building: bool,
@@ -307,19 +308,39 @@ where
             }
             Err(error) => return Err(error),
         };
-        // Retriever 3: semantic. No runtime currently mounts an embedding
-        // provider behind the Vault facade; when the Worker gains its
-        // Vectorize adapter it plugs in here and leaves the unavailable list.
-        unavailable.push("semantic".into());
-        let scanned = literal.len() + fts.len();
-        let items = fuse(vec![
+        let (semantic, semantic_complete) = match &self.semantic {
+            None => {
+                unavailable.push("semantic".into());
+                (Vec::new(), true)
+            }
+            Some(_) => match self.semantic_hits(principal, &query, &meta).await {
+                Ok(results) => results,
+                Err(error) => {
+                    unavailable.push(format!("semantic: {}", error.code()));
+                    (Vec::new(), false)
+                }
+            },
+        };
+        let scanned = literal.len() + fts.len() + semantic.len();
+        let mut items = fuse(vec![
             ("literal".to_owned(), literal),
             ("fts".to_owned(), fts),
+            ("semantic".to_owned(), semantic),
         ]);
+        let output_truncated = self
+            .semantic
+            .as_ref()
+            .is_some_and(|provider| items.len() > provider.ranking().result_limit);
+        if let Some(provider) = &self.semantic {
+            items.truncate(provider.ranking().result_limit);
+        }
         Ok(SearchResult {
             items,
             next_cursor: None,
-            complete: !literal_truncated && !fts_truncated,
+            complete: !literal_truncated
+                && !fts_truncated
+                && semantic_complete
+                && !output_truncated,
             scanned,
             building,
             unavailable,

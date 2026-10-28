@@ -4,6 +4,7 @@
 //! this handler only sees `/api/*` and `/healthz` (wrangler `run_worker_first`).
 
 mod security;
+mod services;
 
 use std::sync::Arc;
 
@@ -72,6 +73,7 @@ fn build_state(env: &Env) -> StateResult {
     let limits = Limits {
         max_text_bytes: int_var(env, "MAX_TEXT_BYTES")?,
         max_attachment_bytes: int_var(env, "MAX_ATTACHMENT_BYTES")?,
+        reindex_page_max: 2,
         ..Limits::default()
     };
     let session_key =
@@ -85,15 +87,17 @@ fn build_state(env: &Env) -> StateResult {
     );
 
     let store = R2ContentStore::new(bucket, vault_name.clone());
-    let vault: WorkerVault = Vault::new(
+    let mut vault: WorkerVault = Vault::new(
         store.clone(),
         store.clone(),
-        store,
+        store.clone(),
         D1Index::new(d1),
         vault_name.clone(),
         limits.clone(),
         CursorSigner::new(cursor_key),
     );
+    services::configure(env, &mut vault, store)
+        .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
     let capabilities = {
         let mut capabilities = Capabilities::cloudflare_rust(
             brains_build_info::VERSION,
@@ -102,6 +106,35 @@ fn build_state(env: &Env) -> StateResult {
             limits.max_attachment_bytes,
         );
         capabilities.semantic = Some(worker_semantics(env));
+        if let Some(semantic) = &vault.semantic {
+            capabilities.semantic = Some(semantic.capability());
+            capabilities.features.insert("semantic_search".into(), true);
+        }
+        if let Some(converter) = &vault.converter {
+            capabilities.document_conversion =
+                Some(brains_domain::capabilities::DocumentConversion {
+                    converter: converter.identity().0.into(),
+                    version: converter.identity().1.into(),
+                    media_types: converter.media_types(),
+                });
+            capabilities
+                .features
+                .insert("document_conversion".into(), true);
+            capabilities
+                .features
+                .insert("remote_conversion".into(), true);
+        }
+        capabilities
+            .features
+            .insert("remote_url_import".into(), vault.fetcher.is_some());
+        if let Some(resources) = &vault.resources {
+            capabilities.features.insert("resource_policy".into(), true);
+            capabilities.resources = Some(brains_domain::capabilities::ResourceCapability {
+                profile_id: resources.profile.profile.id.clone(),
+                reviewed_at: resources.profile.profile.reviewed_at.clone(),
+                coverage: "controlled application operations".into(),
+            });
+        }
         capabilities
     };
     Ok(Arc::new(AppState {
@@ -130,11 +163,7 @@ fn build_state(env: &Env) -> StateResult {
     }))
 }
 
-/// Semantic capability of this deployment: declared unavailable, like the
-/// native runtime, because no embedding retriever is mounted yet (search
-/// serves literal + FTS only). Advertisement never runs ahead of
-/// execution; `SEMANTIC_SEARCH=off` records an explicit operator decision
-/// as the reason instead.
+/// Report why this deployment has no mounted semantic provider.
 fn worker_semantics(env: &Env) -> brains_domain::SemanticCapability {
     let off = str_var(env, "SEMANTIC_SEARCH")
         .unwrap_or_else(|_| "on".into())
@@ -142,13 +171,13 @@ fn worker_semantics(env: &Env) -> brains_domain::SemanticCapability {
     let reason = if off {
         "SEMANTIC_SEARCH=off on this deployment"
     } else {
-        "no embedding retriever in the Worker runtime yet"
+        "no AI Search provider configured for this deployment"
     };
     Capabilities::semantic_unavailable(reason)
 }
 
 #[worker::event(fetch)]
-async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<FetchResponse, worker::Error> {
+async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse, worker::Error> {
     let path = req.uri().path().to_owned();
     // /api, /api/* and /healthz are answered by the shared axum router
     // (healthz lives there too); anything else belongs to Static Assets.
@@ -159,8 +188,58 @@ async fn fetch(req: HttpRequest, env: Env, _ctx: Context) -> Result<FetchRespons
         Ok(state) => state,
         Err(response) => return Ok(*response),
     };
+    if let Some(budget) = &state.vault.resources
+        && let Err(error) = budget.debit("workers", "requests", 1.0).await
+    {
+        let status = if matches!(error, brains_domain::DomainError::QuotaExceeded { .. }) {
+            429
+        } else {
+            503
+        };
+        if req.method() == axum::http::Method::HEAD {
+            return Ok((
+                axum::http::StatusCode::from_u16(status).expect("valid status"),
+                [("X-Brain-Error-Code", error.code())],
+            )
+                .into_response());
+        }
+        let mut detail = serde_json::json!({"code":error.code(),"message":error.to_string(),"request_id":brains_domain::HexId::generate().as_str()});
+        if let brains_domain::DomainError::QuotaExceeded { rule, reset_at } = &error {
+            detail["resource_rule"] = serde_json::json!(rule);
+            detail["reset_at"] = serde_json::json!(reset_at);
+        }
+        let body = serde_json::json!({"error":detail});
+        return Ok((
+            axum::http::StatusCode::from_u16(status).expect("valid status"),
+            axum::Json(body),
+        )
+            .into_response());
+    }
+    let mutated = !matches!(
+        *req.method(),
+        axum::http::Method::GET | axum::http::Method::HEAD | axum::http::Method::OPTIONS
+    ) && !matches!(
+        path.as_str(),
+        "/api/v1/search" | "/api/v1/files/query" | "/api/v1/session"
+    );
+    let semantic = state.vault.semantic.clone();
     let mut router = brains_api_http::routes::build_router(state);
     // `Router::call` is infallible: it resolves to the §11.3 error mapping
     // inside the shared axum layer.
-    Ok(router.call(req).await?)
+    let response = router.call(req).await?;
+    if let Some(semantic) = semantic.filter(|_| mutated) {
+        ctx.wait_until(async move {
+            let _ = semantic.reconcile().await;
+        });
+    }
+    Ok(response)
+}
+
+#[worker::event(scheduled)]
+async fn scheduled(_event: worker::ScheduledEvent, env: Env, _ctx: worker::ScheduleContext) {
+    if let Ok(state) = build_state(&env)
+        && let Some(semantic) = &state.vault.semantic
+    {
+        let _ = semantic.reconcile().await;
+    }
 }

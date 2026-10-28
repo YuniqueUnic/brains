@@ -30,6 +30,14 @@ impl FsHeadStore {
         if !file.exists() {
             return Ok(None);
         }
+        // R2 raw backups retain zero-byte, conditionally written vacancy markers.
+        if std::fs::metadata(&file)
+            .map_err(|e| DomainError::StorageUnavailable(e.to_string()))?
+            .len()
+            == 0
+        {
+            return Ok(None);
+        }
         let head = parse_head(read_json_file(&file)?)?;
         head.validate()?;
         Ok(Some(StoredHead {
@@ -207,7 +215,12 @@ fn collect_head_paths(
         let child_path = dir.join(&name);
         if child_path.is_dir() {
             collect_head_paths(&child_path, &mut child_rel.clone(), out)?;
-        } else if let Some(key) = child_rel.strip_suffix(".json") {
+        } else if let Some(key) = child_rel.strip_suffix(".json")
+            && std::fs::metadata(&child_path)
+                .map_err(|e| DomainError::StorageUnavailable(e.to_string()))?
+                .len()
+                > 0
+        {
             out.push(key.to_owned());
         }
     }

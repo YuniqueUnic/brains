@@ -38,7 +38,89 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> Clone for FilesService<H, R, B, I> {
 #[async_trait::async_trait]
 impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B, I> {
     async fn capabilities(&self) -> ::xidl_rust_axum::Result<contract::Capabilities> {
-        Ok(capabilities_dto(&self.state))
+        let mut caps = capabilities_dto(&self.state);
+        if let Some(budget) = &self.state.vault.resources {
+            use brains_domain::resources::UsageEvidence::{Bounded, Estimated};
+            let mut entries = vec![("requests", "workers", "requests", Bounded)];
+            if self.state.vault.semantic.is_some() {
+                entries.extend([
+                    ("semantic_search", "ai_search", "semantic_queries", Bounded),
+                    ("semantic_ingestion", "ai_search", "ingestion", Estimated),
+                ]);
+            }
+            let mut states = std::collections::BTreeMap::new();
+            for (name, service, metric, evidence) in entries {
+                let value = budget.admission(service, metric, evidence).await;
+                states.insert(
+                    name.to_owned(),
+                    contract::AdmissionState {
+                        state: value.state,
+                        reason: value.reason,
+                        rule: value.rule,
+                        limit: value.limit,
+                        consumed: value.consumed,
+                        reserved: value.reserved,
+                        remaining: value.remaining,
+                        reset_at: value.reset_at,
+                    },
+                );
+            }
+            caps.admission = Some(states.into_iter().collect());
+        }
+        Ok(caps)
+    }
+
+    async fn resource_status(
+        &self,
+    ) -> Result<contract::ResourceReport, contract::FilesResourceStatusError> {
+        super::resources::report(&self.state)
+            .await
+            .map_err(|e| resource_status_error(e, current().request_id.as_str()))
+    }
+
+    async fn convert_document(
+        &self,
+        body: contract::ConversionInput,
+    ) -> Result<contract::ConversionResult, contract::FilesConvertDocumentError> {
+        let ctx = current();
+        let rid = ctx.request_id.as_str();
+        let path = VaultPath::new(&body.path).map_err(|e| convert_document_error(e, rid))?;
+        let result = self
+            .state
+            .vault
+            .convert_document(ctx.auth.principal(), &path, body.to.as_deref())
+            .await
+            .map_err(|e| convert_document_error(e, rid))?;
+        super::resources::wire(result).map_err(|e| convert_document_error(e, rid))
+    }
+
+    async fn import_url(
+        &self,
+        body: contract::UrlImportInput,
+    ) -> Result<contract::UrlImportResult, contract::FilesImportUrlError> {
+        let ctx = current();
+        let rid = ctx.request_id.as_str();
+        let path = VaultPath::new(&body.path).map_err(|e| import_url_error(e, rid))?;
+        let result = self
+            .state
+            .vault
+            .import_public_url(ctx.auth.principal(), &body.url, &path)
+            .await
+            .map_err(|e| import_url_error(e, rid))?;
+        Ok(contract::UrlImportResult {
+            path: result.path,
+            revision: result.revision,
+            source_url: result.source_url,
+            source_path: result.source_path,
+            source_revision: result.source_revision,
+            partial: result.partial,
+            error: result
+                .error
+                .as_ref()
+                .map(|error| super::error::detail(error, rid)),
+            created: result.created,
+            unchanged: result.unchanged,
+        })
     }
 
     async fn list_files(
@@ -167,19 +249,19 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
         let ctx = current();
         let rid = ctx.request_id.as_str();
         let path = VaultPath::new(&path).map_err(|e| get_file_error(e, rid))?;
-        let head = self
-            .state
-            .vault
-            .read_entry(ctx.auth.principal(), &path)
-            .await
-            .map_err(|e| get_file_error(e, rid))?;
-        let etag = quoted_etag(&head.revision);
-        if not_modified(if_none_match.as_deref(), &etag) {
-            return Err(contract::FilesGetFileError::NotModified(
-                contract::NotModified { etag: etag.clone() },
-            ));
-        }
         if format.as_deref() == Some("meta") {
+            let head = self
+                .state
+                .vault
+                .read_entry(ctx.auth.principal(), &path)
+                .await
+                .map_err(|e| get_file_error(e, rid))?;
+            let etag = quoted_etag(&head.revision);
+            if not_modified(if_none_match.as_deref(), &etag) {
+                return Err(contract::FilesGetFileError::NotModified(
+                    contract::NotModified { etag },
+                ));
+            }
             return Ok(contract::FilesGetFileResponse {
                 r#return: contract::FilePayload::Json(entry(&head)),
                 etag: Some(etag),
@@ -187,12 +269,19 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
                 content_disposition: None,
             });
         }
+        // Derive bytes and ETag from one immutable source snapshot.
         let content = self
             .state
             .vault
             .read_file(ctx.auth.principal(), &path)
             .await
             .map_err(|e| get_file_error(e, rid))?;
+        let etag = quoted_etag(content.head.revision.as_str());
+        if not_modified(if_none_match.as_deref(), &etag) {
+            return Err(contract::FilesGetFileError::NotModified(
+                contract::NotModified { etag },
+            ));
+        }
         let media = media_type_or_default(content.revision.content.as_ref());
         let (media_type, content_disposition) = raw_headers(&media, path.file_name());
         Ok(contract::FilesGetFileResponse {
@@ -278,6 +367,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             .await
             .map_err(|e| purge_file_error(e, rid))?;
         Ok(contract::PurgeResult {
+            semantic_state: outcome.semantic_state.clone(),
             path: outcome.path,
             purged: true,
             index_state: outcome.index_state.as_str().to_owned(),
@@ -478,15 +568,12 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             }
         };
         let scan_limit = scan_limit
-            .map(|v| {
-                usize::try_from(v).map_err(|_| {
-                    search_error(
-                        DomainError::InvalidArgument("scan_limit must be positive".into()),
-                        rid,
-                    )
-                })
+            .map(|value| {
+                usize::try_from(value)
+                    .map_err(|_| DomainError::InvalidArgument("scan_limit must be positive".into()))
             })
-            .transpose()?
+            .transpose()
+            .map_err(|error| search_error(error, rid))?
             .unwrap_or(self.state.limits.scan_window_max);
         let query = brains_application::search::SearchQuery {
             q: q.clone(),

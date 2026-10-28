@@ -8,9 +8,9 @@
 //! Native steps: 1) content negotiation (`Accept: text/markdown`),
 //! 2) static HTML through Readability + HTML-to-Markdown, 3) rendered HTML
 //! via the optional external `moli` tool when found on `PATH`, 4) documents
-//! (PDF…) stored as attachments for `bsx convert`. The Worker equivalents
-//! (AI `toMarkdown`, Browser Rendering) mount in the Worker runtime, not
-//! here.
+//! (PDF…) stored as attachments for `bsx convert`. These steps also work
+//! with a remote Worker as the storage target. Remote cloud conversion and
+//! URL import are selected by the CLI when advertised; Browser Run is optional.
 
 use std::io::Read;
 use std::net::IpAddr;

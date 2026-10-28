@@ -90,6 +90,10 @@ where
             deleted,
             self.limits.max_text_bytes,
         );
-        self.index.upsert(&proj).await
+        self.index.upsert(&proj).await?;
+        if let Some(semantic) = &self.semantic {
+            semantic.publish(&proj).await?;
+        }
+        Ok(())
     }
 }

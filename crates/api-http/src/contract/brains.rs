@@ -5,7 +5,24 @@
 #[allow(clippy::too_many_arguments, clippy::large_enum_variant)]
 pub mod brains {
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ErrorDetail {
+        pub code: String,
+        pub message: String,
+        pub request_id: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub path: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub current_revision: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub resource_rule: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub reset_at: Option<i64>,
+    }
+    impl ErrorDetail {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct CapabilityLimits {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub reindex_page_max: Option<u64>,
         pub max_text_bytes: u64,
         pub max_attachment_bytes: u64,
     }
@@ -23,12 +40,181 @@ pub mod brains {
         CloudflareTypescript,
     }
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct DimensionControl {
+        pub mode: String,
+        pub supported: Vec<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub minimum: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub maximum: Option<u64>,
+    }
+    impl DimensionControl {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceDescriptor {
+        pub service: String,
+        pub kind: String,
+    }
+    impl ResourceDescriptor {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceMeasure {
+        pub metric: String,
+        pub unit: String,
+    }
+    impl ResourceMeasure {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceScope {
+        pub kind: String,
+    }
+    impl ResourceScope {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceWindow {
+        pub kind: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub size: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub unit: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub timezone: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub r#ref: Option<String>,
+    }
+    impl ResourceWindow {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceLimit {
+        pub kind: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub value: Option<f64>,
+    }
+    impl ResourceLimit {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourcePolicy {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub fraction: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub maximum: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub when_exhausted: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub when_charge_unknown: Option<String>,
+    }
+    impl ResourcePolicy {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceRule {
+        pub id: String,
+        pub resource: ResourceDescriptor,
+        pub measure: ResourceMeasure,
+        pub scope: ResourceScope,
+        pub window: ResourceWindow,
+        pub limit: ResourceLimit,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub policy: Option<ResourcePolicy>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub source: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub effective_limit: Option<f64>,
+        pub enforcement: String,
+    }
+    impl ResourceRule {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceUsage {
+        pub key: String,
+        pub meter: String,
+        pub rule: String,
+        pub unit: String,
+        pub evidence: String,
+        pub consumed: f64,
+        pub reserved: f64,
+        pub limit: f64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub reset_at: Option<i64>,
+    }
+    impl ResourceUsage {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceCapability {
+        pub profile_id: String,
+        pub reviewed_at: String,
+        pub coverage: String,
+    }
+    impl ResourceCapability {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct AdmissionState {
+        pub state: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub reason: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub rule: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub limit: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub consumed: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub reserved: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub remaining: Option<f64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub reset_at: Option<i64>,
+    }
+    impl AdmissionState {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ResourceReport {
+        pub profile: ResourceCapability,
+        pub rules: Vec<ResourceRule>,
+        pub usage: Vec<ResourceUsage>,
+        pub limitations: Vec<String>,
+    }
+    impl ResourceReport {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ConversionInput {
+        pub path: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub to: Option<String>,
+    }
+    impl ConversionInput {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct ConversionResult {
+        pub companion_path: String,
+        pub companion_revision: String,
+        pub converter: String,
+        pub created: bool,
+        pub unchanged: bool,
+    }
+    impl ConversionResult {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct UrlImportInput {
+        pub url: String,
+        pub path: String,
+    }
+    impl UrlImportInput {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct UrlImportResult {
+        pub path: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub revision: Option<String>,
+        pub partial: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub error: Option<ErrorDetail>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub source_revision: Option<String>,
+        pub source_url: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub source_path: Option<String>,
+        pub created: bool,
+        pub unchanged: bool,
+    }
+    impl UrlImportResult {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct SemanticCapability {
         pub model_id: String,
         pub dimensions: u64,
         pub vector_index_version: i64,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub unavailable_reason: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub dimension_control: Option<DimensionControl>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub model_modalities: Option<Vec<String>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub accepted_inputs: Option<Vec<String>>,
     }
     impl SemanticCapability {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
@@ -52,6 +238,10 @@ pub mod brains {
         pub document_conversion: Option<DocumentConversion>,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub vault: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub resources: Option<ResourceCapability>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub admission: Option<::std::collections::BTreeMap<String, AdmissionState>>,
     }
     impl Capabilities {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
@@ -122,6 +312,8 @@ pub mod brains {
         pub path: String,
         pub purged: bool,
         pub index_state: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub semantic_state: Option<String>,
         pub operation_id: String,
     }
     impl PurgeResult {}
@@ -144,6 +336,8 @@ pub mod brains {
         #[serde(skip_serializing_if = "Option::is_none")]
         pub title: Option<String>,
         pub index_state: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub semantic_state: Option<String>,
         pub operation_id: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub created: Option<bool>,
@@ -360,17 +554,6 @@ pub mod brains {
     }
     impl TransferBody {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
-    pub struct ErrorDetail {
-        pub code: String,
-        pub message: String,
-        pub request_id: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub path: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        pub current_revision: Option<String>,
-    }
-    impl ErrorDetail {}
-    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct TransferResult {
         pub copied: bool,
         pub source_trashed: bool,
@@ -442,6 +625,10 @@ pub mod brains {
         pub error: ErrorDetail,
     }
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct QuotaExceeded {
+        pub error: ErrorDetail,
+    }
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct Internal {
         pub error: ErrorDetail,
     }
@@ -502,6 +689,12 @@ pub mod brains {
     }
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct HeadServiceUnavailable {
+        #[serde(rename = "X-Brain-Error-Code")]
+        #[serde(skip)]
+        pub code: String,
+    }
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct HeadQuotaExceeded {
         #[serde(rename = "X-Brain-Error-Code")]
         #[serde(skip)]
         pub code: String,
@@ -590,6 +783,17 @@ pub mod brains {
     #[async_trait::async_trait]
     pub trait Files {
         async fn capabilities(&self) -> ::xidl_rust_axum::Result<Capabilities>;
+        async fn resource_status(
+            &self,
+        ) -> ::std::result::Result<ResourceReport, FilesResourceStatusError>;
+        async fn convert_document(
+            &self,
+            body: ConversionInput,
+        ) -> ::std::result::Result<ConversionResult, FilesConvertDocumentError>;
+        async fn import_url(
+            &self,
+            body: UrlImportInput,
+        ) -> ::std::result::Result<UrlImportResult, FilesImportUrlError>;
         async fn list_files(
             &self,
             body: ListFilesQuery,
@@ -682,6 +886,790 @@ pub mod brains {
         ) -> ::std::result::Result<ReindexPage, FilesReindexError>;
         async fn validate(&self) -> ::std::result::Result<(), FilesValidateError>;
     }
+    /// Typed error channel for `resource_status`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum FilesResourceStatusError {
+        Forbidden(Forbidden),
+        NotImplemented(NotImplemented),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for FilesResourceStatusError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for FilesResourceStatusError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for FilesResourceStatusError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    impl ::xidl_rust_axum::axum::response::IntoResponse for FilesResourceStatusError {
+        fn into_response(self) -> ::xidl_rust_axum::axum::response::Response {
+            match self {
+                Self::Framework(err) => {
+                    ::xidl_rust_axum::axum::response::IntoResponse::into_response(err)
+                }
+                Self::Forbidden(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(403u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::NotImplemented(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(501u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::ServiceUnavailable(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(503u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Internal(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+            }
+        }
+    }
+    /// Typed error channel for `convert_document`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum FilesConvertDocumentError {
+        BadRequest(BadRequest),
+        Forbidden(Forbidden),
+        NotFound(NotFound),
+        Gone(Gone),
+        PreconditionFailed(PreconditionFailed),
+        PayloadTooLarge(PayloadTooLarge),
+        UnprocessableEntity(UnprocessableEntity),
+        NotImplemented(NotImplemented),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for FilesConvertDocumentError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::NotFound(_) => f.write_str("HTTP 404: NotFound"),
+                Self::Gone(_) => f.write_str("HTTP 410: Gone"),
+                Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
+                Self::PayloadTooLarge(_) => f.write_str("HTTP 413: PayloadTooLarge"),
+                Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
+                Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for FilesConvertDocumentError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for FilesConvertDocumentError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    impl ::xidl_rust_axum::axum::response::IntoResponse for FilesConvertDocumentError {
+        fn into_response(self) -> ::xidl_rust_axum::axum::response::Response {
+            match self {
+                Self::Framework(err) => {
+                    ::xidl_rust_axum::axum::response::IntoResponse::into_response(err)
+                }
+                Self::BadRequest(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(400u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Forbidden(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(403u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::NotFound(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(404u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Gone(err) => {
+                    let headers =
+                        (|| -> xidl_rust_axum::Result<::xidl_rust_axum::axum::http::HeaderMap> {
+                            let mut headers = ::xidl_rust_axum::axum::http::HeaderMap::new();
+                            for value in err.etag.as_ref().into_iter() {
+                                let value = value.to_string();
+                                let value =
+                                    ::xidl_rust_axum::axum::http::header::HeaderValue::from_str(
+                                        &value,
+                                    )
+                                    .map_err(|err| {
+                                        xidl_rust_axum::Error::new(
+                                            500,
+                                            format!("exception ETag: {err}"),
+                                        )
+                                    })?;
+                                headers.append("ETag", value);
+                            }
+                            Ok(headers)
+                        })();
+                    let headers = match headers {
+                        Ok(headers) => headers,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                err,
+                            );
+                        }
+                    };
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(410u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response.headers_mut().extend(headers);
+                    response
+                }
+                Self::PreconditionFailed(err) => {
+                    let headers =
+                        (|| -> xidl_rust_axum::Result<::xidl_rust_axum::axum::http::HeaderMap> {
+                            let mut headers = ::xidl_rust_axum::axum::http::HeaderMap::new();
+                            for value in err.etag.as_ref().into_iter() {
+                                let value = value.to_string();
+                                let value =
+                                    ::xidl_rust_axum::axum::http::header::HeaderValue::from_str(
+                                        &value,
+                                    )
+                                    .map_err(|err| {
+                                        xidl_rust_axum::Error::new(
+                                            500,
+                                            format!("exception ETag: {err}"),
+                                        )
+                                    })?;
+                                headers.append("ETag", value);
+                            }
+                            Ok(headers)
+                        })();
+                    let headers = match headers {
+                        Ok(headers) => headers,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                err,
+                            );
+                        }
+                    };
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(412u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response.headers_mut().extend(headers);
+                    response
+                }
+                Self::PayloadTooLarge(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(413u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::UnprocessableEntity(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(422u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::NotImplemented(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(501u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::ServiceUnavailable(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(503u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Internal(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+            }
+        }
+    }
+    /// Typed error channel for `import_url`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum FilesImportUrlError {
+        BadRequest(BadRequest),
+        Forbidden(Forbidden),
+        NotFound(NotFound),
+        Gone(Gone),
+        PreconditionFailed(PreconditionFailed),
+        PayloadTooLarge(PayloadTooLarge),
+        UnprocessableEntity(UnprocessableEntity),
+        NotImplemented(NotImplemented),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for FilesImportUrlError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::NotFound(_) => f.write_str("HTTP 404: NotFound"),
+                Self::Gone(_) => f.write_str("HTTP 410: Gone"),
+                Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
+                Self::PayloadTooLarge(_) => f.write_str("HTTP 413: PayloadTooLarge"),
+                Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
+                Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for FilesImportUrlError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for FilesImportUrlError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    impl ::xidl_rust_axum::axum::response::IntoResponse for FilesImportUrlError {
+        fn into_response(self) -> ::xidl_rust_axum::axum::response::Response {
+            match self {
+                Self::Framework(err) => {
+                    ::xidl_rust_axum::axum::response::IntoResponse::into_response(err)
+                }
+                Self::BadRequest(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(400u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Forbidden(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(403u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::NotFound(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(404u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Gone(err) => {
+                    let headers =
+                        (|| -> xidl_rust_axum::Result<::xidl_rust_axum::axum::http::HeaderMap> {
+                            let mut headers = ::xidl_rust_axum::axum::http::HeaderMap::new();
+                            for value in err.etag.as_ref().into_iter() {
+                                let value = value.to_string();
+                                let value =
+                                    ::xidl_rust_axum::axum::http::header::HeaderValue::from_str(
+                                        &value,
+                                    )
+                                    .map_err(|err| {
+                                        xidl_rust_axum::Error::new(
+                                            500,
+                                            format!("exception ETag: {err}"),
+                                        )
+                                    })?;
+                                headers.append("ETag", value);
+                            }
+                            Ok(headers)
+                        })();
+                    let headers = match headers {
+                        Ok(headers) => headers,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                err,
+                            );
+                        }
+                    };
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(410u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response.headers_mut().extend(headers);
+                    response
+                }
+                Self::PreconditionFailed(err) => {
+                    let headers =
+                        (|| -> xidl_rust_axum::Result<::xidl_rust_axum::axum::http::HeaderMap> {
+                            let mut headers = ::xidl_rust_axum::axum::http::HeaderMap::new();
+                            for value in err.etag.as_ref().into_iter() {
+                                let value = value.to_string();
+                                let value =
+                                    ::xidl_rust_axum::axum::http::header::HeaderValue::from_str(
+                                        &value,
+                                    )
+                                    .map_err(|err| {
+                                        xidl_rust_axum::Error::new(
+                                            500,
+                                            format!("exception ETag: {err}"),
+                                        )
+                                    })?;
+                                headers.append("ETag", value);
+                            }
+                            Ok(headers)
+                        })();
+                    let headers = match headers {
+                        Ok(headers) => headers,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                err,
+                            );
+                        }
+                    };
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(412u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response.headers_mut().extend(headers);
+                    response
+                }
+                Self::PayloadTooLarge(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(413u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::UnprocessableEntity(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(422u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::NotImplemented(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(501u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::ServiceUnavailable(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(503u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Internal(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+            }
+        }
+    }
     /// Typed error channel for `list_files`: one variant per
     /// declared `raises(...)` exception, plus the runtime fallback.
     #[derive(Debug)]
@@ -690,6 +1678,7 @@ pub mod brains {
         Forbidden(Forbidden),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesListFilesError {
@@ -699,6 +1688,7 @@ pub mod brains {
                 Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -798,6 +1788,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -814,6 +1823,7 @@ pub mod brains {
         UnprocessableEntity(UnprocessableEntity),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesPutFileError {
@@ -828,6 +1838,7 @@ pub mod brains {
                 Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -1078,6 +2089,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -1092,6 +2122,7 @@ pub mod brains {
         NotModified(NotModified),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesGetFileError {
@@ -1104,6 +2135,7 @@ pub mod brains {
                 Self::NotModified(_) => f.write_str("HTTP 304: NotModified"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -1305,6 +2337,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -1318,6 +2369,7 @@ pub mod brains {
         HeadGone(HeadGone),
         HeadServiceUnavailable(HeadServiceUnavailable),
         HeadInternal(HeadInternal),
+        HeadQuotaExceeded(HeadQuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesHeadFileError {
@@ -1329,6 +2381,7 @@ pub mod brains {
                 Self::HeadGone(_) => f.write_str("HTTP 410: HeadGone"),
                 Self::HeadServiceUnavailable(_) => f.write_str("HTTP 503: HeadServiceUnavailable"),
                 Self::HeadInternal(_) => f.write_str("HTTP 500: HeadInternal"),
+                Self::HeadQuotaExceeded(_) => f.write_str("HTTP 429: HeadQuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -1582,6 +2635,42 @@ pub mod brains {
                     response.headers_mut().extend(headers);
                     response
                 }
+                Self::HeadQuotaExceeded(err) => {
+                    let headers =
+                        (|| -> xidl_rust_axum::Result<::xidl_rust_axum::axum::http::HeaderMap> {
+                            let mut headers = ::xidl_rust_axum::axum::http::HeaderMap::new();
+                            {
+                                let value = &err.code;
+                                let value = value.to_string();
+                                let value =
+                                    ::xidl_rust_axum::axum::http::header::HeaderValue::from_str(
+                                        &value,
+                                    )
+                                    .map_err(|err| {
+                                        xidl_rust_axum::Error::new(
+                                            500,
+                                            format!("exception X-Brain-Error-Code: {err}"),
+                                        )
+                                    })?;
+                                headers.append("X-Brain-Error-Code", value);
+                            }
+                            Ok(headers)
+                        })();
+                    let headers = match headers {
+                        Ok(headers) => headers,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                err,
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::empty();
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().extend(headers);
+                    response
+                }
             }
         }
     }
@@ -1597,6 +2686,7 @@ pub mod brains {
         PreconditionFailed(PreconditionFailed),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesDeleteFileError {
@@ -1610,6 +2700,7 @@ pub mod brains {
                 Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -1841,6 +2932,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -1856,6 +2966,7 @@ pub mod brains {
         PreconditionFailed(PreconditionFailed),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesPurgeFileError {
@@ -1869,6 +2980,7 @@ pub mod brains {
                 Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -2072,6 +3184,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -2090,6 +3221,7 @@ pub mod brains {
         UnprocessableEntity(UnprocessableEntity),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesPatchFileError {
@@ -2106,6 +3238,7 @@ pub mod brains {
                 Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -2394,6 +3527,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -2407,6 +3559,7 @@ pub mod brains {
         Gone(Gone),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesListRevisionsError {
@@ -2418,6 +3571,7 @@ pub mod brains {
                 Self::Gone(_) => f.write_str("HTTP 410: Gone"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -2583,6 +3737,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -2596,6 +3769,7 @@ pub mod brains {
         Gone(Gone),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesGetRevisionError {
@@ -2607,6 +3781,7 @@ pub mod brains {
                 Self::Gone(_) => f.write_str("HTTP 410: Gone"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -2772,6 +3947,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -2787,6 +3981,7 @@ pub mod brains {
         PreconditionFailed(PreconditionFailed),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesRestoreError {
@@ -2800,6 +3995,7 @@ pub mod brains {
                 Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -3031,6 +4227,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -3043,6 +4258,7 @@ pub mod brains {
         NotImplemented(NotImplemented),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesSearchError {
@@ -3053,6 +4269,7 @@ pub mod brains {
                 Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -3171,6 +4388,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -3182,6 +4418,7 @@ pub mod brains {
         Forbidden(Forbidden),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesLinksError {
@@ -3191,6 +4428,7 @@ pub mod brains {
                 Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -3290,6 +4528,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -3306,6 +4563,7 @@ pub mod brains {
         UnprocessableEntity(UnprocessableEntity),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesCopyError {
@@ -3320,6 +4578,7 @@ pub mod brains {
                 Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -3570,6 +4829,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -3586,6 +4864,7 @@ pub mod brains {
         UnprocessableEntity(UnprocessableEntity),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesMoveError {
@@ -3600,6 +4879,7 @@ pub mod brains {
                 Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -3850,6 +5130,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -3862,6 +5161,7 @@ pub mod brains {
         NotFound(NotFound),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesDiffError {
@@ -3872,6 +5172,7 @@ pub mod brains {
                 Self::NotFound(_) => f.write_str("HTTP 404: NotFound"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -3990,6 +5291,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -4001,6 +5321,7 @@ pub mod brains {
         Forbidden(Forbidden),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesReindexError {
@@ -4010,6 +5331,7 @@ pub mod brains {
                 Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -4109,6 +5431,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -4117,12 +5458,14 @@ pub mod brains {
     #[derive(Debug)]
     pub enum FilesValidateError {
         NotImplemented(NotImplemented),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for FilesValidateError {
         fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
             match self {
                 Self::NotImplemented(_) => f.write_str("HTTP 501: NotImplemented"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -4165,6 +5508,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -4176,6 +5538,54 @@ pub mod brains {
     )]
     pub(super) mod __xidl_in_Files {
         use super::*;
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_AdmissionState {
+            pub state: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reason: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub rule: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub limit: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub consumed: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reserved: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub remaining: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reset_at: Option<i64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::AdmissionState> for brains_AdmissionState {
+            fn from(value: super::AdmissionState) -> Self {
+                Self {
+                    state: value.state,
+                    reason: value.reason,
+                    rule: value.rule,
+                    limit: value.limit,
+                    consumed: value.consumed,
+                    reserved: value.reserved,
+                    remaining: value.remaining,
+                    reset_at: value.reset_at,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_AdmissionState> for super::AdmissionState {
+            fn from(value: brains_AdmissionState) -> Self {
+                Self {
+                    state: value.state,
+                    reason: value.reason,
+                    rule: value.rule,
+                    limit: value.limit,
+                    consumed: value.consumed,
+                    reserved: value.reserved,
+                    remaining: value.remaining,
+                    reset_at: value.reset_at,
+                }
+            }
+        }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Capabilities {
             pub build_version: String,
@@ -4190,6 +5600,12 @@ pub mod brains {
             pub document_conversion: Option<__xidl_in_Files::brains_DocumentConversion>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub vault: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub resources: Option<__xidl_in_Files::brains_ResourceCapability>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub admission: Option<
+                ::std::collections::BTreeMap<String, __xidl_in_Files::brains_AdmissionState>,
+            >,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::Capabilities> for brains_Capabilities {
@@ -4204,6 +5620,13 @@ pub mod brains {
                     semantic: value.semantic.map(|value| value.into()),
                     document_conversion: value.document_conversion.map(|value| value.into()),
                     vault: value.vault,
+                    resources: value.resources.map(|value| value.into()),
+                    admission: value.admission.map(|value| {
+                        value
+                            .into_iter()
+                            .map(|(key, value)| (key, value.into()))
+                            .collect()
+                    }),
                 }
             }
         }
@@ -4220,11 +5643,20 @@ pub mod brains {
                     semantic: value.semantic.map(|value| value.into()),
                     document_conversion: value.document_conversion.map(|value| value.into()),
                     vault: value.vault,
+                    resources: value.resources.map(|value| value.into()),
+                    admission: value.admission.map(|value| {
+                        value
+                            .into_iter()
+                            .map(|(key, value)| (key, value.into()))
+                            .collect()
+                    }),
                 }
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_CapabilityLimits {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reindex_page_max: Option<u64>,
             pub max_text_bytes: u64,
             pub max_attachment_bytes: u64,
         }
@@ -4232,6 +5664,7 @@ pub mod brains {
         impl From<super::CapabilityLimits> for brains_CapabilityLimits {
             fn from(value: super::CapabilityLimits) -> Self {
                 Self {
+                    reindex_page_max: value.reindex_page_max,
                     max_text_bytes: value.max_text_bytes,
                     max_attachment_bytes: value.max_attachment_bytes,
                 }
@@ -4241,6 +5674,7 @@ pub mod brains {
         impl From<brains_CapabilityLimits> for super::CapabilityLimits {
             fn from(value: brains_CapabilityLimits) -> Self {
                 Self {
+                    reindex_page_max: value.reindex_page_max,
                     max_text_bytes: value.max_text_bytes,
                     max_attachment_bytes: value.max_attachment_bytes,
                 }
@@ -4272,6 +5706,62 @@ pub mod brains {
                     sha256: value.sha256,
                     media_type: value.media_type,
                     executable: value.executable,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ConversionInput {
+            pub path: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub to: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ConversionInput> for brains_ConversionInput {
+            fn from(value: super::ConversionInput) -> Self {
+                Self {
+                    path: value.path,
+                    to: value.to,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ConversionInput> for super::ConversionInput {
+            fn from(value: brains_ConversionInput) -> Self {
+                Self {
+                    path: value.path,
+                    to: value.to,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ConversionResult {
+            pub companion_path: String,
+            pub companion_revision: String,
+            pub converter: String,
+            pub created: bool,
+            pub unchanged: bool,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ConversionResult> for brains_ConversionResult {
+            fn from(value: super::ConversionResult) -> Self {
+                Self {
+                    companion_path: value.companion_path,
+                    companion_revision: value.companion_revision,
+                    converter: value.converter,
+                    created: value.created,
+                    unchanged: value.unchanged,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ConversionResult> for super::ConversionResult {
+            fn from(value: brains_ConversionResult) -> Self {
+                Self {
+                    companion_path: value.companion_path,
+                    companion_revision: value.companion_revision,
+                    converter: value.converter,
+                    created: value.created,
+                    unchanged: value.unchanged,
                 }
             }
         }
@@ -4312,6 +5802,37 @@ pub mod brains {
         impl From<brains_DiffResult> for super::DiffResult {
             fn from(value: brains_DiffResult) -> Self {
                 Self { diff: value.diff }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_DimensionControl {
+            pub mode: String,
+            pub supported: Vec<u64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub minimum: Option<u64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub maximum: Option<u64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::DimensionControl> for brains_DimensionControl {
+            fn from(value: super::DimensionControl) -> Self {
+                Self {
+                    mode: value.mode,
+                    supported: value.supported.into_iter().collect(),
+                    minimum: value.minimum,
+                    maximum: value.maximum,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_DimensionControl> for super::DimensionControl {
+            fn from(value: brains_DimensionControl) -> Self {
+                Self {
+                    mode: value.mode,
+                    supported: value.supported.into_iter().collect(),
+                    minimum: value.minimum,
+                    maximum: value.maximum,
+                }
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
@@ -4406,6 +5927,10 @@ pub mod brains {
             pub path: Option<String>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub current_revision: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub resource_rule: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reset_at: Option<i64>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::ErrorDetail> for brains_ErrorDetail {
@@ -4416,6 +5941,8 @@ pub mod brains {
                     request_id: value.request_id,
                     path: value.path,
                     current_revision: value.current_revision,
+                    resource_rule: value.resource_rule,
+                    reset_at: value.reset_at,
                 }
             }
         }
@@ -4428,6 +5955,8 @@ pub mod brains {
                     request_id: value.request_id,
                     path: value.path,
                     current_revision: value.current_revision,
+                    resource_rule: value.resource_rule,
+                    reset_at: value.reset_at,
                 }
             }
         }
@@ -4650,6 +6179,8 @@ pub mod brains {
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub title: Option<String>,
             pub index_state: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub semantic_state: Option<String>,
             pub operation_id: String,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub created: Option<bool>,
@@ -4669,6 +6200,7 @@ pub mod brains {
                     kind: value.kind,
                     title: value.title,
                     index_state: value.index_state,
+                    semantic_state: value.semantic_state,
                     operation_id: value.operation_id,
                     created: value.created,
                 }
@@ -4689,6 +6221,7 @@ pub mod brains {
                     kind: value.kind,
                     title: value.title,
                     index_state: value.index_state,
+                    semantic_state: value.semantic_state,
                     operation_id: value.operation_id,
                     created: value.created,
                 }
@@ -4837,6 +6370,8 @@ pub mod brains {
             pub path: String,
             pub purged: bool,
             pub index_state: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub semantic_state: Option<String>,
             pub operation_id: String,
         }
         #[allow(unused_variables, unreachable_code)]
@@ -4846,6 +6381,7 @@ pub mod brains {
                     path: value.path,
                     purged: value.purged,
                     index_state: value.index_state,
+                    semantic_state: value.semantic_state,
                     operation_id: value.operation_id,
                 }
             }
@@ -4857,6 +6393,7 @@ pub mod brains {
                     path: value.path,
                     purged: value.purged,
                     index_state: value.index_state,
+                    semantic_state: value.semantic_state,
                     operation_id: value.operation_id,
                 }
             }
@@ -4933,6 +6470,311 @@ pub mod brains {
                 Self {
                     cursor: value.cursor,
                     limit: value.limit,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceCapability {
+            pub profile_id: String,
+            pub reviewed_at: String,
+            pub coverage: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceCapability> for brains_ResourceCapability {
+            fn from(value: super::ResourceCapability) -> Self {
+                Self {
+                    profile_id: value.profile_id,
+                    reviewed_at: value.reviewed_at,
+                    coverage: value.coverage,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceCapability> for super::ResourceCapability {
+            fn from(value: brains_ResourceCapability) -> Self {
+                Self {
+                    profile_id: value.profile_id,
+                    reviewed_at: value.reviewed_at,
+                    coverage: value.coverage,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceDescriptor {
+            pub service: String,
+            pub kind: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceDescriptor> for brains_ResourceDescriptor {
+            fn from(value: super::ResourceDescriptor) -> Self {
+                Self {
+                    service: value.service,
+                    kind: value.kind,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceDescriptor> for super::ResourceDescriptor {
+            fn from(value: brains_ResourceDescriptor) -> Self {
+                Self {
+                    service: value.service,
+                    kind: value.kind,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceLimit {
+            pub kind: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub value: Option<f64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceLimit> for brains_ResourceLimit {
+            fn from(value: super::ResourceLimit) -> Self {
+                Self {
+                    kind: value.kind,
+                    value: value.value,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceLimit> for super::ResourceLimit {
+            fn from(value: brains_ResourceLimit) -> Self {
+                Self {
+                    kind: value.kind,
+                    value: value.value,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceMeasure {
+            pub metric: String,
+            pub unit: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceMeasure> for brains_ResourceMeasure {
+            fn from(value: super::ResourceMeasure) -> Self {
+                Self {
+                    metric: value.metric,
+                    unit: value.unit,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceMeasure> for super::ResourceMeasure {
+            fn from(value: brains_ResourceMeasure) -> Self {
+                Self {
+                    metric: value.metric,
+                    unit: value.unit,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourcePolicy {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub fraction: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub maximum: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub when_exhausted: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub when_charge_unknown: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourcePolicy> for brains_ResourcePolicy {
+            fn from(value: super::ResourcePolicy) -> Self {
+                Self {
+                    fraction: value.fraction,
+                    maximum: value.maximum,
+                    when_exhausted: value.when_exhausted,
+                    when_charge_unknown: value.when_charge_unknown,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourcePolicy> for super::ResourcePolicy {
+            fn from(value: brains_ResourcePolicy) -> Self {
+                Self {
+                    fraction: value.fraction,
+                    maximum: value.maximum,
+                    when_exhausted: value.when_exhausted,
+                    when_charge_unknown: value.when_charge_unknown,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceReport {
+            pub profile: __xidl_in_Files::brains_ResourceCapability,
+            pub rules: Vec<__xidl_in_Files::brains_ResourceRule>,
+            pub usage: Vec<__xidl_in_Files::brains_ResourceUsage>,
+            pub limitations: Vec<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceReport> for brains_ResourceReport {
+            fn from(value: super::ResourceReport) -> Self {
+                Self {
+                    profile: value.profile.into(),
+                    rules: value.rules.into_iter().map(|value| value.into()).collect(),
+                    usage: value.usage.into_iter().map(|value| value.into()).collect(),
+                    limitations: value.limitations.into_iter().collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceReport> for super::ResourceReport {
+            fn from(value: brains_ResourceReport) -> Self {
+                Self {
+                    profile: value.profile.into(),
+                    rules: value.rules.into_iter().map(|value| value.into()).collect(),
+                    usage: value.usage.into_iter().map(|value| value.into()).collect(),
+                    limitations: value.limitations.into_iter().collect(),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceRule {
+            pub id: String,
+            pub resource: __xidl_in_Files::brains_ResourceDescriptor,
+            pub measure: __xidl_in_Files::brains_ResourceMeasure,
+            pub scope: __xidl_in_Files::brains_ResourceScope,
+            pub window: __xidl_in_Files::brains_ResourceWindow,
+            pub limit: __xidl_in_Files::brains_ResourceLimit,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub policy: Option<__xidl_in_Files::brains_ResourcePolicy>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub effective_limit: Option<f64>,
+            pub enforcement: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceRule> for brains_ResourceRule {
+            fn from(value: super::ResourceRule) -> Self {
+                Self {
+                    id: value.id,
+                    resource: value.resource.into(),
+                    measure: value.measure.into(),
+                    scope: value.scope.into(),
+                    window: value.window.into(),
+                    limit: value.limit.into(),
+                    policy: value.policy.map(|value| value.into()),
+                    source: value.source,
+                    effective_limit: value.effective_limit,
+                    enforcement: value.enforcement,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceRule> for super::ResourceRule {
+            fn from(value: brains_ResourceRule) -> Self {
+                Self {
+                    id: value.id,
+                    resource: value.resource.into(),
+                    measure: value.measure.into(),
+                    scope: value.scope.into(),
+                    window: value.window.into(),
+                    limit: value.limit.into(),
+                    policy: value.policy.map(|value| value.into()),
+                    source: value.source,
+                    effective_limit: value.effective_limit,
+                    enforcement: value.enforcement,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceScope {
+            pub kind: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceScope> for brains_ResourceScope {
+            fn from(value: super::ResourceScope) -> Self {
+                Self { kind: value.kind }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceScope> for super::ResourceScope {
+            fn from(value: brains_ResourceScope) -> Self {
+                Self { kind: value.kind }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceUsage {
+            pub key: String,
+            pub meter: String,
+            pub rule: String,
+            pub unit: String,
+            pub evidence: String,
+            pub consumed: f64,
+            pub reserved: f64,
+            pub limit: f64,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reset_at: Option<i64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceUsage> for brains_ResourceUsage {
+            fn from(value: super::ResourceUsage) -> Self {
+                Self {
+                    key: value.key,
+                    meter: value.meter,
+                    rule: value.rule,
+                    unit: value.unit,
+                    evidence: value.evidence,
+                    consumed: value.consumed,
+                    reserved: value.reserved,
+                    limit: value.limit,
+                    reset_at: value.reset_at,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceUsage> for super::ResourceUsage {
+            fn from(value: brains_ResourceUsage) -> Self {
+                Self {
+                    key: value.key,
+                    meter: value.meter,
+                    rule: value.rule,
+                    unit: value.unit,
+                    evidence: value.evidence,
+                    consumed: value.consumed,
+                    reserved: value.reserved,
+                    limit: value.limit,
+                    reset_at: value.reset_at,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceWindow {
+            pub kind: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub size: Option<u64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub unit: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub timezone: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub r#ref: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceWindow> for brains_ResourceWindow {
+            fn from(value: super::ResourceWindow) -> Self {
+                Self {
+                    kind: value.kind,
+                    size: value.size,
+                    unit: value.unit,
+                    timezone: value.timezone,
+                    r#ref: value.r#ref,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceWindow> for super::ResourceWindow {
+            fn from(value: brains_ResourceWindow) -> Self {
+                Self {
+                    kind: value.kind,
+                    size: value.size,
+                    unit: value.unit,
+                    timezone: value.timezone,
+                    r#ref: value.r#ref,
                 }
             }
         }
@@ -5207,6 +7049,12 @@ pub mod brains {
             pub vector_index_version: i64,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub unavailable_reason: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub dimension_control: Option<__xidl_in_Files::brains_DimensionControl>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub model_modalities: Option<Vec<String>>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub accepted_inputs: Option<Vec<String>>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::SemanticCapability> for brains_SemanticCapability {
@@ -5216,6 +7064,13 @@ pub mod brains {
                     dimensions: value.dimensions,
                     vector_index_version: value.vector_index_version,
                     unavailable_reason: value.unavailable_reason,
+                    dimension_control: value.dimension_control.map(|value| value.into()),
+                    model_modalities: value
+                        .model_modalities
+                        .map(|value| value.into_iter().collect()),
+                    accepted_inputs: value
+                        .accepted_inputs
+                        .map(|value| value.into_iter().collect()),
                 }
             }
         }
@@ -5227,6 +7082,13 @@ pub mod brains {
                     dimensions: value.dimensions,
                     vector_index_version: value.vector_index_version,
                     unavailable_reason: value.unavailable_reason,
+                    dimension_control: value.dimension_control.map(|value| value.into()),
+                    model_modalities: value
+                        .model_modalities
+                        .map(|value| value.into_iter().collect()),
+                    accepted_inputs: value
+                        .accepted_inputs
+                        .map(|value| value.into_iter().collect()),
                 }
             }
         }
@@ -5333,6 +7195,77 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_UrlImportInput {
+            pub url: String,
+            pub path: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::UrlImportInput> for brains_UrlImportInput {
+            fn from(value: super::UrlImportInput) -> Self {
+                Self {
+                    url: value.url,
+                    path: value.path,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_UrlImportInput> for super::UrlImportInput {
+            fn from(value: brains_UrlImportInput) -> Self {
+                Self {
+                    url: value.url,
+                    path: value.path,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_UrlImportResult {
+            pub path: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub revision: Option<String>,
+            pub partial: bool,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub error: Option<__xidl_in_Files::brains_ErrorDetail>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source_revision: Option<String>,
+            pub source_url: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source_path: Option<String>,
+            pub created: bool,
+            pub unchanged: bool,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::UrlImportResult> for brains_UrlImportResult {
+            fn from(value: super::UrlImportResult) -> Self {
+                Self {
+                    path: value.path,
+                    revision: value.revision,
+                    partial: value.partial,
+                    error: value.error.map(|value| value.into()),
+                    source_revision: value.source_revision,
+                    source_url: value.source_url,
+                    source_path: value.source_path,
+                    created: value.created,
+                    unchanged: value.unchanged,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_UrlImportResult> for super::UrlImportResult {
+            fn from(value: brains_UrlImportResult) -> Self {
+                Self {
+                    path: value.path,
+                    revision: value.revision,
+                    partial: value.partial,
+                    error: value.error.map(|value| value.into()),
+                    source_revision: value.source_revision,
+                    source_url: value.source_url,
+                    source_path: value.source_path,
+                    created: value.created,
+                    unchanged: value.unchanged,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Verification {
             pub by: String,
             #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -5366,6 +7299,54 @@ pub mod brains {
     pub(super) mod __xidl_out_Files {
         use super::*;
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_AdmissionState {
+            pub state: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reason: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub rule: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub limit: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub consumed: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reserved: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub remaining: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reset_at: Option<i64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::AdmissionState> for brains_AdmissionState {
+            fn from(value: super::AdmissionState) -> Self {
+                Self {
+                    state: value.state,
+                    reason: value.reason,
+                    rule: value.rule,
+                    limit: value.limit,
+                    consumed: value.consumed,
+                    reserved: value.reserved,
+                    remaining: value.remaining,
+                    reset_at: value.reset_at,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_AdmissionState> for super::AdmissionState {
+            fn from(value: brains_AdmissionState) -> Self {
+                Self {
+                    state: value.state,
+                    reason: value.reason,
+                    rule: value.rule,
+                    limit: value.limit,
+                    consumed: value.consumed,
+                    reserved: value.reserved,
+                    remaining: value.remaining,
+                    reset_at: value.reset_at,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Capabilities {
             pub build_version: String,
             pub api_version: String,
@@ -5379,6 +7360,12 @@ pub mod brains {
             pub document_conversion: Option<__xidl_out_Files::brains_DocumentConversion>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub vault: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub resources: Option<__xidl_out_Files::brains_ResourceCapability>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub admission: Option<
+                ::std::collections::BTreeMap<String, __xidl_out_Files::brains_AdmissionState>,
+            >,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::Capabilities> for brains_Capabilities {
@@ -5393,6 +7380,13 @@ pub mod brains {
                     semantic: value.semantic.map(|value| value.into()),
                     document_conversion: value.document_conversion.map(|value| value.into()),
                     vault: value.vault,
+                    resources: value.resources.map(|value| value.into()),
+                    admission: value.admission.map(|value| {
+                        value
+                            .into_iter()
+                            .map(|(key, value)| (key, value.into()))
+                            .collect()
+                    }),
                 }
             }
         }
@@ -5409,11 +7403,20 @@ pub mod brains {
                     semantic: value.semantic.map(|value| value.into()),
                     document_conversion: value.document_conversion.map(|value| value.into()),
                     vault: value.vault,
+                    resources: value.resources.map(|value| value.into()),
+                    admission: value.admission.map(|value| {
+                        value
+                            .into_iter()
+                            .map(|(key, value)| (key, value.into()))
+                            .collect()
+                    }),
                 }
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_CapabilityLimits {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reindex_page_max: Option<u64>,
             pub max_text_bytes: u64,
             pub max_attachment_bytes: u64,
         }
@@ -5421,6 +7424,7 @@ pub mod brains {
         impl From<super::CapabilityLimits> for brains_CapabilityLimits {
             fn from(value: super::CapabilityLimits) -> Self {
                 Self {
+                    reindex_page_max: value.reindex_page_max,
                     max_text_bytes: value.max_text_bytes,
                     max_attachment_bytes: value.max_attachment_bytes,
                 }
@@ -5430,6 +7434,7 @@ pub mod brains {
         impl From<brains_CapabilityLimits> for super::CapabilityLimits {
             fn from(value: brains_CapabilityLimits) -> Self {
                 Self {
+                    reindex_page_max: value.reindex_page_max,
                     max_text_bytes: value.max_text_bytes,
                     max_attachment_bytes: value.max_attachment_bytes,
                 }
@@ -5461,6 +7466,62 @@ pub mod brains {
                     sha256: value.sha256,
                     media_type: value.media_type,
                     executable: value.executable,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ConversionInput {
+            pub path: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub to: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ConversionInput> for brains_ConversionInput {
+            fn from(value: super::ConversionInput) -> Self {
+                Self {
+                    path: value.path,
+                    to: value.to,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ConversionInput> for super::ConversionInput {
+            fn from(value: brains_ConversionInput) -> Self {
+                Self {
+                    path: value.path,
+                    to: value.to,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ConversionResult {
+            pub companion_path: String,
+            pub companion_revision: String,
+            pub converter: String,
+            pub created: bool,
+            pub unchanged: bool,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ConversionResult> for brains_ConversionResult {
+            fn from(value: super::ConversionResult) -> Self {
+                Self {
+                    companion_path: value.companion_path,
+                    companion_revision: value.companion_revision,
+                    converter: value.converter,
+                    created: value.created,
+                    unchanged: value.unchanged,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ConversionResult> for super::ConversionResult {
+            fn from(value: brains_ConversionResult) -> Self {
+                Self {
+                    companion_path: value.companion_path,
+                    companion_revision: value.companion_revision,
+                    converter: value.converter,
+                    created: value.created,
+                    unchanged: value.unchanged,
                 }
             }
         }
@@ -5501,6 +7562,37 @@ pub mod brains {
         impl From<brains_DiffResult> for super::DiffResult {
             fn from(value: brains_DiffResult) -> Self {
                 Self { diff: value.diff }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_DimensionControl {
+            pub mode: String,
+            pub supported: Vec<u64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub minimum: Option<u64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub maximum: Option<u64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::DimensionControl> for brains_DimensionControl {
+            fn from(value: super::DimensionControl) -> Self {
+                Self {
+                    mode: value.mode,
+                    supported: value.supported.into_iter().collect(),
+                    minimum: value.minimum,
+                    maximum: value.maximum,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_DimensionControl> for super::DimensionControl {
+            fn from(value: brains_DimensionControl) -> Self {
+                Self {
+                    mode: value.mode,
+                    supported: value.supported.into_iter().collect(),
+                    minimum: value.minimum,
+                    maximum: value.maximum,
+                }
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
@@ -5595,6 +7687,10 @@ pub mod brains {
             pub path: Option<String>,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub current_revision: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub resource_rule: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reset_at: Option<i64>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::ErrorDetail> for brains_ErrorDetail {
@@ -5605,6 +7701,8 @@ pub mod brains {
                     request_id: value.request_id,
                     path: value.path,
                     current_revision: value.current_revision,
+                    resource_rule: value.resource_rule,
+                    reset_at: value.reset_at,
                 }
             }
         }
@@ -5617,6 +7715,8 @@ pub mod brains {
                     request_id: value.request_id,
                     path: value.path,
                     current_revision: value.current_revision,
+                    resource_rule: value.resource_rule,
+                    reset_at: value.reset_at,
                 }
             }
         }
@@ -5839,6 +7939,8 @@ pub mod brains {
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub title: Option<String>,
             pub index_state: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub semantic_state: Option<String>,
             pub operation_id: String,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub created: Option<bool>,
@@ -5858,6 +7960,7 @@ pub mod brains {
                     kind: value.kind,
                     title: value.title,
                     index_state: value.index_state,
+                    semantic_state: value.semantic_state,
                     operation_id: value.operation_id,
                     created: value.created,
                 }
@@ -5878,6 +7981,7 @@ pub mod brains {
                     kind: value.kind,
                     title: value.title,
                     index_state: value.index_state,
+                    semantic_state: value.semantic_state,
                     operation_id: value.operation_id,
                     created: value.created,
                 }
@@ -6026,6 +8130,8 @@ pub mod brains {
             pub path: String,
             pub purged: bool,
             pub index_state: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub semantic_state: Option<String>,
             pub operation_id: String,
         }
         #[allow(unused_variables, unreachable_code)]
@@ -6035,6 +8141,7 @@ pub mod brains {
                     path: value.path,
                     purged: value.purged,
                     index_state: value.index_state,
+                    semantic_state: value.semantic_state,
                     operation_id: value.operation_id,
                 }
             }
@@ -6046,6 +8153,7 @@ pub mod brains {
                     path: value.path,
                     purged: value.purged,
                     index_state: value.index_state,
+                    semantic_state: value.semantic_state,
                     operation_id: value.operation_id,
                 }
             }
@@ -6122,6 +8230,311 @@ pub mod brains {
                 Self {
                     cursor: value.cursor,
                     limit: value.limit,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceCapability {
+            pub profile_id: String,
+            pub reviewed_at: String,
+            pub coverage: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceCapability> for brains_ResourceCapability {
+            fn from(value: super::ResourceCapability) -> Self {
+                Self {
+                    profile_id: value.profile_id,
+                    reviewed_at: value.reviewed_at,
+                    coverage: value.coverage,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceCapability> for super::ResourceCapability {
+            fn from(value: brains_ResourceCapability) -> Self {
+                Self {
+                    profile_id: value.profile_id,
+                    reviewed_at: value.reviewed_at,
+                    coverage: value.coverage,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceDescriptor {
+            pub service: String,
+            pub kind: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceDescriptor> for brains_ResourceDescriptor {
+            fn from(value: super::ResourceDescriptor) -> Self {
+                Self {
+                    service: value.service,
+                    kind: value.kind,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceDescriptor> for super::ResourceDescriptor {
+            fn from(value: brains_ResourceDescriptor) -> Self {
+                Self {
+                    service: value.service,
+                    kind: value.kind,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceLimit {
+            pub kind: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub value: Option<f64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceLimit> for brains_ResourceLimit {
+            fn from(value: super::ResourceLimit) -> Self {
+                Self {
+                    kind: value.kind,
+                    value: value.value,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceLimit> for super::ResourceLimit {
+            fn from(value: brains_ResourceLimit) -> Self {
+                Self {
+                    kind: value.kind,
+                    value: value.value,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceMeasure {
+            pub metric: String,
+            pub unit: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceMeasure> for brains_ResourceMeasure {
+            fn from(value: super::ResourceMeasure) -> Self {
+                Self {
+                    metric: value.metric,
+                    unit: value.unit,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceMeasure> for super::ResourceMeasure {
+            fn from(value: brains_ResourceMeasure) -> Self {
+                Self {
+                    metric: value.metric,
+                    unit: value.unit,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourcePolicy {
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub fraction: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub maximum: Option<f64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub when_exhausted: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub when_charge_unknown: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourcePolicy> for brains_ResourcePolicy {
+            fn from(value: super::ResourcePolicy) -> Self {
+                Self {
+                    fraction: value.fraction,
+                    maximum: value.maximum,
+                    when_exhausted: value.when_exhausted,
+                    when_charge_unknown: value.when_charge_unknown,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourcePolicy> for super::ResourcePolicy {
+            fn from(value: brains_ResourcePolicy) -> Self {
+                Self {
+                    fraction: value.fraction,
+                    maximum: value.maximum,
+                    when_exhausted: value.when_exhausted,
+                    when_charge_unknown: value.when_charge_unknown,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceReport {
+            pub profile: __xidl_out_Files::brains_ResourceCapability,
+            pub rules: Vec<__xidl_out_Files::brains_ResourceRule>,
+            pub usage: Vec<__xidl_out_Files::brains_ResourceUsage>,
+            pub limitations: Vec<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceReport> for brains_ResourceReport {
+            fn from(value: super::ResourceReport) -> Self {
+                Self {
+                    profile: value.profile.into(),
+                    rules: value.rules.into_iter().map(|value| value.into()).collect(),
+                    usage: value.usage.into_iter().map(|value| value.into()).collect(),
+                    limitations: value.limitations.into_iter().collect(),
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceReport> for super::ResourceReport {
+            fn from(value: brains_ResourceReport) -> Self {
+                Self {
+                    profile: value.profile.into(),
+                    rules: value.rules.into_iter().map(|value| value.into()).collect(),
+                    usage: value.usage.into_iter().map(|value| value.into()).collect(),
+                    limitations: value.limitations.into_iter().collect(),
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceRule {
+            pub id: String,
+            pub resource: __xidl_out_Files::brains_ResourceDescriptor,
+            pub measure: __xidl_out_Files::brains_ResourceMeasure,
+            pub scope: __xidl_out_Files::brains_ResourceScope,
+            pub window: __xidl_out_Files::brains_ResourceWindow,
+            pub limit: __xidl_out_Files::brains_ResourceLimit,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub policy: Option<__xidl_out_Files::brains_ResourcePolicy>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub effective_limit: Option<f64>,
+            pub enforcement: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceRule> for brains_ResourceRule {
+            fn from(value: super::ResourceRule) -> Self {
+                Self {
+                    id: value.id,
+                    resource: value.resource.into(),
+                    measure: value.measure.into(),
+                    scope: value.scope.into(),
+                    window: value.window.into(),
+                    limit: value.limit.into(),
+                    policy: value.policy.map(|value| value.into()),
+                    source: value.source,
+                    effective_limit: value.effective_limit,
+                    enforcement: value.enforcement,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceRule> for super::ResourceRule {
+            fn from(value: brains_ResourceRule) -> Self {
+                Self {
+                    id: value.id,
+                    resource: value.resource.into(),
+                    measure: value.measure.into(),
+                    scope: value.scope.into(),
+                    window: value.window.into(),
+                    limit: value.limit.into(),
+                    policy: value.policy.map(|value| value.into()),
+                    source: value.source,
+                    effective_limit: value.effective_limit,
+                    enforcement: value.enforcement,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceScope {
+            pub kind: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceScope> for brains_ResourceScope {
+            fn from(value: super::ResourceScope) -> Self {
+                Self { kind: value.kind }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceScope> for super::ResourceScope {
+            fn from(value: brains_ResourceScope) -> Self {
+                Self { kind: value.kind }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceUsage {
+            pub key: String,
+            pub meter: String,
+            pub rule: String,
+            pub unit: String,
+            pub evidence: String,
+            pub consumed: f64,
+            pub reserved: f64,
+            pub limit: f64,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub reset_at: Option<i64>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceUsage> for brains_ResourceUsage {
+            fn from(value: super::ResourceUsage) -> Self {
+                Self {
+                    key: value.key,
+                    meter: value.meter,
+                    rule: value.rule,
+                    unit: value.unit,
+                    evidence: value.evidence,
+                    consumed: value.consumed,
+                    reserved: value.reserved,
+                    limit: value.limit,
+                    reset_at: value.reset_at,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceUsage> for super::ResourceUsage {
+            fn from(value: brains_ResourceUsage) -> Self {
+                Self {
+                    key: value.key,
+                    meter: value.meter,
+                    rule: value.rule,
+                    unit: value.unit,
+                    evidence: value.evidence,
+                    consumed: value.consumed,
+                    reserved: value.reserved,
+                    limit: value.limit,
+                    reset_at: value.reset_at,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_ResourceWindow {
+            pub kind: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub size: Option<u64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub unit: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub timezone: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub r#ref: Option<String>,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::ResourceWindow> for brains_ResourceWindow {
+            fn from(value: super::ResourceWindow) -> Self {
+                Self {
+                    kind: value.kind,
+                    size: value.size,
+                    unit: value.unit,
+                    timezone: value.timezone,
+                    r#ref: value.r#ref,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_ResourceWindow> for super::ResourceWindow {
+            fn from(value: brains_ResourceWindow) -> Self {
+                Self {
+                    kind: value.kind,
+                    size: value.size,
+                    unit: value.unit,
+                    timezone: value.timezone,
+                    r#ref: value.r#ref,
                 }
             }
         }
@@ -6396,6 +8809,12 @@ pub mod brains {
             pub vector_index_version: i64,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub unavailable_reason: Option<String>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub dimension_control: Option<__xidl_out_Files::brains_DimensionControl>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub model_modalities: Option<Vec<String>>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub accepted_inputs: Option<Vec<String>>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::SemanticCapability> for brains_SemanticCapability {
@@ -6405,6 +8824,13 @@ pub mod brains {
                     dimensions: value.dimensions,
                     vector_index_version: value.vector_index_version,
                     unavailable_reason: value.unavailable_reason,
+                    dimension_control: value.dimension_control.map(|value| value.into()),
+                    model_modalities: value
+                        .model_modalities
+                        .map(|value| value.into_iter().collect()),
+                    accepted_inputs: value
+                        .accepted_inputs
+                        .map(|value| value.into_iter().collect()),
                 }
             }
         }
@@ -6416,6 +8842,13 @@ pub mod brains {
                     dimensions: value.dimensions,
                     vector_index_version: value.vector_index_version,
                     unavailable_reason: value.unavailable_reason,
+                    dimension_control: value.dimension_control.map(|value| value.into()),
+                    model_modalities: value
+                        .model_modalities
+                        .map(|value| value.into_iter().collect()),
+                    accepted_inputs: value
+                        .accepted_inputs
+                        .map(|value| value.into_iter().collect()),
                 }
             }
         }
@@ -6522,6 +8955,77 @@ pub mod brains {
             }
         }
         #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_UrlImportInput {
+            pub url: String,
+            pub path: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::UrlImportInput> for brains_UrlImportInput {
+            fn from(value: super::UrlImportInput) -> Self {
+                Self {
+                    url: value.url,
+                    path: value.path,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_UrlImportInput> for super::UrlImportInput {
+            fn from(value: brains_UrlImportInput) -> Self {
+                Self {
+                    url: value.url,
+                    path: value.path,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_UrlImportResult {
+            pub path: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub revision: Option<String>,
+            pub partial: bool,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub error: Option<__xidl_out_Files::brains_ErrorDetail>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source_revision: Option<String>,
+            pub source_url: String,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source_path: Option<String>,
+            pub created: bool,
+            pub unchanged: bool,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::UrlImportResult> for brains_UrlImportResult {
+            fn from(value: super::UrlImportResult) -> Self {
+                Self {
+                    path: value.path,
+                    revision: value.revision,
+                    partial: value.partial,
+                    error: value.error.map(|value| value.into()),
+                    source_revision: value.source_revision,
+                    source_url: value.source_url,
+                    source_path: value.source_path,
+                    created: value.created,
+                    unchanged: value.unchanged,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_UrlImportResult> for super::UrlImportResult {
+            fn from(value: brains_UrlImportResult) -> Self {
+                Self {
+                    path: value.path,
+                    revision: value.revision,
+                    partial: value.partial,
+                    error: value.error.map(|value| value.into()),
+                    source_revision: value.source_revision,
+                    source_url: value.source_url,
+                    source_path: value.source_path,
+                    created: value.created,
+                    unchanged: value.unchanged,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
         pub struct brains_Verification {
             pub by: String,
             #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -6543,6 +9047,98 @@ pub mod brains {
                     by: value.by,
                     at: value.at,
                 }
+            }
+        }
+    }
+    pub type FilesConvertDocumentRequestInBody = __xidl_in_Files::brains_ConversionInput;
+    #[derive(::serde::Deserialize)]
+    struct FilesConvertDocumentRequest {
+        body: __xidl_in_Files::brains_ConversionInput,
+    }
+    #[allow(clippy::manual_async_fn, unused_mut)]
+    impl<S> ::xidl_rust_axum::axum::extract::FromRequest<S> for FilesConvertDocumentRequest
+    where
+        S: Send + Sync,
+    {
+        type Rejection = ::xidl_rust_axum::Error;
+        fn from_request(
+            req: ::xidl_rust_axum::axum::extract::Request,
+            state: &S,
+        ) -> impl ::core::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+            async move {
+                let (mut parts, body) = req.into_parts();
+                let _ = &body;
+                let _ = state;
+                let xidl_headers = &parts.headers;
+                let _ = xidl_headers;
+                if !::xidl_rust_axum::http::content_type_matches(xidl_headers, "application/json") {
+                    return Err(::xidl_rust_axum::Error::unsupported_media_type());
+                }
+                let xidl_body_bytes = <::xidl_rust_axum::axum::body::Bytes as ::xidl_rust_axum::axum::extract::FromRequest<
+                    S,
+                >>::from_request(
+                        ::xidl_rust_axum::axum::extract::Request::from_parts(
+                            parts,
+                            body,
+                        ),
+                        state,
+                    )
+                    .await
+                    .map_err(|err| ::xidl_rust_axum::Error::new(
+                        err.status().as_u16(),
+                        err.body_text(),
+                    ))?;
+                let xidl_body: FilesConvertDocumentRequestInBody =
+                    ::xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&xidl_body_bytes)?;
+                let body = xidl_body;
+                Ok(Self { body })
+            }
+        }
+    }
+    pub type FilesImportUrlRequestInBody = __xidl_in_Files::brains_UrlImportInput;
+    #[derive(::serde::Deserialize)]
+    struct FilesImportUrlRequest {
+        body: __xidl_in_Files::brains_UrlImportInput,
+    }
+    #[allow(clippy::manual_async_fn, unused_mut)]
+    impl<S> ::xidl_rust_axum::axum::extract::FromRequest<S> for FilesImportUrlRequest
+    where
+        S: Send + Sync,
+    {
+        type Rejection = ::xidl_rust_axum::Error;
+        fn from_request(
+            req: ::xidl_rust_axum::axum::extract::Request,
+            state: &S,
+        ) -> impl ::core::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+            async move {
+                let (mut parts, body) = req.into_parts();
+                let _ = &body;
+                let _ = state;
+                let xidl_headers = &parts.headers;
+                let _ = xidl_headers;
+                if !::xidl_rust_axum::http::content_type_matches(xidl_headers, "application/json") {
+                    return Err(::xidl_rust_axum::Error::unsupported_media_type());
+                }
+                let xidl_body_bytes = <::xidl_rust_axum::axum::body::Bytes as ::xidl_rust_axum::axum::extract::FromRequest<
+                    S,
+                >>::from_request(
+                        ::xidl_rust_axum::axum::extract::Request::from_parts(
+                            parts,
+                            body,
+                        ),
+                        state,
+                    )
+                    .await
+                    .map_err(|err| ::xidl_rust_axum::Error::new(
+                        err.status().as_u16(),
+                        err.body_text(),
+                    ))?;
+                let xidl_body: FilesImportUrlRequestInBody =
+                    ::xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&xidl_body_bytes)?;
+                let body = xidl_body;
+                Ok(Self { body })
             }
         }
     }
@@ -7564,6 +10160,18 @@ pub mod brains {
                     xidl_rust_axum::axum::routing::get(Self::capabilities),
                 )
                 .route(
+                    "/resources",
+                    xidl_rust_axum::axum::routing::get(Self::resource_status),
+                )
+                .route(
+                    "/files/convert",
+                    xidl_rust_axum::axum::routing::post(Self::convert_document),
+                )
+                .route(
+                    "/files/import-url",
+                    xidl_rust_axum::axum::routing::post(Self::import_url),
+                )
+                .route(
                     "/files/query",
                     xidl_rust_axum::axum::routing::post(Self::list_files),
                 )
@@ -7636,6 +10244,146 @@ pub mod brains {
                 Ok(resp_value) => {
                     let mut resp = {
                         let body_value: __xidl_out_Files::brains_Capabilities = resp_value.into();
+                        let _ = &body_value;
+                        let body = xidl_rust_axum::SerializeFactory::new("application/json")
+                            .to_vec(&body_value)?;
+                        ::xidl_rust_axum::axum::response::Response::builder()
+                            .status(
+                                ::xidl_rust_axum::axum::http::StatusCode::from_u16(200).unwrap(),
+                            )
+                            .header(
+                                ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                                "application/json",
+                            )
+                            .body(::xidl_rust_axum::axum::body::Body::from(body))
+                            .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?
+                    };
+                    resp
+                }
+                Err(err) => ::xidl_rust_axum::axum::response::IntoResponse::into_response(err),
+            };
+            Ok(resp)
+        }
+        #[allow(
+            clippy::let_and_return,
+            clippy::needless_return,
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            clippy::let_unit_value,
+            unused_variables
+        )]
+        async fn resource_status(
+            ::xidl_rust_axum::axum::extract::State(svc): ::xidl_rust_axum::axum::extract::State<
+                ::std::sync::Arc<T>,
+            >,
+            headers: ::xidl_rust_axum::axum::http::HeaderMap,
+            uri: ::xidl_rust_axum::axum::http::Uri,
+        ) -> ::xidl_rust_axum::Result<::xidl_rust_axum::axum::response::Response> {
+            let _ = &headers;
+            if !xidl_rust_axum::http::accepts_media_type(&headers, "application/json") {
+                return Err(xidl_rust_axum::Error::not_acceptable());
+            }
+            let mut resp = match svc.resource_status().await {
+                Ok(resp_value) => {
+                    let mut resp = {
+                        let body_value: __xidl_out_Files::brains_ResourceReport = resp_value.into();
+                        let _ = &body_value;
+                        let body = xidl_rust_axum::SerializeFactory::new("application/json")
+                            .to_vec(&body_value)?;
+                        ::xidl_rust_axum::axum::response::Response::builder()
+                            .status(
+                                ::xidl_rust_axum::axum::http::StatusCode::from_u16(200).unwrap(),
+                            )
+                            .header(
+                                ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                                "application/json",
+                            )
+                            .body(::xidl_rust_axum::axum::body::Body::from(body))
+                            .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?
+                    };
+                    resp
+                }
+                Err(err) => ::xidl_rust_axum::axum::response::IntoResponse::into_response(err),
+            };
+            Ok(resp)
+        }
+        #[allow(
+            clippy::let_and_return,
+            clippy::needless_return,
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            clippy::let_unit_value,
+            unused_variables
+        )]
+        async fn convert_document(
+            ::xidl_rust_axum::axum::extract::State(svc): ::xidl_rust_axum::axum::extract::State<
+                ::std::sync::Arc<T>,
+            >,
+            headers: ::xidl_rust_axum::axum::http::HeaderMap,
+            uri: ::xidl_rust_axum::axum::http::Uri,
+            request: FilesConvertDocumentRequest,
+        ) -> ::xidl_rust_axum::Result<::xidl_rust_axum::axum::response::Response> {
+            let _ = &headers;
+            if !xidl_rust_axum::http::accepts_media_type(&headers, "application/json") {
+                return Err(xidl_rust_axum::Error::not_acceptable());
+            }
+            let FilesConvertDocumentRequest { body } = request;
+            let body: ConversionInput = body.into();
+            let mut resp = match svc.convert_document(body).await {
+                Ok(resp_value) => {
+                    let mut resp = {
+                        let body_value: __xidl_out_Files::brains_ConversionResult =
+                            resp_value.into();
+                        let _ = &body_value;
+                        let body = xidl_rust_axum::SerializeFactory::new("application/json")
+                            .to_vec(&body_value)?;
+                        ::xidl_rust_axum::axum::response::Response::builder()
+                            .status(
+                                ::xidl_rust_axum::axum::http::StatusCode::from_u16(200).unwrap(),
+                            )
+                            .header(
+                                ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                                "application/json",
+                            )
+                            .body(::xidl_rust_axum::axum::body::Body::from(body))
+                            .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?
+                    };
+                    resp
+                }
+                Err(err) => ::xidl_rust_axum::axum::response::IntoResponse::into_response(err),
+            };
+            Ok(resp)
+        }
+        #[allow(
+            clippy::let_and_return,
+            clippy::needless_return,
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            clippy::let_unit_value,
+            unused_variables
+        )]
+        async fn import_url(
+            ::xidl_rust_axum::axum::extract::State(svc): ::xidl_rust_axum::axum::extract::State<
+                ::std::sync::Arc<T>,
+            >,
+            headers: ::xidl_rust_axum::axum::http::HeaderMap,
+            uri: ::xidl_rust_axum::axum::http::Uri,
+            request: FilesImportUrlRequest,
+        ) -> ::xidl_rust_axum::Result<::xidl_rust_axum::axum::response::Response> {
+            let _ = &headers;
+            if !xidl_rust_axum::http::accepts_media_type(&headers, "application/json") {
+                return Err(xidl_rust_axum::Error::not_acceptable());
+            }
+            let FilesImportUrlRequest { body } = request;
+            let body: UrlImportInput = body.into();
+            let mut resp = match svc.import_url(body).await {
+                Ok(resp_value) => {
+                    let mut resp = {
+                        let body_value: __xidl_out_Files::brains_UrlImportResult =
+                            resp_value.into();
                         let _ = &body_value;
                         let body = xidl_rust_axum::SerializeFactory::new("application/json")
                             .to_vec(&body_value)?;
@@ -8812,6 +11560,7 @@ pub mod brains {
         UnprocessableEntity(UnprocessableEntity),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for ArchivesArchiveRevisionError {
@@ -8823,6 +11572,7 @@ pub mod brains {
                 Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -8960,6 +11710,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -8974,6 +11743,7 @@ pub mod brains {
         UnprocessableEntity(UnprocessableEntity),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for ArchivesImportArchiveRevisionError {
@@ -8986,6 +11756,7 @@ pub mod brains {
                 Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -9170,6 +11941,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -9184,6 +11974,7 @@ pub mod brains {
         UnprocessableEntity(UnprocessableEntity),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for ArchivesImportArchiveBlobError {
@@ -9196,6 +11987,7 @@ pub mod brains {
                 Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -9352,6 +12144,25 @@ pub mod brains {
                     );
                     response
                 }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
             }
         }
     }
@@ -9366,6 +12177,7 @@ pub mod brains {
         UnprocessableEntity(UnprocessableEntity),
         ServiceUnavailable(ServiceUnavailable),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for ArchivesImportArchiveHeadError {
@@ -9378,6 +12190,7 @@ pub mod brains {
                 Self::UnprocessableEntity(_) => f.write_str("HTTP 422: UnprocessableEntity"),
                 Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -9556,6 +12369,25 @@ pub mod brains {
                     let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
                     *response.status_mut() =
                         ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
                     response.headers_mut().insert(
                         ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
                         ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
@@ -10420,6 +13252,7 @@ pub mod brains {
         BadRequest(BadRequest),
         Forbidden(Forbidden),
         Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
         Framework(xidl_rust_axum::Error),
     }
     impl ::std::fmt::Display for SessionsLoginError {
@@ -10428,6 +13261,7 @@ pub mod brains {
                 Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
                 Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
                 Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
                 Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
             }
         }
@@ -10502,6 +13336,25 @@ pub mod brains {
                     let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
                     *response.status_mut() =
                         ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
                     response.headers_mut().insert(
                         ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
                         ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),

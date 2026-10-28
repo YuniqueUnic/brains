@@ -130,7 +130,7 @@ where
             }
         }
 
-        let index_state = self
+        let (index_state, semantic_state) = self
             .project_committed(&revision, Some(input.content), false)
             .await;
         Ok(MutationOutcome {
@@ -150,6 +150,7 @@ where
             kind: brains_domain::detect_kind(input.path.as_str(), input.content),
             created,
             index_state,
+            semantic_state,
             operation_id: input.operation_id.as_str().to_owned(),
         })
     }
@@ -209,7 +210,7 @@ where
                 ));
             }
         }
-        let index_state = self.project_committed(&revision, None, true).await;
+        let (index_state, semantic_state) = self.project_committed(&revision, None, true).await;
         Ok(MutationOutcome {
             state: HeadState::Trashed,
             path: path.as_str().to_owned(),
@@ -222,6 +223,7 @@ where
             kind: brains_domain::detect_kind(path.as_str(), b""),
             created: false,
             index_state,
+            semantic_state,
             operation_id: revision.operation_id.as_str().to_owned(),
         })
     }
@@ -264,9 +266,22 @@ where
             Ok(()) => IndexState::Ready,
             Err(_) => IndexState::Pending,
         };
+        let semantic_state = if let Some(semantic) = &self.semantic {
+            Some(
+                if semantic.remove(path.as_str(), None).await.is_ok() {
+                    "pending"
+                } else {
+                    "blocked"
+                }
+                .into(),
+            )
+        } else {
+            None
+        };
         Ok(PurgeOutcome {
             path: path.as_str().to_owned(),
             index_state,
+            semantic_state,
             operation_id: operation_id.as_str().to_owned(),
         })
     }
@@ -346,7 +361,8 @@ where
                 ));
             }
         }
-        let index_state = self.project_committed(&revision, Some(&bytes), false).await;
+        let (index_state, semantic_state) =
+            self.project_committed(&revision, Some(&bytes), false).await;
         Ok(MutationOutcome {
             state: HeadState::Live,
             path: path.as_str().to_owned(),
@@ -359,6 +375,7 @@ where
             kind: brains_domain::detect_kind(path.as_str(), &bytes),
             created: false,
             index_state,
+            semantic_state,
             operation_id: revision.operation_id.as_str().to_owned(),
         })
     }
@@ -370,7 +387,7 @@ where
         revision: &Revision,
         content: Option<&[u8]>,
         deleted: bool,
-    ) -> IndexState {
+    ) -> (IndexState, Option<String>) {
         let proj = projection::build_projection(
             &self.vault,
             revision,
@@ -378,9 +395,22 @@ where
             deleted,
             self.limits.max_text_bytes,
         );
-        match self.index.upsert(&proj).await {
+        let index_state = match self.index.upsert(&proj).await {
             Ok(()) => IndexState::Ready,
             Err(_) => IndexState::Pending,
-        }
+        };
+        let semantic_state = if let Some(semantic) = &self.semantic {
+            Some(
+                if semantic.publish(&proj).await.is_ok() {
+                    "pending"
+                } else {
+                    "blocked"
+                }
+                .into(),
+            )
+        } else {
+            None
+        };
+        (index_state, semantic_state)
     }
 }

@@ -9,6 +9,16 @@ import { xjson } from "xidl-typescript-codec";
 
 
     export namespace brains {
+    export const FilesConvertDocumentRequestSchema = z.object({
+            body: models.brains.ConversionInputSchema,
+        });
+    export type FilesConvertDocumentRequest = z.infer<typeof FilesConvertDocumentRequestSchema>;
+
+    export const FilesImportUrlRequestSchema = z.object({
+            body: models.brains.UrlImportInputSchema,
+        });
+    export type FilesImportUrlRequest = z.infer<typeof FilesImportUrlRequestSchema>;
+
     export const FilesListFilesRequestSchema = z.object({
             body: models.brains.ListFilesQuerySchema,
         });

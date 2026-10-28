@@ -6,13 +6,16 @@
 pub mod archive;
 pub mod checkpoint;
 pub mod commit;
+pub mod content;
 pub mod listing;
 pub mod patch;
 pub mod projection;
 pub mod query;
 pub mod reindex;
+pub mod resources;
 pub mod search;
 pub mod seed;
+pub mod semantic;
 pub mod transfer;
 
 use brains_domain::{CursorSigner, DomainError, DomainResult, Limits, Principal, VaultPath};
@@ -24,6 +27,7 @@ use brains_ports::{BlobStore, HeadStore, IndexStore, RevisionStore, StoredHead};
 pub struct PurgeOutcome {
     pub path: String,
     pub index_state: IndexState,
+    pub semantic_state: Option<String>,
     pub operation_id: String,
 }
 
@@ -41,6 +45,7 @@ pub struct MutationOutcome {
     pub kind: brains_domain::FileKind,
     pub created: bool,
     pub index_state: IndexState,
+    pub semantic_state: Option<String>,
     pub operation_id: String,
 }
 
@@ -79,6 +84,10 @@ pub struct Vault<H, R, B, I> {
     pub vault: String,
     pub limits: Limits,
     pub cursors: CursorSigner,
+    pub semantic: Option<std::sync::Arc<dyn brains_ports::semantic::SemanticRetriever>>,
+    pub converter: Option<std::sync::Arc<dyn brains_ports::content::ContentConverter>>,
+    pub fetcher: Option<std::sync::Arc<dyn brains_ports::content::SourceFetcher>>,
+    pub resources: Option<std::sync::Arc<resources::ResourceBudget>>,
 }
 
 // Send + Sync: the axum handler layer requires Send futures; the R2/D1
@@ -108,6 +117,10 @@ where
             vault,
             limits,
             cursors,
+            semantic: None,
+            converter: None,
+            fetcher: None,
+            resources: None,
         }
     }
 

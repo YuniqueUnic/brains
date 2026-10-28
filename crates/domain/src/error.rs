@@ -38,6 +38,10 @@ pub enum DomainError {
     IndexUnavailable(String),
     /// 503 STORAGE_UNAVAILABLE
     StorageUnavailable(String),
+    /// A user-defined resource budget cannot admit another attempt.
+    QuotaExceeded { rule: String, reset_at: Option<i64> },
+    /// Missing or unbounded resource accounting is explicit unavailability.
+    ResourcePolicy(String),
     /// 500 INTERNAL — bugs and unreachable states; never used for expected failures.
     Internal(String),
 }
@@ -60,6 +64,8 @@ impl DomainError {
             Self::CapabilityUnsupported(_) => "CAPABILITY_UNSUPPORTED",
             Self::IndexUnavailable(_) => "INDEX_UNAVAILABLE",
             Self::StorageUnavailable(_) => "STORAGE_UNAVAILABLE",
+            Self::QuotaExceeded { .. } => "QUOTA_EXHAUSTED",
+            Self::ResourcePolicy(_) => "RESOURCE_POLICY_UNAVAILABLE",
             Self::Internal(_) => "INTERNAL",
         }
     }
@@ -129,6 +135,8 @@ impl fmt::Display for DomainError {
             }
             Self::IndexUnavailable(m) => write!(f, "index unavailable: {m}"),
             Self::StorageUnavailable(m) => write!(f, "storage unavailable: {m}"),
+            Self::QuotaExceeded { rule, .. } => write!(f, "resource quota exhausted: {rule}"),
+            Self::ResourcePolicy(m) => write!(f, "resource policy unavailable: {m}"),
             Self::Internal(m) => write!(f, "internal error: {m}"),
         }
     }

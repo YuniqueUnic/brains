@@ -1,8 +1,8 @@
-//! Document conversion port (issue #19): one port, two runtimes. The
+//! Document conversion port for native client-side conversion (issue #19). The
 //! embedded converter (Xberg) serves native builds behind the compile-time
-//! `convert` feature; the Worker uses Workers AI `toMarkdown` instead. A
-//! build without any converter reports `conversion: unavailable` — never a
-//! silent fallback or a partial note.
+//! `convert` feature. The Worker does not mount a cloud converter; a full
+//! CLI can convert locally and store the companion through its file API.
+//! A build without a converter reports unavailability rather than a partial note.
 
 use std::future::Future;
 

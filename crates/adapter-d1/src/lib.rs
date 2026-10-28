@@ -4,6 +4,9 @@
 //! are applied by `wrangler d1 migrations apply` (all statements are
 //! idempotent); this adapter only runs queries.
 
+mod metered;
+pub mod resources;
+
 use brains_domain::path::normalize_prefix;
 use std::future::Future;
 
@@ -27,11 +30,20 @@ const LITERAL_WINDOW_SQL: &str = include_str!(concat!(
 
 pub struct D1Index {
     db: D1Database,
+    budget: Option<std::sync::Arc<brains_application::resources::ResourceBudget>>,
 }
 
 impl D1Index {
+    pub fn with_budget(
+        mut self,
+        budget: std::sync::Arc<brains_application::resources::ResourceBudget>,
+    ) -> Self {
+        self.budget = Some(budget);
+        self
+    }
+
     pub fn new(db: D1Database) -> Self {
-        Self { db }
+        Self { db, budget: None }
     }
 }
 
@@ -197,12 +209,10 @@ impl IndexStore for D1Index {
     }
 
     fn remove_path(&self, path: &str) -> impl Future<Output = DomainResult<()>> + Send {
-        let db = &self.db;
         let path = path.to_owned();
         SendFuture::new(async move {
             // The files_ad trigger cascades the FTS row, links and tags.
-            run(
-                db,
+            self.execute(
                 "index remove",
                 "DELETE FROM files WHERE path = ?1",
                 &[js_str(&path)],
@@ -212,11 +222,9 @@ impl IndexStore for D1Index {
     }
 
     fn upsert(&self, projection: &FileProjection) -> impl Future<Output = DomainResult<()>> + Send {
-        let db = &self.db;
         let projection = projection.clone();
         SendFuture::new(async move {
-            run(
-                db,
+            self.execute(
                 "index upsert",
                 UPSERT_SQL,
                 &[
@@ -252,7 +260,6 @@ impl IndexStore for D1Index {
         tags: &[String],
         meta: &MetaFilter,
     ) -> impl Future<Output = DomainResult<Vec<LiteralRow>>> + Send {
-        let db = &self.db;
         let prefix = normalize_prefix(prefix).map(str::to_owned);
         let after = after.to_owned();
         let query = query.to_owned();
@@ -266,24 +273,24 @@ impl IndexStore for D1Index {
                     "literal query must not be empty".into(),
                 ));
             }
-            let rows = query_rows::<LiteralDbRow>(
-                db,
-                "literal window",
-                LITERAL_WINDOW_SQL,
-                &[
-                    js_opt(prefix.as_deref()),
-                    js_str(&after),
-                    js_num(limit as i64),
-                    js_str(&query),
-                    js_str(&tags),
-                    js_str_or_null(&meta_params[0]),
-                    js_str_or_null(&meta_params[1]),
-                    js_str_or_null(&meta_params[2]),
-                    js_num_or_null(&meta_params[3]),
-                    js_str_or_null(&meta_params[4]),
-                ],
-            )
-            .await?;
+            let rows = self
+                .query::<LiteralDbRow>(
+                    "literal window",
+                    LITERAL_WINDOW_SQL,
+                    &[
+                        js_opt(prefix.as_deref()),
+                        js_str(&after),
+                        js_num(limit as i64),
+                        js_str(&query),
+                        js_str(&tags),
+                        js_str_or_null(&meta_params[0]),
+                        js_str_or_null(&meta_params[1]),
+                        js_str_or_null(&meta_params[2]),
+                        js_num_or_null(&meta_params[3]),
+                        js_str_or_null(&meta_params[4]),
+                    ],
+                )
+                .await?;
             Ok(rows
                 .into_iter()
                 .map(|row| LiteralRow {
@@ -305,7 +312,6 @@ impl IndexStore for D1Index {
         offset: usize,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<(String, String, String)>>> + Send {
-        let db = &self.db;
         let query = query.to_owned();
         let prefix = normalize_prefix(prefix).map(str::to_owned);
         let tags = serde_json::to_string(tags).expect("string array");
@@ -324,30 +330,30 @@ impl IndexStore for D1Index {
                  ORDER BY rank LIMIT ?9 OFFSET ?10",
                 meta_sql
             );
-            let rows = query_rows::<FtsRow>(
-                db,
-                "fts search",
-                &sql,
-                &[
-                    js_str(&query),
-                    js_opt(prefix.as_deref()),
-                    js_str(&tags),
-                    js_str_or_null(&meta_params[0]),
-                    js_str_or_null(&meta_params[1]),
-                    js_str_or_null(&meta_params[2]),
-                    js_num_or_null(&meta_params[3]),
-                    js_str_or_null(&meta_params[4]),
-                    js_num(limit as i64),
-                    js_num(offset as i64),
-                ],
-            )
-            .await
-            .map_err(|e| match e {
-                DomainError::IndexUnavailable(m) => {
-                    DomainError::InvalidArgument(format!("invalid FTS query: {m}"))
-                }
-                other => other,
-            })?;
+            let rows = self
+                .query::<FtsRow>(
+                    "fts search",
+                    &sql,
+                    &[
+                        js_str(&query),
+                        js_opt(prefix.as_deref()),
+                        js_str(&tags),
+                        js_str_or_null(&meta_params[0]),
+                        js_str_or_null(&meta_params[1]),
+                        js_str_or_null(&meta_params[2]),
+                        js_num_or_null(&meta_params[3]),
+                        js_str_or_null(&meta_params[4]),
+                        js_num(limit as i64),
+                        js_num(offset as i64),
+                    ],
+                )
+                .await
+                .map_err(|e| match e {
+                    DomainError::IndexUnavailable(m) => {
+                        DomainError::InvalidArgument(format!("invalid FTS query: {m}"))
+                    }
+                    other => other,
+                })?;
             Ok(rows
                 .into_iter()
                 .map(|row| (row.path, row.revision, row.snip))
@@ -362,7 +368,6 @@ impl IndexStore for D1Index {
         after_updated: Option<&str>,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<ListRow>>> + Send {
-        let db = &self.db;
         let filter = ListFilter {
             prefix: filter.prefix.clone(),
             tags: filter.tags.clone(),
@@ -403,26 +408,26 @@ impl IndexStore for D1Index {
                 sql.push_str(" ORDER BY path LIMIT ?7");
             }
 
-            let rows = query_rows::<ListDbRow>(
-                db,
-                "index listing",
-                &sql,
-                &[
-                    js_num(filter.include_deleted as i64),
-                    js_opt(prefix),
-                    js_str(&serde_json::to_string(&filter.tags).expect("string array")),
-                    js_opt(filter.kind.map(|k| k.as_str())),
-                    js_opt(after_updated.as_deref()),
-                    js_opt(after_path.as_deref()),
-                    js_num(limit as i64),
-                    js_str_or_null(&meta_params[0]),
-                    js_str_or_null(&meta_params[1]),
-                    js_str_or_null(&meta_params[2]),
-                    js_num_or_null(&meta_params[3]),
-                    js_str_or_null(&meta_params[4]),
-                ],
-            )
-            .await?;
+            let rows = self
+                .query::<ListDbRow>(
+                    "index listing",
+                    &sql,
+                    &[
+                        js_num(filter.include_deleted as i64),
+                        js_opt(prefix),
+                        js_str(&serde_json::to_string(&filter.tags).expect("string array")),
+                        js_opt(filter.kind.map(|k| k.as_str())),
+                        js_opt(after_updated.as_deref()),
+                        js_opt(after_path.as_deref()),
+                        js_num(limit as i64),
+                        js_str_or_null(&meta_params[0]),
+                        js_str_or_null(&meta_params[1]),
+                        js_str_or_null(&meta_params[2]),
+                        js_num_or_null(&meta_params[3]),
+                        js_str_or_null(&meta_params[4]),
+                    ],
+                )
+                .await?;
             Ok(rows.into_iter().map(ListRow::from).collect())
         })
     }
@@ -433,12 +438,10 @@ impl IndexStore for D1Index {
         after: Option<&str>,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<LinkRow>>> + Send {
-        let db = &self.db;
         let path = path.to_owned();
         let after = after.map(str::to_owned);
         SendFuture::new(async move {
-            query_rows::<LinkDbRow>(
-                db,
+            self.query::<LinkDbRow>(
                 "links outbound",
                 "SELECT source, target, kind, source_revision FROM links \
                  WHERE source = ?1 AND (?2 IS NULL OR target > ?2) ORDER BY target LIMIT ?3",
@@ -459,12 +462,10 @@ impl IndexStore for D1Index {
         after: Option<&str>,
         limit: usize,
     ) -> impl Future<Output = DomainResult<Vec<LinkRow>>> + Send {
-        let db = &self.db;
         let path = path.to_owned();
         let after = after.map(str::to_owned);
         SendFuture::new(async move {
-            query_rows::<LinkDbRow>(
-                db,
+            self.query::<LinkDbRow>(
                 "links backlinks",
                 "SELECT source, target, kind, source_revision FROM links \
                  WHERE target = ?1 AND (?2 IS NULL OR source > ?2) ORDER BY source LIMIT ?3",
@@ -480,11 +481,10 @@ impl IndexStore for D1Index {
     }
 
     fn files_count(&self) -> impl Future<Output = DomainResult<u64>> + Send {
-        let db = &self.db;
         SendFuture::new(async move {
-            let rows =
-                query_rows::<Count>(db, "files count", "SELECT COUNT(*) AS n FROM files", &[])
-                    .await?;
+            let rows = self
+                .query::<Count>("files count", "SELECT COUNT(*) AS n FROM files", &[])
+                .await?;
             Ok(rows.first().map(|c| c.n.max(0) as u64).unwrap_or(0))
         })
     }

@@ -7,6 +7,16 @@
 
     export namespace brains {
 
+    export interface FilesConvertDocumentRequest {
+            body: types.brains.ConversionInput;
+            }
+
+
+    export interface FilesImportUrlRequest {
+            body: types.brains.UrlImportInput;
+            }
+
+
     export interface FilesListFilesRequest {
             body: types.brains.ListFilesQuery;
             }

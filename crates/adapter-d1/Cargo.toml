@@ -7,7 +7,10 @@ license.workspace = true
 [dependencies]
 brains-domain.workspace = true
 brains-ports.workspace = true
+brains-application.workspace = true
+futures.workspace = true
 serde.workspace = true
 wasm-bindgen = "0.2"
 serde_json.workspace = true
 worker = { version = "=0.8.7", features = ["d1"] }
+time.workspace = true

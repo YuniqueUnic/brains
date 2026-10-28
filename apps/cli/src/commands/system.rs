@@ -168,6 +168,7 @@ pub(crate) fn login(
 }
 
 pub(crate) fn reindex(client: &dyn Library, all_pages: bool, limit: usize) -> ClientResult<i32> {
+    let limit = client.reindex_page_size(limit)?;
     let mut cursor: Option<String> = None;
     let mut processed = 0i64;
     let mut failed = 0usize;

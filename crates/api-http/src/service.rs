@@ -23,6 +23,7 @@ mod conditional;
 mod dto;
 mod error;
 mod files;
+mod resources;
 mod session;
 mod transfer;
 

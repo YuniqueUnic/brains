@@ -13,6 +13,7 @@ members = [
     "crates/api-http",
     "crates/adapter-r2",
     "crates/adapter-d1",
+    "crates/adapter-cloudflare",
     "crates/client",
     "crates/local",
     "apps/server",
@@ -41,6 +42,7 @@ brains-api-http = { path = "crates/api-http", default-features = false }
 brains-adapter-r2 = { path = "crates/adapter-r2" }
 brains-adapter-convert = { path = "crates/adapter-convert", default-features = false }
 brains-adapter-d1 = { path = "crates/adapter-d1" }
+brains-adapter-cloudflare = { path = "crates/adapter-cloudflare" }
 brains-client = { path = "crates/client", default-features = false }
 brains-local = { path = "crates/local", default-features = false }
 

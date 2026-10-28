@@ -12,6 +12,8 @@ pub mod id;
 pub mod kind;
 pub mod limits;
 pub mod path;
+pub mod resources;
+pub mod retrieval;
 pub mod revision;
 pub mod scope;
 pub mod timestamp;

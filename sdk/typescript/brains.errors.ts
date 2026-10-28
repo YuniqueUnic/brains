@@ -163,6 +163,23 @@ import type * as types from "./brains";
     }
 }
 
+    /** Typed HTTP error for status 429 responses. */
+    export class QuotaExceeded extends Error {
+        readonly status = 429;
+        readonly kind = "QuotaExceeded" as const;
+        readonly error: types.brains.ErrorDetail;
+
+    constructor(fields: {
+        "error": types.brains.ErrorDetail;
+
+    }) {
+        super("QuotaExceeded");
+        this.name = "QuotaExceeded";
+        this.error = fields["error"];
+
+    }
+}
+
     /** Typed HTTP error for status 500 responses. */
     export class Internal extends Error {
         readonly status = 500;
@@ -349,6 +366,23 @@ import type * as types from "./brains";
     }) {
         super("HeadServiceUnavailable");
         this.name = "HeadServiceUnavailable";
+        this.code = fields["code"];
+
+    }
+}
+
+    /** Typed HTTP error for status 429 responses. */
+    export class HeadQuotaExceeded extends Error {
+        readonly status = 429;
+        readonly kind = "HeadQuotaExceeded" as const;
+        readonly code: string;
+
+    constructor(fields: {
+        "code": string;
+
+    }) {
+        super("HeadQuotaExceeded");
+        this.name = "HeadQuotaExceeded";
         this.code = fields["code"];
 
     }

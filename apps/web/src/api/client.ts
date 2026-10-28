@@ -1,4 +1,5 @@
 import { demoApi } from "./demo";
+import type { brains } from "../../../../sdk/typescript/brains";
 
 /**
  * HTTP transport for the web app (design §22.4): one module owns URLs,
@@ -239,6 +240,18 @@ export function isTextMedia(mediaType?: string): boolean {
 }
 
 const httpApi = {
+  getCapabilities(): Promise<Pick<brains.Capabilities, "features">> {
+    return request("/capabilities", {});
+  },
+  convertDocument(path: string, to?: string): Promise<brains.ConversionResult> {
+    return request("/files/convert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path, to }) });
+  },
+  importUrl(url: string, path: string): Promise<brains.UrlImportResult> {
+    return request("/files/import-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, path }) });
+  },
+  resourceStatus(): Promise<brains.ResourceReport> {
+    return request("/resources", {});
+  },
   fileUrl(path: string): string {
     const url = new URL("/api/v1/file", window.location.origin);
     url.searchParams.set("path", path);

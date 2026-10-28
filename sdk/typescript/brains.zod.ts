@@ -6,7 +6,27 @@ import { xjson } from "xidl-typescript-codec";
 
     export namespace brains {
 
+        export const ErrorDetailSchema = z.object({
+
+                code: z.coerce.string(),
+
+                message: z.coerce.string(),
+
+                request_id: z.coerce.string(),
+
+                path: z.coerce.string().optional(),
+
+                current_revision: z.coerce.string().optional(),
+
+                resource_rule: z.coerce.string().optional(),
+
+                reset_at: z.coerce.number().int().optional()
+
+        });
+
         export const CapabilityLimitsSchema = z.object({
+
+                reindex_page_max: z.coerce.number().int().nonnegative().optional(),
 
                 max_text_bytes: z.coerce.number().int().nonnegative(),
 
@@ -14,6 +34,214 @@ import { xjson } from "xidl-typescript-codec";
 
         });
     export const RuntimeSchema = z.enum(["local-rust", "cloudflare-rust", "cloudflare-typescript"]);
+
+        export const DimensionControlSchema = z.object({
+
+                mode: z.coerce.string(),
+
+                supported: z.array(z.coerce.number().int().nonnegative()),
+
+                minimum: z.coerce.number().int().nonnegative().optional(),
+
+                maximum: z.coerce.number().int().nonnegative().optional()
+
+        });
+
+        export const ResourceDescriptorSchema = z.object({
+
+                service: z.coerce.string(),
+
+                kind: z.coerce.string()
+
+        });
+
+        export const ResourceMeasureSchema = z.object({
+
+                metric: z.coerce.string(),
+
+                unit: z.coerce.string()
+
+        });
+
+        export const ResourceScopeSchema = z.object({
+
+                kind: z.coerce.string()
+
+        });
+
+        export const ResourceWindowSchema = z.object({
+
+                kind: z.coerce.string(),
+
+                size: z.coerce.number().int().nonnegative().optional(),
+
+                unit: z.coerce.string().optional(),
+
+                timezone: z.coerce.string().optional(),
+
+                ref: z.coerce.string().optional()
+
+        });
+
+        export const ResourceLimitSchema = z.object({
+
+                kind: z.coerce.string(),
+
+                value: z.coerce.number().optional()
+
+        });
+
+        export const ResourcePolicySchema = z.object({
+
+                fraction: z.coerce.number().optional(),
+
+                maximum: z.coerce.number().optional(),
+
+                when_exhausted: z.coerce.string().optional(),
+
+                when_charge_unknown: z.coerce.string().optional()
+
+        });
+
+        export const ResourceRuleSchema = z.object({
+
+                id: z.coerce.string(),
+
+                resource: ResourceDescriptorSchema,
+
+                measure: ResourceMeasureSchema,
+
+                scope: ResourceScopeSchema,
+
+                window: ResourceWindowSchema,
+
+                limit: ResourceLimitSchema,
+
+                policy: ResourcePolicySchema.optional(),
+
+                source: z.coerce.string().optional(),
+
+                effective_limit: z.coerce.number().optional(),
+
+                enforcement: z.coerce.string()
+
+        });
+
+        export const ResourceUsageSchema = z.object({
+
+                key: z.coerce.string(),
+
+                meter: z.coerce.string(),
+
+                rule: z.coerce.string(),
+
+                unit: z.coerce.string(),
+
+                evidence: z.coerce.string(),
+
+                consumed: z.coerce.number(),
+
+                reserved: z.coerce.number(),
+
+                limit: z.coerce.number(),
+
+                reset_at: z.coerce.number().int().optional()
+
+        });
+
+        export const ResourceCapabilitySchema = z.object({
+
+                profile_id: z.coerce.string(),
+
+                reviewed_at: z.coerce.string(),
+
+                coverage: z.coerce.string()
+
+        });
+
+        export const AdmissionStateSchema = z.object({
+
+                state: z.coerce.string(),
+
+                reason: z.coerce.string().optional(),
+
+                rule: z.coerce.string().optional(),
+
+                limit: z.coerce.number().optional(),
+
+                consumed: z.coerce.number().optional(),
+
+                reserved: z.coerce.number().optional(),
+
+                remaining: z.coerce.number().optional(),
+
+                reset_at: z.coerce.number().int().optional()
+
+        });
+
+        export const ResourceReportSchema = z.object({
+
+                profile: ResourceCapabilitySchema,
+
+                rules: z.array(ResourceRuleSchema),
+
+                usage: z.array(ResourceUsageSchema),
+
+                limitations: z.array(z.coerce.string())
+
+        });
+
+        export const ConversionInputSchema = z.object({
+
+                path: z.coerce.string(),
+
+                to: z.coerce.string().optional()
+
+        });
+
+        export const ConversionResultSchema = z.object({
+
+                companion_path: z.coerce.string(),
+
+                companion_revision: z.coerce.string(),
+
+                converter: z.coerce.string(),
+
+                created: z.coerce.boolean(),
+
+                unchanged: z.coerce.boolean()
+
+        });
+
+        export const UrlImportInputSchema = z.object({
+
+                url: z.coerce.string(),
+
+                path: z.coerce.string()
+
+        });
+
+        export const UrlImportResultSchema = z.object({
+
+                path: z.coerce.string(),
+
+                revision: z.coerce.string().optional(),
+
+                partial: z.coerce.boolean(),
+
+                error: ErrorDetailSchema.optional(),
+
+                source_revision: z.coerce.string().optional(),
+
+                source_url: z.coerce.string(),
+
+                source_path: z.coerce.string().optional(),
+
+                created: z.coerce.boolean(),
+
+                unchanged: z.coerce.boolean()
+
+        });
 
         export const SemanticCapabilitySchema = z.object({
 
@@ -23,7 +251,13 @@ import { xjson } from "xidl-typescript-codec";
 
                 vector_index_version: z.coerce.number().int(),
 
-                unavailable_reason: z.coerce.string().optional()
+                unavailable_reason: z.coerce.string().optional(),
+
+                dimension_control: DimensionControlSchema.optional(),
+
+                model_modalities: z.array(z.coerce.string()).optional(),
+
+                accepted_inputs: z.array(z.coerce.string()).optional()
 
         });
 
@@ -55,7 +289,11 @@ import { xjson } from "xidl-typescript-codec";
 
                 document_conversion: DocumentConversionSchema.optional(),
 
-                vault: z.coerce.string().optional()
+                vault: z.coerce.string().optional(),
+
+                resources: ResourceCapabilitySchema.optional(),
+
+                admission: z.record(z.string(), AdmissionStateSchema).optional()
 
         });
 
@@ -141,6 +379,8 @@ import { xjson } from "xidl-typescript-codec";
 
                 index_state: z.coerce.string(),
 
+                semantic_state: z.coerce.string().optional(),
+
                 operation_id: z.coerce.string()
 
         });
@@ -168,6 +408,8 @@ import { xjson } from "xidl-typescript-codec";
                 title: z.coerce.string().optional(),
 
                 index_state: z.coerce.string(),
+
+                semantic_state: z.coerce.string().optional(),
 
                 operation_id: z.coerce.string(),
 
@@ -455,20 +697,6 @@ import { xjson } from "xidl-typescript-codec";
 
         });
 
-        export const ErrorDetailSchema = z.object({
-
-                code: z.coerce.string(),
-
-                message: z.coerce.string(),
-
-                request_id: z.coerce.string(),
-
-                path: z.coerce.string().optional(),
-
-                current_revision: z.coerce.string().optional()
-
-        });
-
         export const TransferResultSchema = z.object({
 
                 copied: z.coerce.boolean(),
@@ -561,6 +789,12 @@ import { xjson } from "xidl-typescript-codec";
 
         });
 
+        export const QuotaExceededSchema = z.object({
+
+                error: ErrorDetailSchema
+
+        });
+
         export const InternalSchema = z.object({
 
                 error: ErrorDetailSchema
@@ -630,6 +864,12 @@ import { xjson } from "xidl-typescript-codec";
         });
 
         export const HeadServiceUnavailableSchema = z.object({
+
+                code: xjson(z.coerce.string(), {"name":"X-Brain-Error-Code"})
+
+        });
+
+        export const HeadQuotaExceededSchema = z.object({
 
                 code: xjson(z.coerce.string(), {"name":"X-Brain-Error-Code"})
 

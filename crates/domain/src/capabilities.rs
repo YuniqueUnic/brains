@@ -3,6 +3,9 @@
 
 use std::collections::BTreeMap;
 
+mod resources;
+pub use resources::{AdmissionState, ResourceCapability};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +26,10 @@ pub enum FullTextSearch {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Capabilities {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resources: Option<ResourceCapability>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admission: Option<BTreeMap<String, AdmissionState>>,
     /// Product version and build metadata supplied by the running application.
     pub build_version: String,
     pub api_version: String, // "1"
@@ -57,6 +64,12 @@ pub struct DocumentConversion {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SemanticCapability {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dimension_control: Option<crate::retrieval::DimensionControl>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_modalities: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accepted_inputs: Option<Vec<String>>,
     pub model_id: String,
     pub dimensions: usize,
     pub vector_index_version: i64,
@@ -68,6 +81,8 @@ pub struct SemanticCapability {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct CapabilityLimits {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reindex_page_max: Option<usize>,
     pub max_text_bytes: usize,
     pub max_attachment_bytes: usize,
 }
@@ -117,11 +132,14 @@ impl Capabilities {
             ("semantic_search".into(), false), // no runtime mounts an embedding provider yet
         ]);
         Self {
+            resources: None,
+            admission: None,
             build_version: build_version.to_owned(),
             api_version: "1".into(),
             store_format: 1,
             runtime: Runtime::LocalRust,
             limits: CapabilityLimits {
+                reindex_page_max: None,
                 max_text_bytes,
                 max_attachment_bytes,
             },
@@ -186,6 +204,9 @@ impl Capabilities {
     /// The explicit-off semantic report: no model, no projection.
     pub fn semantic_unavailable(reason: &str) -> SemanticCapability {
         SemanticCapability {
+            dimension_control: None,
+            model_modalities: None,
+            accepted_inputs: None,
             model_id: "none".into(),
             dimensions: 0,
             vector_index_version: 0,

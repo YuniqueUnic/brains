@@ -9,7 +9,9 @@
 //! `!Send`, so every port method wraps its body in `worker::send::SendFuture`
 //! — the sanctioned bridge for single-threaded Workers behind axum.
 
+use brains_application::resources::ResourceBudget;
 use std::future::Future;
+use std::sync::Arc;
 
 use brains_domain::{DomainError, DomainResult, Head, HexId, Revision, VaultPath};
 use brains_ports::{BlobStore, CasOutcome, ExpectedHead, HeadStore, RevisionStore, StoredHead};
@@ -23,6 +25,7 @@ use worker::{Bucket, Conditional, HttpMetadata};
 pub struct R2ContentStore {
     bucket: Bucket,
     vault: String,
+    budget: Option<Arc<ResourceBudget>>,
 }
 
 impl R2ContentStore {
@@ -30,7 +33,49 @@ impl R2ContentStore {
         Self {
             bucket,
             vault: vault.into(),
+            budget: None,
         }
+    }
+
+    pub fn with_budget(mut self, budget: Arc<ResourceBudget>) -> Self {
+        self.budget = Some(budget);
+        self
+    }
+
+    async fn charge(&self, metric: &str, amount: usize) -> DomainResult<()> {
+        if let Some(budget) = &self.budget {
+            budget.debit("r2", metric, amount as f64).await?;
+        }
+        Ok(())
+    }
+
+    async fn read_head(&self, path: &VaultPath) -> DomainResult<Option<StoredHead>> {
+        let key = self.head_key(path);
+        let Some(object) = self
+            .bucket
+            .get(&key)
+            .execute()
+            .await
+            .map_err(|e| storage_error("head read", &key, e))?
+        else {
+            return Ok(None);
+        };
+        if object.size() == 0 {
+            return Ok(None);
+        }
+        let storage_token = object.etag();
+        let bytes = object
+            .body()
+            .ok_or_else(|| DomainError::Internal("head has no body".into()))?
+            .bytes()
+            .await
+            .map_err(|e| storage_error("head bytes", &key, e))?;
+        let head = serde_json::from_slice(&bytes)
+            .map_err(|e| DomainError::Internal(format!("corrupt head: {e}")))?;
+        Ok(Some(StoredHead {
+            head,
+            storage_token,
+        }))
     }
 
     fn head_key(&self, path: &VaultPath) -> String {
@@ -96,32 +141,9 @@ impl HeadStore for R2ContentStore {
         &self,
         path: &VaultPath,
     ) -> impl Future<Output = DomainResult<Option<StoredHead>>> + Send {
-        let bucket = self.bucket.clone();
-        let key = self.head_key(path);
         SendFuture::new(async move {
-            let object = bucket
-                .get(&key)
-                .execute()
-                .await
-                .map_err(|e| storage_error("head read", &key, e))?;
-            let Some(object) = object else {
-                return Ok(None);
-            };
-            let head: Head = serde_json::from_slice(
-                &object
-                    .body()
-                    .ok_or_else(|| {
-                        DomainError::Internal(format!("head object without body: {key}"))
-                    })?
-                    .bytes()
-                    .await
-                    .map_err(|e| storage_error("head bytes", &key, e))?,
-            )
-            .map_err(|e| DomainError::Internal(format!("head corrupt {key}: {e}")))?;
-            Ok(Some(StoredHead {
-                head,
-                storage_token: object.etag(),
-            }))
+            self.charge("class_b_operations", 1).await?;
+            self.read_head(path).await
         })
     }
 
@@ -133,15 +155,30 @@ impl HeadStore for R2ContentStore {
     ) -> impl Future<Output = DomainResult<CasOutcome>> + Send {
         let bucket = self.bucket.clone();
         let key = self.head_key(path);
-        let condition = match expected {
-            ExpectedHead::Absent => absent_condition(),
-            ExpectedHead::StorageToken(token) => Conditional {
-                etag_matches: Some(token.to_owned()),
-                ..Default::default()
-            },
-        };
         let body = serde_json::to_vec(new_head).expect("head serializes");
         SendFuture::new(async move {
+            let condition = match expected {
+                ExpectedHead::Absent => {
+                    self.charge("class_b_operations", 1).await?;
+                    match bucket
+                        .get(&key)
+                        .execute()
+                        .await
+                        .map_err(|e| storage_error("vacancy read", &key, e))?
+                    {
+                        Some(object) if object.size() == 0 => Conditional {
+                            etag_matches: Some(object.etag()),
+                            ..Default::default()
+                        },
+                        _ => absent_condition(),
+                    }
+                }
+                ExpectedHead::StorageToken(token) => Conditional {
+                    etag_matches: Some(token.clone()),
+                    ..Default::default()
+                },
+            };
+            self.charge("class_a_operations", 1).await?;
             // `execute()` yields None exactly when the condition failed —
             // never treat that as a commit (design §22.1).
             let committed = bucket
@@ -158,54 +195,36 @@ impl HeadStore for R2ContentStore {
         })
     }
 
-    /// Permanent removal. worker 0.8's R2 delete carries no conditional
-    /// form, so this is verify-then-delete with a re-check: if a head
-    /// reappears after the delete (a restore raced us), the error is raised
-    /// instead of pretending the purge won. The race window is the
-    /// get→delete span.
+    /// A zero-byte vacancy marker makes purge conditional. Physical R2
+    /// DeleteObject cannot compare ETags and could erase a concurrent restore.
     fn remove(
         &self,
         path: &VaultPath,
         expected: &ExpectedHead,
     ) -> impl Future<Output = DomainResult<CasOutcome>> + Send {
-        let bucket = self.bucket.clone();
         let key = self.head_key(path);
-        let expected_token = match expected {
-            ExpectedHead::Absent => None,
-            ExpectedHead::StorageToken(token) => Some(token.to_owned()),
+        let condition = match expected {
+            ExpectedHead::Absent => absent_condition(),
+            ExpectedHead::StorageToken(token) => Conditional {
+                etag_matches: Some(token.clone()),
+                ..Default::default()
+            },
         };
         SendFuture::new(async move {
-            let object = bucket
-                .get(&key)
+            self.charge("class_a_operations", 1).await?;
+            let committed = self
+                .bucket
+                .put(&key, Vec::<u8>::new())
+                .http_metadata(json_metadata())
+                .only_if(condition)
                 .execute()
                 .await
-                .map_err(|e| storage_error("head read", &key, e))?;
-            let Some(object) = object else {
-                return Ok(CasOutcome::Committed); // already gone
-            };
-            if let Some(token) = &expected_token
-                && object.etag() != *token
-            {
-                return Ok(CasOutcome::PreconditionFailed);
-            }
-            bucket
-                .delete(&key)
-                .await
-                .map_err(|e| storage_error("head remove", &key, e))?;
-            if let Some(after) = bucket
-                .get(&key)
-                .execute()
-                .await
-                .map_err(|e| storage_error("head re-read", &key, e))?
-            {
-                // A restore landed between our read and delete: the head we
-                // removed is NOT the tombstone we verified — say so loudly.
-                return Err(DomainError::RevisionConflict {
-                    path: path.as_str().to_owned(),
-                    current_revision: Some(after.etag().to_owned()),
-                });
-            }
-            Ok(CasOutcome::Committed)
+                .map_err(|e| storage_error("head purge", &key, e))?;
+            Ok(if committed.is_some() {
+                CasOutcome::Committed
+            } else {
+                CasOutcome::PreconditionFailed
+            })
         })
     }
 
@@ -238,11 +257,18 @@ impl HeadStore for R2ContentStore {
                 if let Some(cursor) = &r2_cursor {
                     options = options.cursor(cursor.clone());
                 }
+                self.charge("class_a_operations", 1).await?;
                 let objects = options
                     .execute()
                     .await
                     .map_err(|e| storage_error("heads list", &scan_prefix, e))?;
-                candidates.extend(objects.objects().iter().map(|o| o.key()));
+                candidates.extend(
+                    objects
+                        .objects()
+                        .iter()
+                        .filter(|object| object.size() > 0)
+                        .map(|o| o.key()),
+                );
                 if !objects.truncated() {
                     break;
                 }
@@ -264,11 +290,12 @@ impl HeadStore for R2ContentStore {
             paths.sort();
             paths.truncate(limit);
 
+            self.charge("class_b_operations", paths.len()).await?;
             let mut heads = Vec::with_capacity(paths.len());
             for path in &paths {
                 // A head vanishing between scan and read is the filesystem
                 // adapter's skip-and-continue case, not an error.
-                if let Some(stored) = HeadStore::get(self, path).await? {
+                if let Some(stored) = self.read_head(path).await? {
                     heads.push(stored);
                 }
             }
@@ -283,6 +310,7 @@ impl RevisionStore for R2ContentStore {
         let key = self.revision_key(&revision.revision);
         let body = serde_json::to_vec(revision).expect("revision serializes");
         SendFuture::new(async move {
+            self.charge("class_a_operations", 1).await?;
             let created = bucket
                 .put(&key, body)
                 .http_metadata(json_metadata())
@@ -305,7 +333,10 @@ impl RevisionStore for R2ContentStore {
     fn get(&self, revision: &HexId) -> impl Future<Output = DomainResult<Option<Revision>>> + Send {
         let bucket = self.bucket.clone();
         let key = self.revision_key(revision);
-        SendFuture::new(async move { read_json::<Revision>(&bucket, "revision", &key).await })
+        SendFuture::new(async move {
+            self.charge("class_b_operations", 1).await?;
+            read_json::<Revision>(&bucket, "revision", &key).await
+        })
     }
 }
 
@@ -329,6 +360,7 @@ impl BlobStore for R2ContentStore {
                 .map_err(|e| DomainError::Internal(format!("declared digest malformed: {e}")))?;
             // R2 verifies the stored bytes against this checksum server-side
             // (design §22.3); the create-only condition rejects overwrites.
+            self.charge("class_a_operations", 1).await?;
             let created = bucket
                 .put(&key, content)
                 .sha256(digest)
@@ -349,6 +381,7 @@ impl BlobStore for R2ContentStore {
         let bucket = self.bucket.clone();
         let key = key.to_owned();
         SendFuture::new(async move {
+            self.charge("class_b_operations", 1).await?;
             let object = bucket
                 .get(&key)
                 .execute()
