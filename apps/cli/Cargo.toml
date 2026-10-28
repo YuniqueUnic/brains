@@ -33,6 +33,11 @@ bin-dir = "brains-{ version }-linux-x64/{ bin }{ binary-ext }"
 pkg-url = "{ repo }/releases/download/v{ version }/brains-{ version }-linux-arm64.{ archive-format }"
 bin-dir = "brains-{ version }-linux-arm64/{ bin }{ binary-ext }"
 
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-fmt = "zip"
+pkg-url = "{ repo }/releases/download/v{ version }/brains-{ version }-windows-x64.{ archive-format }"
+bin-dir = "brains-{ version }-windows-x64/{ bin }{ binary-ext }"
+
 [features]
 default = ["fts", "convert", "url-import"]
 fts = ["brains-client/fts"]
@@ -61,11 +66,15 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tar = "0.4"
+tempfile = "3.27.0"
 tokio = { workspace = true, features = ["rt"] }
+
+[target.'cfg(windows)'.dependencies]
+self-replace = "1.5.1"
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 assert_cmd = "2.2.2"
 brains-server = { path = "../server" }
 predicates = "3.1.4"
-tempfile = "3.27.0"

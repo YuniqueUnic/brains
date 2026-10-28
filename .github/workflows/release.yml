@@ -30,6 +30,7 @@ jobs:
       tag: ${{ steps.identity.outputs.tag }}
       version: ${{ steps.identity.outputs.version }}
       sha: ${{ steps.identity.outputs.sha }}
+      native_matrix: ${{ steps.identity.outputs.native_matrix }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,12 +52,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 - <<'PY'
+          import json
           import os
           from pathlib import Path
           import subprocess
           import tomllib
 
-          version = tomllib.loads(Path("Cargo.toml").read_text())["workspace"]["package"]["version"]
+          manifest = tomllib.loads(Path("Cargo.toml").read_text())
+          version = manifest["workspace"]["package"]["version"]
+          native = [
+              {"id": "macos-arm64", "os": "macos-15", "target": "aarch64-apple-darwin"},
+              {"id": "macos-x64", "os": "macos-15-intel", "target": "x86_64-apple-darwin"},
+              {"id": "linux-x64", "os": "ubuntu-24.04", "target": "x86_64-unknown-linux-musl"},
+              {"id": "linux-arm64", "os": "ubuntu-24.04-arm", "target": "aarch64-unknown-linux-musl"},
+          ]
+          cli = tomllib.loads(Path("apps/cli/Cargo.toml").read_text())
+          overrides = cli.get("package", {}).get("metadata", {}).get("binstall", {}).get("overrides", {})
+          if "x86_64-pc-windows-msvc" in overrides:
+              native.append({"id": "windows-x64", "os": "windows-2025", "target": "x86_64-pc-windows-msvc"})
           tag = os.environ["INPUT_VERSION"]
           if tag != f"v{version}":
               raise SystemExit(f"Release tag must match Cargo workspace version: v{version}")
@@ -64,6 +77,7 @@ jobs:
           subprocess.run(["gh", "release", "view", tag], check=True, stdout=subprocess.DEVNULL)
           with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"tag={tag}\nversion={version}\nsha={sha}\n")
+              output.write(f"native_matrix={json.dumps({'include': native})}\n")
           print(f"Release {tag} from {sha}")
           PY
 
@@ -71,25 +85,15 @@ jobs:
     name: bsx + brains-server (${{ matrix.id }})
     needs: prepare
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     env:
       VERSION: ${{ needs.prepare.outputs.version }}
       RELEASE_SHA: ${{ needs.prepare.outputs.sha }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - id: macos-arm64
-            os: macos-15
-            target: aarch64-apple-darwin
-          - id: macos-x64
-            os: macos-15-intel
-            target: x86_64-apple-darwin
-          - id: linux-x64
-            os: ubuntu-24.04
-            target: x86_64-unknown-linux-musl
-          - id: linux-arm64
-            os: ubuntu-24.04-arm
-            target: aarch64-unknown-linux-musl
+      matrix: ${{ fromJSON(needs.prepare.outputs.native_matrix) }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -98,6 +102,9 @@ jobs:
         run: rustup show
       - name: Install release target
         run: rustup target add ${{ matrix.target }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
@@ -109,30 +116,23 @@ jobs:
           CC_aarch64_unknown_linux_musl: musl-gcc
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: cargo build --locked --release -p brains-server -p brains-cli --target ${{ matrix.target }}
-      - name: Verify compiled identity
-        run: |
-          actual="$(target/${{ matrix.target }}/release/bsx --version)"
-          expected="bsx ${VERSION} (git ${RELEASE_SHA:0:12})"
-          if [[ "$actual" != "$expected" ]]; then
-            printf 'Expected: %s\nActual: %s\n' "$expected" "$actual" >&2
-            exit 1
-          fi
-      - name: Package
-        run: |
-          DIR="brains-${VERSION}-${{ matrix.id }}"
-          mkdir -p "$DIR"
-          cp "target/${{ matrix.target }}/release/brains-server" \
-             "target/${{ matrix.target }}/release/bsx" "$DIR/"
-          cp docs/native-release.md "$DIR/README.md"
-          "$DIR/bsx" --version > "$DIR/VERSION"
-          tar czf "$DIR.tar.gz" "$DIR"
-          shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
+      - name: Check out the workflow packaging recipe
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-recipe
+          sparse-checkout: scripts/package-native.py
+          sparse-checkout-cone-mode: false
+      - name: Verify identity and package native pair
+        run: python3 .release-recipe/scripts/package-native.py --bin-dir "target/${{ matrix.target }}/release" --version "$VERSION" --target "${{ matrix.id }}" --sha "$RELEASE_SHA"
       - uses: actions/upload-artifact@v7
         with:
           name: brains-${{ matrix.id }}
           path: |
             brains-*.tar.gz
             brains-*.tar.gz.sha256
+            brains-*.zip
+            brains-*.zip.sha256
           retention-days: 7
           if-no-files-found: error
 

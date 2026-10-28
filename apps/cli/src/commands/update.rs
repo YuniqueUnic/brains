@@ -1,17 +1,15 @@
 //! `bsx update`: self-upgrade from the project's GitHub releases. Downloads
-//! the release tarball for the running platform, verifies its published
+//! the release archive for the running platform, verifies its published
 //! sha256, and replaces the running binary in place (plus a sibling
-//! `brains-server` when one sits next to it). Windows has no release
-//! artifacts and is refused explicitly.
+//! `brains-server` when one sits next to it).
+
+mod artifact;
+use artifact::{download, extract_member, install_binary, verify_sha256};
 
 use brains_client::{ClientError, ClientResult};
 use clap::Parser;
-use sha2::{Digest, Sha256};
 
 const REPO: &str = "YuniqueUnic/brains";
-/// Release tarballs are far below this; the cap bounds a hijacked or
-/// misconfigured download source, not a real artifact.
-const MAX_DOWNLOAD_BYTES: u64 = 256 * 1024 * 1024;
 const USER_AGENT: &str = concat!("bsx/", env!("CARGO_PKG_VERSION"));
 
 #[derive(Debug, Parser)]
@@ -27,13 +25,14 @@ pub(crate) struct UpdateArgs {
     yes: bool,
 }
 
-/// (release matrix id, tarball prefix) for the running platform.
+/// Release matrix ID for the running platform.
 fn release_target() -> ClientResult<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
         ("macos", "aarch64") => Ok("macos-arm64"),
         ("macos", "x86_64") => Ok("macos-x64"),
         ("linux", "x86_64") => Ok("linux-x64"),
         ("linux", "aarch64") => Ok("linux-arm64"),
+        ("windows", "x86_64") => Ok("windows-x64"),
         (os, arch) => Err(ClientError {
             status: 400,
             code: Some("UNSUPPORTED_PLATFORM".into()),
@@ -69,8 +68,8 @@ fn parse_version(value: &str) -> ClientResult<(u64, u64, u64)> {
 
 struct Release {
     tag: String,
-    tarball_url: String,
-    tarball_name: String,
+    archive_url: String,
+    archive_name: String,
     sha256_url: String,
 }
 
@@ -104,132 +103,37 @@ fn fetch_release(
         .filter(|tag| !tag.is_empty())
         .ok_or_else(|| ClientError::transport("release has no tag_name".to_owned()))?
         .to_owned();
-    let tarball_suffix = format!("-{target}.tar.gz");
-    let mut tarball_url = None;
-    let mut tarball_name = None;
-    let mut sha256_url = None;
-    for asset in body["assets"].as_array().into_iter().flatten() {
-        let (Some(name), Some(download)) = (
-            asset["name"].as_str(),
-            asset["browser_download_url"].as_str(),
-        ) else {
-            continue;
-        };
-        if let Some(stem) = name.strip_suffix(&tarball_suffix) {
-            let _ = stem;
-            tarball_url = Some(download.to_owned());
-            tarball_name = Some(name.to_owned());
-            sha256_url = Some(format!("{download}.sha256"));
-        }
-    }
-    let (Some(tarball_url), Some(tarball_name), Some(sha256_url)) =
-        (tarball_url, tarball_name, sha256_url)
-    else {
+    let extension = if target.starts_with("windows-") {
+        "zip"
+    } else {
+        "tar.gz"
+    };
+    let archive_name = format!(
+        "brains-{}-{target}.{extension}",
+        tag.trim_start_matches('v')
+    );
+    let asset_url = |name: &str| {
+        body["assets"]
+            .as_array()?
+            .iter()
+            .find(|asset| asset["name"].as_str() == Some(name))?["browser_download_url"]
+            .as_str()
+            .map(str::to_owned)
+    };
+    let (Some(archive_url), Some(sha256_url)) = (
+        asset_url(&archive_name),
+        asset_url(&format!("{archive_name}.sha256")),
+    ) else {
         return Err(ClientError::transport(format!(
-            "release {tag} has no .tar.gz/.sha256 asset pair"
+            "release {tag} has no {archive_name}/.sha256 asset pair"
         )));
     };
     Ok(Release {
         tag,
-        tarball_url,
-        tarball_name,
+        archive_url,
+        archive_name,
         sha256_url,
     })
-}
-
-fn download(client: &reqwest::blocking::Client, url: &str, label: &str) -> ClientResult<Vec<u8>> {
-    let mut response = client
-        .get(url)
-        .send()
-        .map_err(|e| ClientError::transport(format!("{label} download failed: {e}")))?;
-    let status = response.status();
-    if !status.is_success() {
-        return Err(ClientError::transport(format!(
-            "{label} download failed ({status})"
-        )));
-    }
-    let mut bytes = Vec::new();
-    use std::io::Read;
-    response
-        .read_to_end(&mut bytes)
-        .map_err(|e| ClientError::transport(format!("{label} download failed: {e}")))?;
-    if bytes.len() as u64 > MAX_DOWNLOAD_BYTES {
-        return Err(ClientError::transport(format!(
-            "{label} exceeds the {MAX_DOWNLOAD_BYTES}-byte download cap"
-        )));
-    }
-    Ok(bytes)
-}
-
-fn verify_sha256(tarball: &[u8], digest_file: &[u8], tarball_name: &str) -> ClientResult<()> {
-    let expected = std::str::from_utf8(digest_file)
-        .map_err(|_| ClientError::transport("sha256 file is not UTF-8".to_owned()))?
-        .lines()
-        .next()
-        .unwrap_or("")
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
-    if expected.len() != 64 || !expected.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(ClientError::transport(
-            "sha256 file does not start with a hex digest".to_owned(),
-        ));
-    }
-    let actual = hex::encode(Sha256::digest(tarball));
-    if actual != expected {
-        return Err(ClientError::transport(format!(
-            "{tarball_name} failed the published sha256 check ({actual} != {expected}); refusing to install"
-        )));
-    }
-    Ok(())
-}
-
-/// Extract `<prefix>/<name>` from the verified tar.gz into `destination`.
-fn extract_member(
-    tarball: &[u8],
-    member_name: &str,
-    destination: &std::path::Path,
-) -> ClientResult<()> {
-    let gz = flate2::read::GzDecoder::new(tarball);
-    let mut archive = tar::Archive::new(gz);
-    for entry in archive
-        .entries()
-        .map_err(|e| ClientError::transport(format!("tarball is not readable gzip: {e}")))?
-    {
-        let mut entry =
-            entry.map_err(|e| ClientError::transport(format!("tarball is corrupt: {e}")))?;
-        let path = entry
-            .path()
-            .map_err(|e| ClientError::transport(format!("tarball is corrupt: {e}")))?
-            .into_owned();
-        if path.as_os_str() != std::ffi::OsStr::new(member_name) {
-            continue;
-        }
-        use std::io::Read;
-        let mut bytes = Vec::new();
-        entry
-            .read_to_end(&mut bytes)
-            .map_err(|e| ClientError::transport(format!("{member_name} could not be read: {e}")))?;
-        return std::fs::write(destination, &bytes)
-            .map_err(|e| ClientError::transport(format!("could not write {destination:?}: {e}")));
-    }
-    Err(ClientError::transport(format!(
-        "tarball does not contain {member_name}"
-    )))
-}
-
-fn install_binary(bytes_path: &std::path::Path, target: &std::path::Path) -> ClientResult<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(bytes_path, std::fs::Permissions::from_mode(0o755))
-            .map_err(|e| ClientError::transport(format!("could not chmod staged binary: {e}")))?;
-    }
-    // Rename over the running executable: atomic on Unix, and the old inode
-    // stays alive until the process exits.
-    std::fs::rename(bytes_path, target)
-        .map_err(|e| ClientError::transport(format!("could not replace {target:?}: {e}")))
 }
 
 pub(crate) fn update(args: UpdateArgs) -> ClientResult<i32> {
@@ -293,38 +197,37 @@ pub(crate) fn update(args: UpdateArgs) -> ClientResult<i32> {
         }
     }
 
-    println!("downloading {}", release.tarball_name);
-    let tarball = download(&http, &release.tarball_url, "tarball")?;
+    println!("downloading {}", release.archive_name);
+    let archive = download(&http, &release.archive_url, "archive")?;
     let digest_file = download(&http, &release.sha256_url, "sha256")?;
-    verify_sha256(&tarball, &digest_file, &release.tarball_name)?;
+    verify_sha256(&archive, &digest_file, &release.archive_name)?;
 
-    // The tarball lays binaries out under a prefix dir named after the
-    // asset itself: brains-<version>-<target>/bsx.
     let prefix = release
-        .tarball_name
-        .strip_suffix(".tar.gz")
-        .ok_or_else(|| ClientError::transport("unexpected tarball name".to_owned()))?
-        .to_owned();
+        .archive_name
+        .strip_suffix(if cfg!(windows) { ".zip" } else { ".tar.gz" })
+        .ok_or_else(|| ClientError::transport("unexpected archive name".to_owned()))?;
     let executable = std::env::current_exe()
         .map_err(|e| ClientError::transport(format!("could not locate the running bsx: {e}")))?;
     let bin_dir = executable.parent().ok_or_else(|| {
         ClientError::transport("running binary has no parent directory".to_owned())
     })?;
-
-    let staged = bin_dir.join(format!(".bsx.update-{}", std::process::id()));
-    extract_member(&tarball, &format!("{prefix}/bsx"), &staged)?;
-    install_binary(&staged, &executable)?;
-    println!("updated bsx -> {}", release.tag);
-
-    // A brains-server sitting next to bsx (the release layout) is refreshed
-    // from the same verified tarball so the pair cannot drift.
-    let server = bin_dir.join("brains-server");
+    let stage = tempfile::tempdir_in(bin_dir)
+        .map_err(|e| ClientError::transport(format!("could not stage the update: {e}")))?;
+    let cli_name = format!("bsx{}", std::env::consts::EXE_SUFFIX);
+    let server_name = format!("brains-server{}", std::env::consts::EXE_SUFFIX);
+    let staged_cli = stage.path().join(&cli_name);
+    extract_member(&archive, &format!("{prefix}/{cli_name}"), &staged_cli)?;
+    let server = bin_dir.join(&server_name);
     if server.is_file() {
-        let staged_server = bin_dir.join(format!(".brains-server.update-{}", std::process::id()));
-        extract_member(&tarball, &format!("{prefix}/brains-server"), &staged_server)?;
-        install_binary(&staged_server, &server)?;
+        let staged_server = stage.path().join(&server_name);
+        extract_member(&archive, &format!("{prefix}/{server_name}"), &staged_server)?;
+        // Stop the server before replacing it on Windows. A busy server fails
+        // here, leaving bsx unchanged and reporting the installation error.
+        install_binary(&staged_server, &server, false)?;
         println!("updated brains-server -> {}", release.tag);
     }
+    install_binary(&staged_cli, &executable, true)?;
+    println!("updated bsx -> {}", release.tag);
     println!("restart any running bsx/brains-server processes to pick up the new version");
     Ok(0)
 }

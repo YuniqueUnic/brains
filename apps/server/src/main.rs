@@ -86,7 +86,18 @@ fn main() {
                 }
             }
         };
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        let shutdown = {
+            let mut interrupt = tokio::signal::windows::ctrl_c().map_err(|e| e.to_string())?;
+            let mut terminate = tokio::signal::windows::ctrl_break().map_err(|e| e.to_string())?;
+            async move {
+                tokio::select! {
+                    _ = interrupt.recv() => {},
+                    _ = terminate.recv() => {},
+                }
+            }
+        };
+        #[cfg(not(any(unix, windows)))]
         let shutdown = async {
             if let Err(error) = tokio::signal::ctrl_c().await {
                 tracing::error!(%error, "cannot listen for shutdown; stopping server");

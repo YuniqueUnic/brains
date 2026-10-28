@@ -26,7 +26,7 @@ fn parse_head(value: serde_json::Value) -> DomainResult<Head> {
 
 impl FsHeadStore {
     fn read_current(&self, path: &VaultPath) -> DomainResult<Option<StoredHead>> {
-        let file = self.store.head_file(path);
+        let file = self.store.head_file(path)?;
         if !file.exists() {
             return Ok(None);
         }
@@ -40,6 +40,14 @@ impl FsHeadStore {
         }
         let head = parse_head(read_json_file(&file)?)?;
         head.validate()?;
+        if head.path != path.as_str() {
+            let message = format!("stored HEAD path differs from the requested spelling: {path}");
+            return Err(if cfg!(windows) {
+                DomainError::InvalidArgument(message)
+            } else {
+                DomainError::StorageUnavailable(message)
+            });
+        }
         Ok(Some(StoredHead {
             storage_token: head.revision.as_str().to_owned(),
             head,
@@ -61,7 +69,11 @@ impl HeadStore for FsHeadStore {
         new_head: &Head,
     ) -> DomainResult<CasOutcome> {
         new_head.validate()?;
-        let target = self.store.head_file(path);
+        if new_head.path != path.as_str() {
+            return Err(DomainError::InvalidArgument(
+                "HEAD path must match the CAS path".into(),
+            ));
+        }
         let lock_path = lock_file(&self.store.locks_dir(), path.as_str());
         if let Some(parent) = lock_path.parent() {
             std::fs::create_dir_all(parent)
@@ -76,7 +88,10 @@ impl HeadStore for FsHeadStore {
             .map_err(|e| DomainError::StorageUnavailable(format!("lock open: {e}")))?;
         lock.lock_exclusive()
             .map_err(|e| DomainError::StorageUnavailable(format!("lock acquire: {e}")))?;
-        let outcome = self.under_lock(path, &target, expected, new_head);
+        let outcome = self
+            .store
+            .head_file(path)
+            .and_then(|target| self.under_lock(path, &target, expected, new_head));
         let _ = lock.seek(std::io::SeekFrom::Start(0));
         let _ = lock.unlock();
         outcome
@@ -84,7 +99,6 @@ impl HeadStore for FsHeadStore {
 
     /// Lock → verify token → remove the file → unlock (mirror of `cas`).
     async fn remove(&self, path: &VaultPath, expected: &ExpectedHead) -> DomainResult<CasOutcome> {
-        let target = self.store.head_file(path);
         let lock_path = lock_file(&self.store.locks_dir(), path.as_str());
         if let Some(parent) = lock_path.parent() {
             std::fs::create_dir_all(parent)
@@ -99,6 +113,7 @@ impl HeadStore for FsHeadStore {
             .map_err(|e| DomainError::StorageUnavailable(format!("lock open: {e}")))?;
         lock.lock_exclusive()
             .map_err(|e| DomainError::StorageUnavailable(format!("lock acquire: {e}")))?;
+        let target = self.store.head_file(path)?;
         let matches = match (self.read_current(path)?, expected) {
             (None, _) => true, // already gone — removal achieved
             (Some(current), ExpectedHead::StorageToken(token)) => current.storage_token == *token,
@@ -165,6 +180,7 @@ impl FsHeadStore {
         expected: &ExpectedHead,
         new_head: &Head,
     ) -> DomainResult<CasOutcome> {
+        crate::paths::check_spelling(&self.store.heads_dir(), &format!("{}.json", path.as_str()))?;
         let matches = match (self.read_current(path)?, expected) {
             (None, ExpectedHead::Absent) => true,
             (None, ExpectedHead::StorageToken(_)) => false,

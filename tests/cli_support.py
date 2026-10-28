@@ -5,14 +5,16 @@ import json
 import os
 from pathlib import Path
 import secrets
+import signal
 import socket
 import subprocess
 import time
 import urllib.request
 
 REPO = Path(__file__).resolve().parent.parent
-CLI_BIN = Path(os.environ.get("BRAINS_CLI_BIN", REPO / "target/debug/bsx"))
-SERVER_BIN = Path(os.environ.get("BRAINS_SERVER_BIN", REPO / "target/debug/brains-server"))
+EXE_SUFFIX = ".exe" if os.name == "nt" else ""
+CLI_BIN = Path(os.environ.get("BRAINS_CLI_BIN", REPO / f"target/debug/bsx{EXE_SUFFIX}")).resolve()
+SERVER_BIN = Path(os.environ.get("BRAINS_SERVER_BIN", REPO / f"target/debug/brains-server{EXE_SUFFIX}")).resolve()
 
 
 class Cli:
@@ -96,18 +98,22 @@ def exercise_path_subtrees(cli, profile):
 
 
 @contextmanager
-def native_server(root, data_dir, vault, binary=None):
-    token = secrets.token_urlsafe(32)
+def native_server(root, data_dir, vault, binary=None, token=None, register_token=True):
+    token = token or secrets.token_urlsafe(32)
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
     base = f"http://127.0.0.1:{port}"
     with (root / f"server-{port}.log").open("w+") as log:
-        env = dict(os.environ, BRAINS_TOKEN=token)
+        env = {key: value for key, value in os.environ.items()
+               if key not in ("BRAINS_TOKEN", "BRAINS_TOKEN_FILE")}
+        if register_token:
+            env["BRAINS_TOKEN"] = token
         server = subprocess.Popen([
             str(binary or SERVER_BIN), "--data-dir", str(data_dir),
             "--bind", "127.0.0.1", "--port", str(port), "--vault", vault, "--no-seed",
-        ], env=env, stdout=log, stderr=subprocess.STDOUT)
+        ], env=env, stdout=log, stderr=subprocess.STDOUT,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
         try:
             deadline = time.monotonic() + 30
             while True:
@@ -123,7 +129,11 @@ def native_server(root, data_dir, vault, binary=None):
                     time.sleep(0.1)
             yield base, token
         finally:
-            server.terminate()
+            if server.poll() is None:
+                if os.name == "nt":
+                    server.send_signal(signal.CTRL_BREAK_EVENT)
+                else:
+                    server.terminate()
             try:
                 server.wait(timeout=5)
             except subprocess.TimeoutExpired:

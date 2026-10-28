@@ -17,11 +17,13 @@
 
 pub mod blob;
 pub mod head;
+mod paths;
 pub mod revision;
 
 use std::io;
 use std::path::{Path, PathBuf};
 
+#[cfg(not(windows))]
 use sha2::{Digest, Sha256};
 
 use brains_domain::{DomainError, DomainResult};
@@ -131,7 +133,7 @@ impl FsStore {
                 DomainError::StorageUnavailable(format!("open {}: {e}", base.display()))
             })?;
         fs2::FileExt::try_lock_exclusive(&file).map_err(|e| DomainError::StorageUnavailable(
-            if e.kind() == io::ErrorKind::WouldBlock {
+            if e.raw_os_error() == fs2::lock_contended_error().raw_os_error() {
                 format!("data directory {} is in use; close its local process, or use a remote profile to access the running server", base.display())
             } else { format!("lock {}: {e}", base.display()) }
         ))?;
@@ -163,8 +165,9 @@ impl FsStore {
     }
 
     /// Storage file for a logical path: `heads/<path>.json`.
-    pub fn head_file(&self, path: &brains_domain::VaultPath) -> PathBuf {
-        self.heads_dir().join(format!("{}.json", path.as_str()))
+    pub fn head_file(&self, path: &brains_domain::VaultPath) -> DomainResult<PathBuf> {
+        paths::validate_name(path.as_str())?;
+        paths::join(&self.heads_dir(), &format!("{}.json", path.as_str()))
     }
 
     pub fn revision_file(&self, revision: &brains_domain::HexId) -> PathBuf {
@@ -172,10 +175,19 @@ impl FsStore {
     }
 }
 
-/// Per-path lock file name: a digest so arbitrary path bytes stay flat.
+/// Windows serializes namespace writes because distinct logical paths may alias
+/// the same directory entry. Unix keeps independent digest-named path locks.
 pub fn lock_file(locks_dir: &Path, logical_path: &str) -> PathBuf {
-    let digest = Sha256::digest(logical_path.as_bytes());
-    locks_dir.join(format!("{}.lock", hex::encode(digest)))
+    #[cfg(windows)]
+    {
+        let _ = logical_path;
+        locks_dir.join("namespace.lock")
+    }
+    #[cfg(not(windows))]
+    {
+        let digest = Sha256::digest(logical_path.as_bytes());
+        locks_dir.join(format!("{}.lock", hex::encode(digest)))
+    }
 }
 
 pub(crate) fn read_json_file(path: &Path) -> DomainResult<serde_json::Value> {
@@ -221,11 +233,20 @@ pub(crate) fn atomic_write(target: &Path, bytes: &[u8]) -> DomainResult<()> {
     fsync_dir(dir)
 }
 
-/// Durability of a rename requires syncing the parent directory entry.
+/// Unix supports syncing directory entries after publishing a file. Windows
+/// flushes the staged file, but does not expose the same directory-fsync contract.
 pub(crate) fn fsync_dir(dir: &Path) -> DomainResult<()> {
-    std::fs::File::open(dir)
-        .and_then(|f| f.sync_all())
-        .map_err(|e| DomainError::StorageUnavailable(format!("fsync dir: {e}")))
+    #[cfg(unix)]
+    {
+        std::fs::File::open(dir)
+            .and_then(|f| f.sync_all())
+            .map_err(|e| DomainError::StorageUnavailable(format!("fsync dir: {e}")))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = dir;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -246,6 +267,7 @@ pub(crate) fn create_immutable(target: &Path, bytes: &[u8]) -> DomainResult<()> 
             .open(&temp)?;
         file.write_all(bytes)?;
         file.sync_all()?;
+        drop(file);
         std::fs::hard_link(&temp, target)
     })();
     let _ = std::fs::remove_file(&temp);

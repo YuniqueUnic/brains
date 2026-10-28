@@ -154,6 +154,55 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  windows:
+    name: Windows x64 (CLI + server workflows)
+    runs-on: windows-2025
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: rustup show
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: windows-x64
+      - name: Check and lint native crates
+        run: |
+          cargo check --locked -p brains-cli -p brains-server --all-targets --all-features
+          cargo clippy --locked -p brains-cli -p brains-server -p brains-adapter-fs -p brains-adapter-turso --all-targets --all-features -- -D warnings
+      - name: Native Rust tests
+        run: cargo test --locked -p brains-cli -p brains-server -p brains-adapter-fs -p brains-adapter-turso --all-features
+      - name: Build full and basic native binaries
+        run: |
+          cargo build --locked --release -p brains-cli -p brains-server
+          mkdir -p artifacts/full artifacts/basic
+          cp target/release/bsx.exe target/release/brains-server.exe artifacts/full/
+          cargo build --locked --release -p brains-cli -p brains-server --no-default-features
+          cp target/release/bsx.exe target/release/brains-server.exe artifacts/basic/
+      - name: Package the full Windows release
+        run: |
+          version=$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["workspace"]["package"]["version"])')
+          python3 scripts/package-native.py --bin-dir artifacts/full --version "$version" --target windows-x64 --sha "$GITHUB_SHA" --output-dir artifacts/package
+          python3 tests/windows-workflows.py --package "artifacts/package/brains-${version}-windows-x64.zip"
+      - name: Verify feature combinations
+        run: python3 tests/feature-workflows.py --fts-cli artifacts/full/bsx.exe --fts-server artifacts/full/brains-server.exe --basic-cli artifacts/basic/bsx.exe --basic-server artifacts/basic/brains-server.exe
+      - name: Standalone CLI, archive, sync and native server handoff
+        env:
+          BRAINS_CLI_BIN: ${{ github.workspace }}/artifacts/full/bsx.exe
+          BRAINS_SERVER_BIN: ${{ github.workspace }}/artifacts/full/brains-server.exe
+        run: python3 tests/local-workflows.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: windows-native
+          path: artifacts/package/*.zip*
+          if-no-files-found: error
+          retention-days: 7
+
   worker-build:
     name: Worker release bundle
     runs-on: ubuntu-24.04
@@ -234,7 +283,7 @@ jobs:
   quality-gate:
     name: Development gates
     if: ${{ always() }}
-    needs: [rust, api-codegen, web, native-build, worker-build, e2e, worker-smoke, worker-e2e, docker]
+    needs: [rust, api-codegen, web, native-build, windows, worker-build, e2e, worker-smoke, worker-e2e, docker]
     runs-on: ubuntu-24.04
     steps:
       - name: Require every development check to pass

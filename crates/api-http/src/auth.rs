@@ -485,7 +485,9 @@ fn write_private(path: &std::path::Path, bytes: &[u8]) -> DomainResult<()> {
         file.sync_all()?;
         drop(file);
         std::fs::rename(&temporary, path)?;
-        std::fs::File::open(parent)?.sync_all()
+        #[cfg(unix)]
+        std::fs::File::open(parent)?.sync_all()?;
+        Ok(())
     })();
     if result.is_err() {
         // Preserve the original error; removal only cleans an unpublished file.

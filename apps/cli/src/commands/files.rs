@@ -253,7 +253,8 @@ pub(crate) fn diff(client: &dyn Library, path: &str, from: &str, to: &str) -> Cl
 
 pub(crate) fn edit(client: &dyn Library, path: &str, if_revision: &str) -> ClientResult<i32> {
     let (bytes, _etag) = client.get_raw(path)?;
-    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".into());
+    let editor = std::env::var("EDITOR")
+        .unwrap_or_else(|_| if cfg!(windows) { "notepad.exe" } else { "vi" }.into());
     let temp =
         std::env::temp_dir().join(format!("brain-edit-{}", brains_domain::HexId::generate()));
     std::fs::write(&temp, &bytes).map_err(|e| ClientError::transport(e.to_string()))?;

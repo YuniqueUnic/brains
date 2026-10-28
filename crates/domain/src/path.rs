@@ -157,7 +157,9 @@ pub fn check_portable_segment(segment: &str) -> Result<(), String> {
     if WINDOWS_RESERVED
         .iter()
         .copied()
-        .chain(["lpt8", "lpt9"])
+        .chain([
+            "lpt8", "lpt9", "com¹", "com²", "com³", "lpt¹", "lpt²", "lpt³",
+        ])
         .any(|r| r.eq_ignore_ascii_case(stem))
     {
         return Err(format!("reserved device name `{stem}`"));
