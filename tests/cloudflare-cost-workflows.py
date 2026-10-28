@@ -152,6 +152,32 @@ assert states(control("tick"), "manual/current.md") == ["deleted", "deleted"]
 control("publication", {"mode": "automatic"})
 print("manual publication: bounded explicit refresh, read-only progress, no automatic upload, deletion-only cleanup", flush=True)
 
+control("publication", {"mode": "manual"})
+created = put("manual/provider-recovery.md", "# Stable source identity")
+control("arm")
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 2})
+assert states(control(), "manual/provider-recovery.md") == ["queued"]
+control("drop-provider-item", {"revision": created["revision"]})
+control("arm")
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 2})
+assert states(control(), "manual/provider-recovery.md") == ["queued"]
+control("arm")
+request("POST", "/api/v1/maintenance/semantic/reconcile", {"limit": 2})
+assert states(control(), "manual/provider-recovery.md") == ["ready"]
+control("publication", {"mode": "automatic"})
+print("cached provider item removed while queued: recover by immutable source key and finish indexing", flush=True)
+
+natural_query = "Versioned content?"
+result = request("POST", "/api/v1/search", {"q": natural_query, "mode": "hybrid"})[0]
+assert any(hit["path"] == "cost/live.md" and any(source["retriever"] == "fts" for source in hit["retrieved_by"]) for hit in result["items"]), result
+assert control()["lastQuery"] == natural_query
+print("hybrid natural-language punctuation: valid lexical terms and unchanged semantic input", flush=True)
+
+put("cost/accent.md", "résumé")
+result = request("POST", "/api/v1/search", {"q": "re\u0301sume\u0301?", "mode": "hybrid"})[0]
+assert any(hit["path"] == "cost/accent.md" and any(source["retriever"] == "fts" for source in hit["retrieved_by"]) for hit in result["items"]), result
+print("hybrid Unicode: decomposed query marks preserve composed D1 text matches", flush=True)
+
 for start in range(0, 1001, 50):
     control("seed-scan", {"start": start, "count": min(50, 1001 - start)})
 before = control()

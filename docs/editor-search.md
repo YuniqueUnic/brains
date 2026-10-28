@@ -12,3 +12,8 @@
 - Cmd/Ctrl+S 暂存本地草稿，Cmd/Ctrl+Enter 发布。发布快捷键不会再额外插入空行。
 
 源码标签只标记被接受的字符串值，保留既有 64 个标签上限。YAML 的数字、布尔值和无效文档不生成标签操作。别名解析仍沿用现有规则，但不会把别名引用位置标成标签。支持 BOM、Windows 换行和 `---` / `...` 两种结束符；正文继续按 Markdown 处理。
+
+
+## Natural-language hybrid queries
+
+Use hybrid mode for ordinary questions, including punctuation such as `Which API version is pinned?`. The semantic provider receives the original text. The lexical branch uses lowercase words, so punctuation and uppercase words such as `AND` cannot accidentally become backend query operators. Use explicit FTS mode when you want the active backend's query syntax; invalid syntax in that mode returns 400.

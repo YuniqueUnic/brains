@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+unicode-normalization.workspace = true
 brains-domain.workspace = true
 brains-format.workspace = true
 brains-ports.workspace = true

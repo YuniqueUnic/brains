@@ -3,21 +3,27 @@
 import application from "../../apps/worker/build/worker/shim.mjs";
 
 const items = new Map();
-const calls = { upload: 0, info: 0, list: 0, delete: 0 };
+const calls = { upload: 0, info: 0, list: 0, delete: 0, search: 0 };
 let nextStatus = "queued";
 let deleteFails = false;
 let publication = "automatic";
+let lastQuery;
 
 function testEnv(env) {
   const provider = {
+    async search({ query }) {
+      calls.search++;
+      lastQuery = query;
+      return { chunks: [] };
+    },
     items: {
-      async list({ search }) {
+      async list({ key, source }) {
         calls.list++;
-        return { result: [...items.values()].filter(item => item.key === search) };
+        return { result: [...items.values()].filter(item => item.key === key && item.source_id === source) };
       },
       async upload(key) {
         calls.upload++;
-        const item = { id: crypto.randomUUID(), key, status: nextStatus };
+        const item = { id: crypto.randomUUID(), key, source_id: "builtin", status: nextStatus };
         items.set(key, item);
         return item;
       },
@@ -25,7 +31,7 @@ function testEnv(env) {
         return { async info() {
           calls.info++;
           const item = [...items.values()].find(item => item.id === id);
-          if (!item) throw Object.assign(new Error("missing item"), { status: 404 });
+          if (!item) throw new Error("item_not_found");
           return item;
         } };
       },
@@ -76,6 +82,9 @@ export default {
       await env.BRAINS_INDEX.exec("ALTER TABLE resource_settings_offline RENAME TO resource_settings");
     } else if (path === "/_cost/publication") {
       publication = (await request.json()).mode;
+    } else if (path === "/_cost/drop-provider-item") {
+      const { revision } = await request.json();
+      items.delete(`p1/${revision}.md`);
     } else if (path === "/_cost/invalidate-live") {
       const { path: source } = await request.json();
       await env.BRAINS_INDEX.prepare("UPDATE semantic_items SET state='deleting',updated_at=0 WHERE path=?1 AND state='ready'").bind(source).run();
@@ -95,6 +104,6 @@ export default {
       const result = await env.BRAINS_INDEX.prepare(`EXPLAIN QUERY PLAN SELECT revision FROM semantic_items WHERE space=?1 AND state IN (${states}) AND updated_at<unixepoch()-30 ORDER BY updated_at,revision LIMIT 1`).bind("fixture").all();
       plans.push(...result.results.map(row => row.detail));
     }
-    return Response.json({ calls, jobs: jobs.results, usage: usage.results, items: [...items.values()], plans });
+    return Response.json({ calls, lastQuery, jobs: jobs.results, usage: usage.results, items: [...items.values()], plans });
   },
 };

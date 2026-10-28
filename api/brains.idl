@@ -776,7 +776,7 @@ interface Files {
         @flatten in RestoreBody body
     ) raises(BadRequest, Forbidden, NotFound, Gone, PreconditionRequired, PreconditionFailed, ServiceUnavailable, Internal, QuotaExceeded);
 
-    // Literal (case-sensitive UTF-8 substring) or FTS (tokenized) search.
+    // Literal substring, explicit backend FTS syntax, or natural-language hybrid search.
     @post(path = "/search")
     SearchPage search(@flatten in SearchQuery body) raises(BadRequest, Forbidden, NotImplemented, ServiceUnavailable, Internal, QuotaExceeded);
 

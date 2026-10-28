@@ -18,8 +18,6 @@ extern "C" {
     pub fn find_item(env: &JsValue, instance: &str, key: &str) -> Promise;
     #[wasm_bindgen(js_name = uploadItem)]
     pub fn upload_item(env: &JsValue, instance: &str, key: &str, body: &str) -> Promise;
-    #[wasm_bindgen(js_name = itemInfo)]
-    pub fn item_info(env: &JsValue, instance: &str, id: &str) -> Promise;
     #[wasm_bindgen(js_name = deleteItem)]
     pub fn delete_item(env: &JsValue, instance: &str, id: &str) -> Promise;
 }

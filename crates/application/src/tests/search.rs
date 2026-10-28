@@ -428,3 +428,51 @@ async fn literal_search_matches_file_paths_with_the_same_tag_intersection() {
         "notes/unique-path.md"
     );
 }
+
+#[tokio::test]
+async fn hybrid_accepts_natural_language_instead_of_backend_query_syntax() {
+    let TestVault { vault, .. } = open_vault();
+    let owner = owner_principal();
+    put_text(
+        &vault,
+        &owner,
+        "cache.md",
+        "cache and version strategy",
+        Precondition::Create,
+    )
+    .await
+    .unwrap();
+    for text in [
+        "cache: version?",
+        "cache AND version?",
+        "\"cache version",
+        "缓存？",
+        "!?",
+    ] {
+        let mut query = literal_query(text, None, 100);
+        query.mode = SearchMode::Hybrid;
+        let results = vault.search(&owner, query).await.unwrap();
+        if text.starts_with("cache") || text.starts_with('"') {
+            assert!(results.items.iter().any(|hit| hit.path == "cache.md"));
+        }
+    }
+}
+
+#[tokio::test]
+async fn hybrid_preserves_decomposed_word_marks_for_the_native_tokenizer() {
+    let TestVault { vault, .. } = open_vault();
+    let owner = owner_principal();
+    put_text(
+        &vault,
+        &owner,
+        "resume.md",
+        "re\u{0301}sume\u{0301} letter",
+        Precondition::Create,
+    )
+    .await
+    .unwrap();
+    let mut query = literal_query("re\u{0301}sume\u{0301}?", None, 100);
+    query.mode = SearchMode::Hybrid;
+    let hits = vault.search(&owner, query).await.unwrap();
+    assert!(hits.items.iter().any(|hit| hit.path == "resume.md"));
+}
