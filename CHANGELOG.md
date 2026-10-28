@@ -23,6 +23,14 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.7.0](https://github.com/YuniqueUnic/brains/compare/v0.6.1...v0.7.0) (2026-10-28)
+
+
+### Features
+
+* **cloudflare:** add cloud ingestion, semantic search and resource budgets ([#53](https://github.com/YuniqueUnic/brains/issues/53)) ([612143e](https://github.com/YuniqueUnic/brains/commit/612143eea453285819f53f6142a070943cc25f3d))
+* manage Cloudflare usage and allowances in settings ([#55](https://github.com/YuniqueUnic/brains/issues/55)) ([03db880](https://github.com/YuniqueUnic/brains/commit/03db88056ec00e1cd0facb91a7de01d99350450d))
+
 ## [0.6.1](https://github.com/YuniqueUnic/brains/compare/v0.6.0...v0.6.1) (2026-10-17)
 
 
