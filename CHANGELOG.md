@@ -23,6 +23,13 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.8.1](https://github.com/YuniqueUnic/brains/compare/v0.8.0...v0.8.1) (2026-10-28)
+
+
+### Performance Improvements
+
+* **web:** lazy-load note context and control managed search refresh ([e1b58c4](https://github.com/YuniqueUnic/brains/commit/e1b58c493725bed1d2092d7471b869e505f1240c))
+
 ## [0.8.0](https://github.com/YuniqueUnic/brains/compare/v0.7.0...v0.8.0) (2026-10-28)
 
 
