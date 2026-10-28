@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "brains-adapter-cloudflare"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "brains-adapter-d1",
  "brains-adapter-r2",
