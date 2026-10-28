@@ -48,3 +48,4 @@ mv "$generated_dir/contract" crates/api-http/src/contract
 mv "$generated_dir/rust/brains_generated.rs" sdk/rust/src/brains_generated.rs
 
 echo "sdk/ regenerated from api/brains.idl with $actual"
+python3 scripts/check-api-paths.py

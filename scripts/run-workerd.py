@@ -120,6 +120,7 @@ def main():
                     )
                 (root / "wrangler.json").write_text(json.dumps(config))
                 token = secrets.token_urlsafe(32)
+                reader_token = secrets.token_urlsafe(32)
                 variables = {
                     "TOKEN_REGISTRY_JSON": json.dumps(
                         {
@@ -132,6 +133,11 @@ def main():
                                         token.encode()
                                     ).hexdigest(),
                                     "scopes": ["read:/", "write:/", "admin:/"],
+                                },
+                                {
+                                    "id": "reader", "name": "isolated read-only verification", "enabled": True,
+                                    "token_sha256": hashlib.sha256(reader_token.encode()).hexdigest(),
+                                    "scopes": ["read:/"],
                                 }
                             ]
                         }
@@ -207,7 +213,7 @@ def main():
                         inspector.getsockname()[1],
                     )
                 base = f"{args.protocol}://127.0.0.1:{port}"
-                env.update(BRAINS_BASE_URL=base, BRAINS_E2E_TOKEN=token)
+                env.update(BRAINS_BASE_URL=base, BRAINS_E2E_TOKEN=token, BRAINS_E2E_READER_TOKEN=reader_token)
                 check_interrupt()
                 with (root / "worker.log").open("w") as log:
                     server = subprocess.Popen(

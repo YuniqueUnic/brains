@@ -61,7 +61,7 @@ fn plain_error(status: u16, message: &str) -> FetchResponse {
 
 /// Assemble the cloudflare profile (design §22.1): R2 content store + D1
 /// index + secret-backed security, per request bindings.
-fn build_state(env: &Env) -> StateResult {
+async fn build_state(env: &Env) -> StateResult {
     let vault_name = str_var(env, "VAULT_ID")?;
     let bucket = env
         .bucket("BRAINS_BUCKET")
@@ -97,6 +97,7 @@ fn build_state(env: &Env) -> StateResult {
         CursorSigner::new(cursor_key),
     );
     services::configure(env, &mut vault, store)
+        .await
         .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
     let capabilities = {
         let mut capabilities = Capabilities::cloudflare_rust(
@@ -127,11 +128,11 @@ fn build_state(env: &Env) -> StateResult {
         capabilities
             .features
             .insert("remote_url_import".into(), vault.fetcher.is_some());
-        if let Some(resources) = &vault.resources {
+        if let Some(control) = &vault.resource_control {
             capabilities.features.insert("resource_policy".into(), true);
             capabilities.resources = Some(brains_domain::capabilities::ResourceCapability {
-                profile_id: resources.profile.profile.id.clone(),
-                reviewed_at: resources.profile.profile.reviewed_at.clone(),
+                profile_id: control.settings.profile.profile.id.clone(),
+                reviewed_at: control.settings.profile.profile.reviewed_at.clone(),
                 coverage: "controlled application operations".into(),
             });
         }
@@ -184,12 +185,26 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
     if !path.starts_with("/api/") && path != "/api" && path != "/healthz" {
         return Ok(axum::http::StatusCode::NOT_FOUND.into_response());
     }
-    let state = match build_state(&env) {
+    let state = match build_state(&env).await {
         Ok(state) => state,
         Err(response) => return Ok(*response),
     };
+    // Administration stays available to repair exhausted budgets. Its requests
+    // are observed, while the API still requires admin authentication and CSRF.
+    let administration = matches!(
+        path.as_str(),
+        "/healthz"
+            | "/api/v1/resources"
+            | "/api/v1/resources/settings"
+            | "/api/v1/session"
+            | "/api/v1/capabilities"
+    );
     if let Some(budget) = &state.vault.resources
-        && let Err(error) = budget.debit("workers", "requests", 1.0).await
+        && let Err(error) = if administration {
+            budget.observe_request().await
+        } else {
+            budget.debit("workers", "requests", 1.0).await
+        }
     {
         let status = if matches!(error, brains_domain::DomainError::QuotaExceeded { .. }) {
             429
@@ -237,7 +252,7 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
 
 #[worker::event(scheduled)]
 async fn scheduled(_event: worker::ScheduledEvent, env: Env, _ctx: worker::ScheduleContext) {
-    if let Ok(state) = build_state(&env)
+    if let Ok(state) = build_state(&env).await
         && let Some(semantic) = &state.vault.semantic
     {
         let _ = semantic.reconcile().await;

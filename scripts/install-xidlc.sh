@@ -12,5 +12,5 @@ PY
 # Registry sources are not a Git checkout. Do not derive generated headers
 # from an unrelated parent repository or the caller's build environment.
 XIDLC_VERSION="$compiler_version" XIDLC_GIT_HASH=unknown "${CARGO:-cargo}" install --locked \
-  --version "=$compiler_version" xidlc --features cli,fmt \
+  --version "=$compiler_version" xidlc --features cli \
   --root "${1:?pass the installation directory}"

@@ -12,6 +12,7 @@ pub mod patch;
 pub mod projection;
 pub mod query;
 pub mod reindex;
+pub mod resource_settings;
 pub mod resources;
 pub mod search;
 pub mod seed;
@@ -88,6 +89,7 @@ pub struct Vault<H, R, B, I> {
     pub converter: Option<std::sync::Arc<dyn brains_ports::content::ContentConverter>>,
     pub fetcher: Option<std::sync::Arc<dyn brains_ports::content::SourceFetcher>>,
     pub resources: Option<std::sync::Arc<resources::ResourceBudget>>,
+    pub resource_control: Option<std::sync::Arc<resource_settings::ResourceControl>>,
 }
 
 // Send + Sync: the axum handler layer requires Send futures; the R2/D1
@@ -121,6 +123,7 @@ where
             converter: None,
             fetcher: None,
             resources: None,
+            resource_control: None,
         }
     }
 

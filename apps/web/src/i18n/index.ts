@@ -4,7 +4,7 @@ import { initReactI18next } from "react-i18next";
 import en from "./locales/en";
 import zhCN from "./locales/zh-CN";
 
-export const NAMESPACES = ["common", "login", "workspace", "editor", "info"] as const;
+export const NAMESPACES = ["common", "login", "workspace", "editor", "info", "resources"] as const;
 export type Namespace = (typeof NAMESPACES)[number];
 
 export const LANGUAGES = ["zh-CN", "en"] as const;

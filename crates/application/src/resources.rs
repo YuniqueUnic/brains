@@ -9,14 +9,24 @@ pub struct ResourceBudget {
     pub profile: ResourceProfile,
     pub account: String,
     store: Arc<dyn UsageStore>,
+    enforced: bool,
 }
 
 impl ResourceBudget {
+    pub fn with_enforcement(mut self, enforced: bool) -> Self {
+        self.enforced = enforced;
+        self
+    }
+    pub async fn observe_request(&self) -> DomainResult<()> {
+        let charges = self.charges("workers", "requests", 1.0, UsageEvidence::Bounded)?;
+        self.store.observe(&charges).await
+    }
     pub fn new(profile: ResourceProfile, account: String, store: Arc<dyn UsageStore>) -> Self {
         Self {
             profile,
             account,
             store,
+            enforced: true,
         }
     }
 
@@ -32,7 +42,9 @@ impl ResourceBudget {
             attempt_id: HexId::generate().as_str().to_owned(),
             charges,
         };
-        self.store.reserve(&reservation).await?;
+        if !reservation.charges.is_empty() {
+            self.store.reserve(&reservation).await?;
+        }
         Ok(reservation)
     }
 
@@ -44,19 +56,58 @@ impl ResourceBudget {
         evidence: UsageEvidence,
     ) -> DomainResult<Vec<BudgetCharge>> {
         let now = time::OffsetDateTime::now_utc();
-        let charges =
-            vec![
-                self.profile
-                    .charge(service, metric, amount, &self.account, evidence, now)?,
-            ];
-        self.with_accounting(charges, now)
+        let mut observed;
+        let profile = if !self.enforced
+            && matches!(evidence, UsageEvidence::Unknown | UsageEvidence::Estimated)
+        {
+            observed = self.profile.clone();
+            observed.policy.when_charge_unknown = Some(AdmissionAction::Observe);
+            for rule in &mut observed.rules {
+                rule.policy.when_charge_unknown = Some(AdmissionAction::Observe);
+            }
+            &observed
+        } else {
+            &self.profile
+        };
+        let Some(charge) = self.measured_charge(profile.charge(
+            service,
+            metric,
+            amount,
+            &self.account,
+            evidence,
+            now,
+        ))?
+        else {
+            return Ok(vec![]);
+        };
+        self.with_accounting(vec![charge], now)
+    }
+
+    /// Missing meter facts remain unmeasured only when enforcement is off.
+    pub fn measured_charge(
+        &self,
+        result: DomainResult<BudgetCharge>,
+    ) -> DomainResult<Option<BudgetCharge>> {
+        match result {
+            Ok(mut charge) => {
+                if !self.enforced {
+                    charge.action = AdmissionAction::Observe;
+                }
+                Ok(Some(charge))
+            }
+            Err(brains_domain::DomainError::ResourcePolicy(_)) if !self.enforced => Ok(None),
+            Err(error) => Err(error),
+        }
     }
 
     /// Debit a known attempt before dispatch; a cancelled dispatch overcounts safely.
     pub async fn debit(&self, service: &str, metric: &str, amount: f64) -> DomainResult<()> {
-        self.store
-            .debit(&self.charges(service, metric, amount, UsageEvidence::Bounded)?)
-            .await
+        let charges = self.charges(service, metric, amount, UsageEvidence::Bounded)?;
+        if self.enforced {
+            self.store.debit(&charges).await
+        } else {
+            self.store.observe(&charges).await
+        }
     }
 
     /// Record completed I/O together; ledger accounting is added only once.
@@ -73,14 +124,14 @@ impl ResourceBudget {
         let (reads, writes) = self.store.accounting_bounds();
         for (metric, amount) in [("rows_read", reads), ("rows_written", writes)] {
             if amount > 0 {
-                charges.push(self.profile.charge(
+                charges.extend(self.measured_charge(self.profile.charge(
                     "d1",
                     metric,
                     amount as f64,
                     &self.account,
                     UsageEvidence::Bounded,
                     now,
-                )?);
+                ))?);
             }
         }
         let mut merged = std::collections::BTreeMap::<String, BudgetCharge>::new();
@@ -101,6 +152,9 @@ impl ResourceBudget {
         metric: &str,
         resource: &str,
     ) -> DomainResult<()> {
+        if !self.enforced {
+            return Ok(());
+        }
         let charge = self.profile.capacity(service, metric, resource, 0.0)?;
         if let Some(usage) = self
             .store
@@ -120,6 +174,9 @@ impl ResourceBudget {
     }
 
     pub async fn settle(&self, reservation: &Reservation, outcome: Settlement) -> DomainResult<()> {
+        if reservation.charges.is_empty() {
+            return Ok(());
+        }
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
         let outcome = if matches!(outcome, Settlement::Consume)
             && reservation
@@ -171,6 +228,13 @@ impl ResourceBudget {
             remaining: None,
             reset_at: None,
         };
+        if !self.enforced {
+            let mut state = unavailable(
+                "Application budgets are not enforced; measurable usage is observed".into(),
+            );
+            state.state = "observe".into();
+            return state;
+        }
         let charges = match self.charges(service, metric, 1.0, evidence) {
             Ok(charges) => charges,
             Err(error) => return unavailable(error.to_string()),

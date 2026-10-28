@@ -1,7 +1,10 @@
+import resourceStrings from "./en-resources";
+
 /** English strings, same namespace/key shape as zh-CN. The e2e suite runs
  * against zh-CN only, but keep phrasing consistent with the Chinese copy. */
 const en = {
 
+  resources: resourceStrings,
   common: {
     loading: "Loading…",
     newFile: "New",

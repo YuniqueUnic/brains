@@ -1,7 +1,10 @@
+import resourceStrings from "./zh-CN-resources";
+
 /** zh-CN strings, grouped by namespace. The e2e suite asserts several of
  * these verbatim (editor status labels, search hit header, logout text) —
  * treat changes to those values as contract changes. */
 const zhCN = {
+  resources: resourceStrings,
   common: {
     loading: "加载中…",
     newFile: "新建",

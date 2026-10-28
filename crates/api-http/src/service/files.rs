@@ -78,6 +78,15 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Files for FilesService<H, R, B,
             .map_err(|e| resource_status_error(e, current().request_id.as_str()))
     }
 
+    async fn update_resource_settings(
+        &self,
+        body: contract::ResourceSettingsInput,
+    ) -> Result<contract::ResourceReport, contract::FilesUpdateResourceSettingsError> {
+        super::resources::update(&self.state, body)
+            .await
+            .map_err(|e| update_resource_settings_error(e, current().request_id.as_str()))
+    }
+
     async fn convert_document(
         &self,
         body: contract::ConversionInput,
