@@ -255,6 +255,12 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
             budget.debit("workers", "requests", 1.0).await
         }
     {
+        if let Err(accounting_error) = budget.flush_accounting().await {
+            return Ok(plain_error(
+                503,
+                &format!("resource accounting: {}", accounting_error.code()),
+            ));
+        }
         let status = if matches!(error, brains_domain::DomainError::QuotaExceeded { .. }) {
             429
         } else {
@@ -295,13 +301,27 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
             )
     );
     let semantic = state.vault.semantic.clone();
+    let budget = state.vault.resources.clone();
     let mut router = brains_api_http::routes::build_router(state);
     // `Router::call` is infallible: it resolves to the §11.3 error mapping
     // inside the shared axum layer.
     let response = router.call(req).await?;
+    if let Some(budget) = &budget
+        && let Err(error) = budget.flush_accounting().await
+    {
+        return Ok(plain_error(
+            503,
+            &format!("resource accounting: {}", error.code()),
+        ));
+    }
     if let Some(semantic) = semantic.filter(|_| mutated && response.status().is_success()) {
         ctx.wait_until(async move {
             let _ = semantic.reconcile(semantic.background_work(), 1).await;
+            if let Some(budget) = budget
+                && let Err(error) = budget.flush_accounting().await
+            {
+                worker::console_error!("Background resource accounting failed: {}", error.code());
+            }
         });
     }
     Ok(response)
@@ -318,9 +338,14 @@ async fn scheduled(_event: worker::ScheduledEvent, env: Env, _ctx: worker::Sched
     let Ok(security) = load_security(&env) else {
         return;
     };
-    if let Ok(state) = build_state(&env, security, Vec::new()).await
-        && let Some(semantic) = &state.vault.semantic
-    {
-        let _ = semantic.reconcile(semantic.background_work(), 1).await;
+    if let Ok(state) = build_state(&env, security, Vec::new()).await {
+        if let Some(semantic) = &state.vault.semantic {
+            let _ = semantic.reconcile(semantic.background_work(), 1).await;
+        }
+        if let Some(budget) = &state.vault.resources
+            && let Err(error) = budget.flush_accounting().await
+        {
+            worker::console_error!("Scheduled resource accounting failed: {}", error.code());
+        }
     }
 }

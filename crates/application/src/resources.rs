@@ -10,6 +10,7 @@ pub struct ResourceBudget {
     pub account: String,
     store: Arc<dyn UsageStore>,
     enforced: bool,
+    accounted: futures::lock::Mutex<(u64, u64)>,
 }
 
 impl ResourceBudget {
@@ -19,7 +20,7 @@ impl ResourceBudget {
     }
     pub async fn observe_request(&self) -> DomainResult<()> {
         let charges = self.charges("workers", "requests", 1.0, UsageEvidence::Bounded)?;
-        self.store.observe(&charges).await
+        self.apply_accounted(charges, false).await
     }
     pub fn new(profile: ResourceProfile, account: String, store: Arc<dyn UsageStore>) -> Self {
         Self {
@@ -27,6 +28,7 @@ impl ResourceBudget {
             account,
             store,
             enforced: true,
+            accounted: futures::lock::Mutex::new((0, 0)),
         }
     }
 
@@ -37,7 +39,12 @@ impl ResourceBudget {
         amount: f64,
         evidence: UsageEvidence,
     ) -> DomainResult<Reservation> {
-        let charges = self.charges(service, metric, amount, evidence)?;
+        let primary = self.charges(service, metric, amount, evidence)?;
+        self.apply_accounted(vec![], false).await?;
+        self.check_accounted(vec![]).await?;
+        // Previously incurred bookkeeping is never a refundable reservation.
+        // Zero-amount D1 guards still participate in the atomic admission.
+        let charges = self.with_accounting(primary, (0, 0), UsageEvidence::Exact)?;
         let reservation = Reservation {
             attempt_id: HexId::generate().as_str().to_owned(),
             charges,
@@ -80,7 +87,7 @@ impl ResourceBudget {
         else {
             return Ok(vec![]);
         };
-        self.with_accounting(vec![charge], now)
+        Ok(vec![charge])
     }
 
     /// Missing meter facts remain unmeasured only when enforcement is off.
@@ -103,33 +110,96 @@ impl ResourceBudget {
     /// Debit a known attempt before dispatch; a cancelled dispatch overcounts safely.
     pub async fn debit(&self, service: &str, metric: &str, amount: f64) -> DomainResult<()> {
         let charges = self.charges(service, metric, amount, UsageEvidence::Bounded)?;
-        if self.enforced {
-            self.store.debit(&charges).await
-        } else {
-            self.store.observe(&charges).await
+        if amount == 0.0 {
+            return self.check_accounted(charges).await;
         }
+        self.apply_accounted(charges, self.enforced).await
     }
 
-    /// Record completed I/O together; ledger accounting is added only once.
+    /// Record completed I/O and previously measured bookkeeping together.
     pub async fn record(&self, charges: Vec<BudgetCharge>) -> DomainResult<()> {
-        let charges = self.with_accounting(charges, time::OffsetDateTime::now_utc())?;
-        self.store.observe(&charges).await
+        self.apply_accounted(charges, false).await
+    }
+
+    async fn check_accounted(&self, charges: Vec<BudgetCharge>) -> DomainResult<()> {
+        let accounted = self.accounted.lock().await;
+        let usage = self.store.accounting_usage();
+        let charges = self.with_accounting(
+            charges,
+            (usage.0 - accounted.0, usage.1 - accounted.1),
+            UsageEvidence::Exact,
+        )?;
+        if charges.is_empty() {
+            return Ok(());
+        }
+        self.store.check(&charges).await
+    }
+
+    async fn apply_accounted(&self, charges: Vec<BudgetCharge>, enforce: bool) -> DomainResult<()> {
+        // Serialize acknowledgement, not provider I/O. A failed admission must
+        // leave the receipt pending for the end-of-request accounting write.
+        let mut accounted = self.accounted.lock().await;
+        let usage = self.store.accounting_usage();
+        let charges = self.with_accounting(
+            charges,
+            (usage.0 - accounted.0, usage.1 - accounted.1),
+            UsageEvidence::Exact,
+        )?;
+        if charges
+            .iter()
+            .any(|charge| charge.amount > 0.0 || charge.mode == ChargeMode::Gauge)
+        {
+            if enforce {
+                self.store.debit(&charges).await?;
+            } else {
+                self.store.observe(&charges).await?;
+            }
+        }
+        *accounted = usage;
+        Ok(())
+    }
+
+    /// Close a completed request or bounded background scope without recursively
+    /// charging the final accounting write. Repeating an idle flush is a no-op.
+    pub async fn flush_accounting(&self) -> DomainResult<()> {
+        let mut accounted = self.accounted.lock().await;
+        let usage = self.store.accounting_usage();
+        if usage == *accounted {
+            return Ok(());
+        }
+        let bound = self.store.accounting_bounds();
+        // Resolve one window for both the pending receipt and the closing bound.
+        let charges = self.with_accounting(
+            vec![],
+            (
+                usage.0 - accounted.0 + bound.0,
+                usage.1 - accounted.1 + bound.1,
+            ),
+            UsageEvidence::Bounded,
+        )?;
+        let closing_cost = self.store.flush_accounting(&charges).await?;
+        // A background operation may have completed during this write. Only
+        // acknowledge the closing write's own receipt, not a newer snapshot.
+        *accounted = (usage.0 + closing_cost.0, usage.1 + closing_cost.1);
+        Ok(())
     }
 
     fn with_accounting(
         &self,
         mut charges: Vec<BudgetCharge>,
-        now: time::OffsetDateTime,
+        usage: (u64, u64),
+        evidence: UsageEvidence,
     ) -> DomainResult<Vec<BudgetCharge>> {
-        let (reads, writes) = self.store.accounting_bounds();
+        let now = time::OffsetDateTime::now_utc();
+        let (reads, writes) = usage;
         for (metric, amount) in [("rows_read", reads), ("rows_written", writes)] {
-            if amount > 0 {
+            if self.store.accounting_bounds() != (0, 0) || amount > 0 {
                 charges.extend(self.measured_charge(self.profile.charge(
                     "d1",
                     metric,
                     amount as f64,
                     &self.account,
-                    UsageEvidence::Bounded,
+                    evidence,
                     now,
                 ))?);
             }
@@ -235,7 +305,10 @@ impl ResourceBudget {
             state.state = "observe".into();
             return state;
         }
-        let charges = match self.charges(service, metric, 1.0, evidence) {
+        let charges = match self
+            .charges(service, metric, 1.0, evidence)
+            .and_then(|charges| self.with_accounting(charges, (0, 0), UsageEvidence::Exact))
+        {
             Ok(charges) => charges,
             Err(error) => return unavailable(error.to_string()),
         };
