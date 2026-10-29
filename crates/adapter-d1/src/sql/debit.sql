@@ -15,5 +15,11 @@ WITH charges AS MATERIALIZED (
 INSERT INTO resource_usage(key,meter,rule,unit,evidence,limit_value,consumed,reserved,reset_at)
 SELECT key,meter,rule,unit,evidence,max_value,amount,0,reset_at FROM charges WHERE (SELECT ok FROM permitted)
 ON CONFLICT(key) DO UPDATE SET
-     rule=excluded.rule,unit=excluded.unit,limit_value=excluded.limit_value,consumed=CASE WHEN (SELECT mode FROM charges WHERE key=excluded.key)='gauge' THEN excluded.consumed ELSE resource_usage.consumed+excluded.consumed END,evidence=CASE WHEN resource_usage.evidence IN ('unknown','estimated') THEN resource_usage.evidence ELSE excluded.evidence END
+     rule=excluded.rule,unit=excluded.unit,limit_value=excluded.limit_value,consumed=CASE WHEN (SELECT mode FROM charges WHERE key=excluded.key)='gauge' THEN excluded.consumed ELSE resource_usage.consumed+excluded.consumed END,
+     evidence=CASE
+         WHEN resource_usage.evidence='unknown' OR excluded.evidence='unknown' THEN 'unknown'
+         WHEN resource_usage.evidence='estimated' OR excluded.evidence='estimated' THEN 'estimated'
+         WHEN resource_usage.evidence='bounded' OR excluded.evidence='bounded' THEN 'bounded'
+         ELSE 'exact'
+     END
 RETURNING key;

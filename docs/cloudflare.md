@@ -106,7 +106,7 @@ The owner token must be nonempty printable ASCII without whitespace; no minimum 
 
 `github-configure` uploads secrets over stdin and writes public settings as Environment variables. JSON file inputs are resolved into inline variables for Actions. Explicitly empty optional values remove stale variables; omitted values remain untouched. Initial setup creates a `production` Environment limited to `main`. Existing protection rules are retained. Run the command again after changing local credentials or deployment settings.
 
-**Deploy (Cloudflare Workers)** runs automatically after a successful `CI` push run on the current `main` commit. It checks out that exact tested SHA, skips obsolete CI completions, and serializes deployments per environment. The manual workflow remains available for a selected Environment. Both entry points use `pnpm cloudflare:deploy`, frozen dependencies and the pinned Worker build tool. Separate environments need their own Worker, R2, D1 and secrets. [Cloudflare GitHub Actions guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
+**Deploy (Cloudflare Workers)** runs only through `workflow_dispatch`. Merging a pull request or completing CI does not deploy the Worker. After the intended commit passes CI, select its branch or tag and the target Environment in Actions, then run the workflow. The workflow checks out the dispatch SHA, serializes deployments per environment and uses `pnpm cloudflare:deploy`, frozen dependencies and the pinned Worker build tool. Separate environments need their own Worker, R2, D1 and secrets. [Cloudflare GitHub Actions guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
 
 ## Verify and connect bsx
 

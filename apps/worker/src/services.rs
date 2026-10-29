@@ -57,10 +57,11 @@ pub async fn configure(
         env.d1("BRAINS_INDEX")
             .map_err(|e| DomainError::IndexUnavailable(e.to_string()))
     };
+    let accounting = Arc::new(brains_adapter_d1::D1Accounting::default());
     let control = brains_application::resource_settings::ResourceControl::load(
         deployed,
-        Arc::new(D1ResourceSettingsStore::new(database()?)),
-        Arc::new(D1UsageStore::new(database()?)),
+        Arc::new(D1ResourceSettingsStore::new(database()?).with_accounting(accounting.clone())),
+        Arc::new(D1UsageStore::new(database()?).with_accounting(accounting)),
     )
     .await?;
     let account = env

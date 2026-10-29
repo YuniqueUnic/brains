@@ -1,19 +1,29 @@
 //! Conditional administration settings, independent of the usage ledger.
 
-use super::{index_err, query_rows};
+use super::{D1Accounting, index_err, query_rows};
 use brains_domain::{DomainError, DomainResult, resources::ResourceSettings};
 use brains_ports::resources::ResourceSettingsStore;
 use futures::future::BoxFuture;
+use std::sync::Arc;
 use wasm_bindgen::JsValue;
 use worker::{D1Database, send::SendFuture};
 
 pub struct D1ResourceSettingsStore {
     db: D1Database,
+    accounting: Arc<D1Accounting>,
 }
 
 impl D1ResourceSettingsStore {
     pub fn new(db: D1Database) -> Self {
-        Self { db }
+        Self {
+            db,
+            accounting: Arc::default(),
+        }
+    }
+
+    pub fn with_accounting(mut self, accounting: Arc<D1Accounting>) -> Self {
+        self.accounting = accounting;
+        self
     }
 }
 
@@ -28,6 +38,7 @@ impl ResourceSettingsStore for D1ResourceSettingsStore {
             }
             let rows: Vec<Row> = query_rows(
                 &self.db,
+                &self.accounting,
                 "read resource settings",
                 "SELECT revision,enforced,profile FROM resource_settings WHERE id=1",
                 &[],
@@ -79,6 +90,7 @@ impl ResourceSettingsStore for D1ResourceSettingsStore {
                 .run()
                 .await
                 .map_err(|e| index_err("write resource settings", e))?;
+            self.accounting.record(&result)?;
             if !result.success() {
                 return Err(DomainError::IndexUnavailable(
                     "resource settings write failed".into(),

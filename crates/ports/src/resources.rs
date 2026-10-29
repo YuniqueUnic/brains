@@ -31,9 +31,30 @@ pub trait UsageStore: Send + Sync {
                 .max())
         })
     }
-    /// Conservative bound for this ledger's reserve/settle SQL itself.
+    /// Bound for the final accounting write, not an allowance per operation.
+    /// Native stores do not incur D1 bookkeeping costs.
     fn accounting_bounds(&self) -> (u64, u64) {
         (0, 0)
+    }
+    /// Cumulative measured bookkeeping rows for this store's request lifetime.
+    fn accounting_usage(&self) -> (u64, u64) {
+        (0, 0)
+    }
+    /// Check all projected charges without consuming them. D1 implements this
+    /// as one read-only statement; other stores retain their existing behavior.
+    fn check<'a>(&'a self, charges: &'a [BudgetCharge]) -> BoxFuture<'a, DomainResult<()>> {
+        self.debit(charges)
+    }
+    /// Persist the remaining accounting charge and return this write's own
+    /// measured cost. It must fit accounting_bounds to close without recursion.
+    fn flush_accounting<'a>(
+        &'a self,
+        charges: &'a [BudgetCharge],
+    ) -> BoxFuture<'a, DomainResult<(u64, u64)>> {
+        Box::pin(async move {
+            self.observe(charges).await?;
+            Ok((0, 0))
+        })
     }
     fn debit<'a>(&'a self, charges: &'a [BudgetCharge]) -> BoxFuture<'a, DomainResult<()>>;
     fn observe<'a>(&'a self, charges: &'a [BudgetCharge]) -> BoxFuture<'a, DomainResult<()>>;

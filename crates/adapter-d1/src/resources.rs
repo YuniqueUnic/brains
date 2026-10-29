@@ -4,15 +4,25 @@ use futures::future::BoxFuture;
 use wasm_bindgen::JsValue;
 use worker::{D1Database, send::SendFuture};
 
-use super::{index_err, query_rows};
+use super::{D1Accounting, index_err, query_rows};
+use std::sync::Arc;
 
 pub struct D1UsageStore {
     db: D1Database,
+    accounting: Arc<D1Accounting>,
 }
 
 impl D1UsageStore {
     pub fn new(db: D1Database) -> Self {
-        Self { db }
+        Self {
+            db,
+            accounting: Arc::default(),
+        }
+    }
+
+    pub fn with_accounting(mut self, accounting: Arc<D1Accounting>) -> Self {
+        self.accounting = accounting;
+        self
     }
 }
 
@@ -30,6 +40,7 @@ impl UsageStore for D1UsageStore {
                 serde_json::to_string(rules).map_err(|e| DomainError::Internal(e.to_string()))?;
             let rows: Vec<Row> = query_rows(
                 &self.db,
+                &self.accounting,
                 "accounted period boundary",
                 "SELECT MAX(reset_at) AS \"end\" FROM resource_usage WHERE rule IN (SELECT value FROM json_each(?1)) AND (consumed>0 OR reserved>0)",
                 &[JsValue::from_str(&json)],
@@ -38,7 +49,80 @@ impl UsageStore for D1UsageStore {
         }))
     }
     fn accounting_bounds(&self) -> (u64, u64) {
-        (64, 32)
+        // The closing batch has two primary-key upserts, no scans or triggers.
+        // Each can read at most two rows and insert one table row plus the
+        // primary-key, meter, reset and rule indexes. Existing rows cost less.
+        (4, 10)
+    }
+
+    fn accounting_usage(&self) -> (u64, u64) {
+        self.accounting.usage()
+    }
+
+    fn check<'a>(&'a self, charges: &'a [BudgetCharge]) -> BoxFuture<'a, DomainResult<()>> {
+        Box::pin(SendFuture::new(async move {
+            if charges.is_empty() {
+                return Ok(());
+            }
+            #[derive(serde::Deserialize)]
+            struct Row {
+                allowed: i64,
+            }
+            let json = serde_json::to_string(charges)
+                .map_err(|error| DomainError::Internal(error.to_string()))?;
+            let rows: Vec<Row> = query_rows(
+                &self.db,
+                &self.accounting,
+                "usage admission check",
+                include_str!("sql/check.sql"),
+                &[JsValue::from_str(&json)],
+            )
+            .await?;
+            if rows.first().is_some_and(|row| row.allowed != 0) {
+                Ok(())
+            } else {
+                self.exhausted(charges).await
+            }
+        }))
+    }
+
+    fn flush_accounting<'a>(
+        &'a self,
+        charges: &'a [BudgetCharge],
+    ) -> BoxFuture<'a, DomainResult<(u64, u64)>> {
+        Box::pin(SendFuture::new(async move {
+            let mut statements = Vec::new();
+            for charge in charges {
+                let json = serde_json::to_string(charge)
+                    .map_err(|error| DomainError::Internal(error.to_string()))?;
+                statements.push(
+                    self.db
+                        .prepare(include_str!("sql/accounting.sql"))
+                        .bind(&[JsValue::from_str(&json)])
+                        .map_err(|error| index_err("final accounting", error))?,
+                );
+            }
+            if statements.is_empty() {
+                return Ok((0, 0));
+            }
+            let results = self
+                .db
+                .batch(statements)
+                .await
+                .map_err(|error| index_err("final accounting", error))?;
+            let mut cost = (0, 0);
+            for result in results {
+                let receipt = self.accounting.record(&result)?;
+                cost.0 += receipt.0;
+                cost.1 += receipt.1;
+                if !result.success() {
+                    return Err(DomainError::IndexUnavailable(
+                        "final accounting failed".into(),
+                    ));
+                }
+            }
+            Ok(cost)
+        }))
     }
 
     fn debit<'a>(&'a self, charges: &'a [BudgetCharge]) -> BoxFuture<'a, DomainResult<()>> {
@@ -67,7 +151,7 @@ impl UsageStore for D1UsageStore {
             };
             let statements = vec![
                 prepare(
-                    "INSERT INTO resource_usage(key,meter,rule,unit,evidence,limit_value,reset_at) SELECT json_extract(value,'$.key'),json_extract(value,'$.meter'),json_extract(value,'$.rule'),json_extract(value,'$.measure.unit'),json_extract(value,'$.evidence'),json_extract(value,'$.limit'),json_extract(value,'$.window.end') FROM json_each(?1) WHERE 1 ON CONFLICT(key) DO UPDATE SET rule=excluded.rule, unit=excluded.unit, evidence=CASE WHEN resource_usage.evidence IN ('unknown','estimated') THEN resource_usage.evidence ELSE excluded.evidence END, limit_value=excluded.limit_value",
+                    "INSERT INTO resource_usage(key,meter,rule,unit,evidence,limit_value,reset_at) SELECT json_extract(value,'$.key'),json_extract(value,'$.meter'),json_extract(value,'$.rule'),json_extract(value,'$.measure.unit'),json_extract(value,'$.evidence'),json_extract(value,'$.limit'),json_extract(value,'$.window.end') FROM json_each(?1) WHERE 1 ON CONFLICT(key) DO UPDATE SET rule=excluded.rule, unit=excluded.unit, evidence=CASE WHEN resource_usage.evidence='unknown' OR excluded.evidence='unknown' THEN 'unknown' WHEN resource_usage.evidence='estimated' OR excluded.evidence='estimated' THEN 'estimated' WHEN resource_usage.evidence='bounded' OR excluded.evidence='bounded' THEN 'bounded' ELSE 'exact' END, limit_value=excluded.limit_value",
                     std::slice::from_ref(&json),
                 )?,
                 prepare(
@@ -84,6 +168,9 @@ impl UsageStore for D1UsageStore {
                 .batch(statements)
                 .await
                 .map_err(|e| index_err("reserve usage", e))?;
+            for result in &results {
+                self.accounting.record(result)?;
+            }
             if results.iter().any(|r| !r.success()) {
                 return Err(DomainError::IndexUnavailable(
                     "resource reservation transaction failed".into(),
@@ -95,6 +182,7 @@ impl UsageStore for D1UsageStore {
             }
             let existing: Vec<Attempt> = query_rows(
                 &self.db,
+                &self.accounting,
                 "read reservation",
                 "SELECT payload FROM resource_attempts WHERE id=?1",
                 &[id],
@@ -121,13 +209,14 @@ impl UsageStore for D1UsageStore {
                 Settlement::Release => "released",
                 Settlement::Uncertain => "uncertain",
             };
-            super::run(&self.db,"settle usage","UPDATE resource_attempts SET state=?2,updated_at=unixepoch() WHERE id=?1 AND state IN ('reserved','uncertain')", &[JsValue::from_str(attempt_id),JsValue::from_str(state)]).await
+            super::run(&self.db,&self.accounting,"settle usage","UPDATE resource_attempts SET state=?2,updated_at=unixepoch() WHERE id=?1 AND state IN ('reserved','uncertain')", &[JsValue::from_str(attempt_id),JsValue::from_str(state)]).await
         }))
     }
 
     fn usage(&self) -> BoxFuture<'_, DomainResult<Vec<BudgetUsage>>> {
         Box::pin(SendFuture::new(query_rows(
             &self.db,
+            &self.accounting,
             "resource usage",
             "SELECT key,meter,rule,unit,evidence,consumed,reserved,limit_value AS \"limit\",reset_at FROM resource_usage WHERE reset_at IS NULL OR reset_at>unixepoch() OR reserved>0 ORDER BY rule",
             &[],
@@ -179,6 +268,7 @@ impl D1UsageStore {
             .all()
             .await
             .map_err(|e| index_err("usage debit", e))?;
+        self.accounting.record(&result)?;
         if !result.success() {
             return Err(DomainError::IndexUnavailable(
                 result

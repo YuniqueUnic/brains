@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+futures.workspace = true
 unicode-normalization.workspace = true
 brains-domain.workspace = true
 brains-format.workspace = true
@@ -21,6 +22,5 @@ tracing.workspace = true
 [dev-dependencies]
 brains-adapter-fs.workspace = true
 brains-adapter-turso = { workspace = true, features = ["fts"] }
-futures.workspace = true
 tempfile = "3.27.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

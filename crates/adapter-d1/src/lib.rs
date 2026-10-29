@@ -4,7 +4,9 @@
 //! are applied by `wrangler d1 migrations apply` (all statements are
 //! idempotent); this adapter only runs queries.
 
+mod accounting;
 mod metered;
+pub use accounting::D1Accounting;
 pub mod resources;
 pub mod settings;
 
@@ -89,27 +91,34 @@ fn js_num_or_null(value: &str) -> JsValue {
     }
 }
 
-async fn run(db: &D1Database, what: &str, sql: &str, params: &[JsValue]) -> DomainResult<()> {
-    db.prepare(sql)
+async fn run(
+    db: &D1Database,
+    accounting: &D1Accounting,
+    what: &str,
+    sql: &str,
+    params: &[JsValue],
+) -> DomainResult<()> {
+    let result = db
+        .prepare(sql)
         .bind(params)
         .map_err(|e| index_err(what, e))?
         .run()
         .await
-        .map_err(|e| index_err(what, e))
-        .and_then(|result| {
-            if result.success() {
-                Ok(())
-            } else {
-                Err(index_msg(
-                    what,
-                    result.error().unwrap_or_else(|| "unknown".into()),
-                ))
-            }
-        })
+        .map_err(|e| index_err(what, e))?;
+    accounting.record(&result)?;
+    if result.success() {
+        Ok(())
+    } else {
+        Err(index_msg(
+            what,
+            result.error().unwrap_or_else(|| "unknown".into()),
+        ))
+    }
 }
 
 async fn query_rows<T: for<'a> serde::de::Deserialize<'a>>(
     db: &D1Database,
+    accounting: &D1Accounting,
     what: &str,
     sql: &str,
     params: &[JsValue],
@@ -121,6 +130,7 @@ async fn query_rows<T: for<'a> serde::de::Deserialize<'a>>(
         .all()
         .await
         .map_err(|e| index_err(what, e))?;
+    accounting.record(&result)?;
     if !result.success() {
         return Err(index_msg(
             what,
