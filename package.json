@@ -2,7 +2,7 @@
   "name": "brains",
   "private": true,
   "packageManager": "pnpm@10.28.2",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "scripts": {
     "cloudflare:init": "python3 scripts/cloudflare.py init",
     "cloudflare:sync-admin-token": "python3 scripts/cloudflare.py sync-admin-token",

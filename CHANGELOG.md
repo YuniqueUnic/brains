@@ -23,6 +23,13 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.8.3](https://github.com/YuniqueUnic/brains/compare/v0.8.2...v0.8.3) (2026-10-29)
+
+
+### Bug Fixes
+
+* **resources:** measure D1 ledger bookkeeping cost ([de41f07](https://github.com/YuniqueUnic/brains/commit/de41f0763265e1512f5664b41db429cdb8248f4e))
+
 ## [0.8.2](https://github.com/YuniqueUnic/brains/compare/v0.8.1...v0.8.2) (2026-10-28)
 
 
