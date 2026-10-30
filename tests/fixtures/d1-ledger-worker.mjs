@@ -22,7 +22,8 @@ async function measured(result, sql, operation, batch) {
   });
   if (control.holdSQL && sql.includes(control.holdSQL) && !held) {
     held = true;
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    held = false;
   }
   if (control.fault?.sql && sql.includes(control.fault.sql)) {
     faultCount++;

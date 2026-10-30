@@ -89,6 +89,9 @@ connection.request("PUT", "/api/v1/file?path=failures/disconnected.md", b"# Exac
 })
 try:
     wait_for(lambda: request("GET", "/_ledger/control")["held"])
+    pending = request("GET", "/_ledger/snapshot")
+    assert any("INSERT INTO files" in row["sql"] for row in pending["measurements"])
+    assert not closing(pending), "The receipt must still be held when the client disconnects"
 finally:
     connection.close()
 after = wait_for(lambda: (snapshot if closing(snapshot := request("GET", "/_ledger/snapshot")) else None))
