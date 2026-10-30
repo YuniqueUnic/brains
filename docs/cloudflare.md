@@ -77,8 +77,35 @@ Three app secrets are sent together with the code through `deploy --secrets-file
 | `ALLOWED_ORIGINS` | Optional comma-separated origins for cross-origin cookie flows; empty means same-origin only. |
 | `SEMANTIC_SEARCH` | `off` prevents mounting semantic retrieval; `on` uses the configured provider when bindings and resource policy are present. |
 | `BRAINS_APPLY_MIGRATIONS` | `true` by default; `false` skips remote migration application. |
+| `BRAINS_OBSERVATION_TTL_SECONDS` | Lifetime of the account-storage sample collected during an explicit API-token deployment; default 86400 seconds. This does not schedule a refresh. |
+| `BRAINS_RESOURCE_OBSERVATIONS` or `_FILE` | Optional trusted, account-scoped provider gauge snapshot instead of automatic deployment sampling. JSON file input is resolved into an inline Actions variable. |
 
 There is no `FULL_MODE` or generic Worker `BRAINS_DISABLE` switch. Native compile-time features and server advertisement switches are not Worker runtime controls. Every deployment derives ordinary variables from this configuration, so Dashboard-only changes may be overwritten. [Wrangler configuration](https://developers.cloudflare.com/workers/wrangler/configuration/)
+
+### Account storage observations
+
+An explicit deployment with `CLOUDFLARE_API_TOKEN` reads the complete paginated D1 inventory and each database's details, then passes the sum of `file_size` values to the Worker as a non-secret gauge snapshot. This uses control-plane GETs once per deployment, not SQL or per-request account scans. Pagination is bounded and repeated database identifiers fail collection. Missing size metadata is an error rather than a fabricated zero. The deployment token needs D1 Read or D1 Write permission; it is never sent to the Worker. [D1 inventory](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/list/), [database size metadata](https://developers.cloudflare.com/api/resources/d1/subresources/database/methods/get/).
+
+The default sample lifetime is one day. Redeploy explicitly to refresh it, or supply a trusted snapshot through `BRAINS_RESOURCE_OBSERVATIONS_FILE`. Wrangler OAuth deployments without an API token do not collect account inventory automatically; without an explicit snapshot the account-storage gauge remains unmeasured. `cloudflare:check` never samples a cloud account. The settings panel reads usage only when its resource tab is first visited, retains drafts across tabs during the same dialog session, and does not poll.
+
+Snapshots identify provider resources and measures, independently of budget-rule aliases. They follow the effective saved profile; an absent or incompatible optional gauge is ignored rather than blocking core API construction. The account must match `BRAINS_RESOURCE_ACCOUNT` (which defaults to `CLOUDFLARE_ACCOUNT_ID`), amounts must be finite and non-negative, and observation/expiry times and units must be valid. Example shape:
+
+```json
+{
+  "account": "your-configured-account-partition",
+  "observations": [{
+    "resource": { "service": "d1", "kind": "database" },
+    "measure": { "metric": "storage", "unit": "byte" },
+    "amount": 3000000,
+    "evidence": "exact",
+    "observed_at": 1793332800,
+    "expires_at": 1793419200,
+    "source": "cloudflare.d1.inventory"
+  }]
+}
+```
+
+Use actual timestamps for a current sample. The API includes provenance even after expiry; the UI then shows no current measurement and the expired sample's dates. The observation overlays the report without overwriting usage tables, changing row limits or treating one database's size as the entire account. Its evidence describes the provider's reported sizes at sampling time, not an atomic account-wide live measurement or a storage admission guarantee.
 
 ## GitHub Actions
 

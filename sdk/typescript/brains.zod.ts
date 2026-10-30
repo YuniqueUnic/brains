@@ -145,7 +145,13 @@ import { xjson } from "xidl-typescript-codec";
 
                 limit: z.coerce.number(),
 
-                reset_at: z.coerce.number().int().nullish().transform((value) => value ?? undefined)
+                reset_at: z.coerce.number().int().nullish().transform((value) => value ?? undefined),
+
+                observed_at: z.coerce.number().int().nullish().transform((value) => value ?? undefined),
+
+                expires_at: z.coerce.number().int().nullish().transform((value) => value ?? undefined),
+
+                source: z.coerce.string().nullish().transform((value) => value ?? undefined)
 
         });
 

@@ -5,16 +5,33 @@ import application from "../../apps/worker/build/worker/shim.mjs";
 let measurements = [];
 let nextBatch = 0;
 let failReconcile = false;
+let control = {};
+let faultCount = 0;
+let held = false;
+let savedProfile;
 const originals = new WeakMap();
 
-function measured(result, sql, operation, batch) {
+async function measured(result, sql, operation, batch) {
+  sql = sql.replace(/\s+/g, " ").trim();
   measurements.push({
-    sql: sql.replace(/\s+/g, " ").trim(),
+    sql,
     operation,
     batch,
     rows_read: result.meta?.rows_read,
     rows_written: result.meta?.rows_written,
   });
+  if (control.holdSQL && sql.includes(control.holdSQL) && !held) {
+    held = true;
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  if (control.fault?.sql && sql.includes(control.fault.sql)) {
+    faultCount++;
+    if (faultCount === (control.fault.at ?? 1)) {
+      result = { ...result, meta: { ...result.meta } };
+      if (control.fault.missing === "meta") delete result.meta;
+      else delete result.meta[control.fault.missing];
+    }
+  }
   return result;
 }
 
@@ -51,8 +68,12 @@ function database(native) {
         const source = statements.map(value => originals.get(value));
         if (source.some(value => !value)) throw new Error("Unmeasured batch statement");
         const batch = nextBatch++;
+        if (control.failClosing && source.some(value => value.sql.replace(/\s+/g, " ").trim().startsWith("UPDATE resource_usage SET consumed=consumed+"))) {
+          control.failClosing = false;
+          throw new Error("simulated lost closing connection before commit");
+        }
         const results = await target.batch(source.map(value => value.native));
-        return results.map((result, index) => measured(result, source[index].sql, "batch", batch));
+        return Promise.all(results.map((result, index) => measured(result, source[index].sql, "batch", batch)));
       };
       if (property === "exec" || property === "withSession") {
         throw new Error("Unexpected D1 execution path in the ledger fixture");
@@ -72,6 +93,7 @@ function testEnv(original) {
       instance: "local-ledger-fixture", publication: "manual",
     } }),
     AI_SEARCH: { get: () => ({ async search() { return { chunks: [] }; } }) },
+    ...control.overrides,
   };
 }
 
@@ -96,6 +118,21 @@ export default {
     const path = new URL(request.url).pathname;
     if (path.startsWith("/_ledger/")) {
       if (!await isAdmin(request, original)) return new Response("unauthorized", { status: 401 });
+      if (path === "/_ledger/control") {
+        if (request.method === "POST") {
+          control = await request.json(); faultCount = 0; held = false;
+        }
+        return Response.json({ held, faultCount });
+      }
+      if (path === "/_ledger/profile") {
+        const { invalid } = await request.json();
+        if (invalid) {
+          savedProfile = await original.BRAINS_INDEX.prepare("SELECT profile FROM resource_settings WHERE id=1").first("profile");
+        }
+        await original.BRAINS_INDEX.prepare("UPDATE resource_settings SET profile=?1 WHERE id=1")
+          .bind(invalid ? "{" : savedProfile).run();
+        return Response.json({ invalid });
+      }
       if (path === "/_ledger/probe-closing") {
         const { sql, charges, seedSql, seed = [], held = false } = await request.json();
         if (seed.length) {

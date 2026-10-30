@@ -21,6 +21,7 @@ from cloudflare_actions import configure as configure_actions
 from cloudflare_credentials import sync_admin_token
 from cloudflare_usage import synchronize as synchronize_usage
 from cloudflare_search import refresh as refresh_search
+from cloudflare_observations import account_storage
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -47,6 +48,9 @@ SETTINGS = (
     "BRAINS_RESOURCE_PROFILE",
     "BRAINS_RESOURCE_PROFILE_FILE",
     "BRAINS_RESOURCE_ACCOUNT",
+    "BRAINS_RESOURCE_OBSERVATIONS",
+    "BRAINS_RESOURCE_OBSERVATIONS_FILE",
+    "BRAINS_OBSERVATION_TTL_SECONDS",
     "BRAINS_AI_SEARCH_NAMESPACE",
     "BRAINS_RECONCILE_CRON",
     "BRAINS_R2_LIST_PAGE_MAX",
@@ -336,6 +340,11 @@ def verify(env):
 
 
 def deploy(args, env):
+    env = env.copy()
+    if args.command == "deploy" and env.get("CLOUDFLARE_API_TOKEN") and not (
+        env.get("BRAINS_RESOURCE_OBSERVATIONS") or env.get("BRAINS_RESOURCE_OBSERVATIONS_FILE")
+    ):
+        env["BRAINS_RESOURCE_OBSERVATIONS"] = json.dumps(account_storage(env))
     config = deployment_config(env)
     supplied = instance_secrets(env)
     if args.command == "deploy":

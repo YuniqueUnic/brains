@@ -82,6 +82,7 @@ impl ResourceSettingsStore for D1ResourceSettingsStore {
                 JsValue::from_str(&profile),
             ];
             values.append(&mut params);
+            let observed_at = time::OffsetDateTime::now_utc().unix_timestamp();
             let result = self
                 .db
                 .prepare(sql)
@@ -89,8 +90,11 @@ impl ResourceSettingsStore for D1ResourceSettingsStore {
                 .map_err(|e| index_err("write resource settings", e))?
                 .run()
                 .await
-                .map_err(|e| index_err("write resource settings", e))?;
-            self.accounting.record(&result)?;
+                .map_err(|e| {
+                    self.accounting.unmeasured(observed_at);
+                    index_err("write resource settings", e)
+                })?;
+            self.accounting.record(&result, observed_at)?;
             if !result.success() {
                 return Err(DomainError::IndexUnavailable(
                     "resource settings write failed".into(),

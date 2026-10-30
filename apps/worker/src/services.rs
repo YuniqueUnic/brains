@@ -5,7 +5,10 @@ use brains_adapter_d1::resources::D1UsageStore;
 use brains_adapter_d1::settings::D1ResourceSettingsStore;
 use brains_adapter_r2::R2ContentStore;
 use brains_application::resources::ResourceBudget;
-use brains_domain::{DomainError, DomainResult, resources::ResourceProfile};
+use brains_domain::{
+    DomainError, DomainResult,
+    resources::{ProviderSnapshot, ResourceProfile},
+};
 use brains_ports::{content::ContentConverter, semantic::SemanticRetriever};
 use serde::Deserialize;
 use worker::Env;
@@ -31,6 +34,15 @@ pub async fn configure(
             .map_err(|e| DomainError::InvalidArgument(format!("cloud configuration: {e}")))?,
         Err(_) => ServiceConfig::default(),
     };
+    let snapshot: Option<ProviderSnapshot> = env
+        .var("BRAINS_RESOURCE_OBSERVATIONS")
+        .ok()
+        .map(|raw| {
+            serde_json::from_str(&raw.to_string()).map_err(|error| {
+                DomainError::InvalidArgument(format!("provider observations: {error}"))
+            })
+        })
+        .transpose()?;
     let mut deployed = None;
     if let Ok(count) = env.var("BRAINS_RESOURCE_PROFILE_COUNT") {
         let count = count
@@ -58,16 +70,26 @@ pub async fn configure(
             .map_err(|e| DomainError::IndexUnavailable(e.to_string()))
     };
     let accounting = Arc::new(brains_adapter_d1::D1Accounting::default());
-    let control = brains_application::resource_settings::ResourceControl::load(
-        deployed,
-        Arc::new(D1ResourceSettingsStore::new(database()?).with_accounting(accounting.clone())),
-        Arc::new(D1UsageStore::new(database()?).with_accounting(accounting)),
-    )
-    .await?;
+    let usage = Arc::new(D1UsageStore::new(database()?).with_accounting(accounting.clone()));
     let account = env
         .var("BRAINS_RESOURCE_ACCOUNT")
         .map(|v| v.to_string())
         .unwrap_or_else(|_| "deployment".into());
+    // This budget owns settings-query receipts if loading saved settings fails.
+    // It never admits business work and is replaced before installing services.
+    let bootstrap = match &deployed {
+        Some(profile) => profile.clone(),
+        None => ResourceProfile::parse(brains_domain::resources::CLOUDFLARE_FREE_PROFILE)?,
+    };
+    vault.resources = Some(Arc::new(
+        ResourceBudget::new(bootstrap, account.clone(), usage.clone()).with_enforcement(false),
+    ));
+    let mut control = brains_application::resource_settings::ResourceControl::load(
+        deployed,
+        Arc::new(D1ResourceSettingsStore::new(database()?).with_accounting(accounting.clone())),
+        usage,
+    )
+    .await?;
     let budget = Arc::new(
         ResourceBudget::new(
             control.settings.profile.clone(),
@@ -77,6 +99,9 @@ pub async fn configure(
         .with_enforcement(control.settings.enforced),
     );
     vault.resources = Some(budget.clone());
+    if let Some(snapshot) = snapshot {
+        control = control.with_snapshot(snapshot, &budget.account)?;
+    }
     vault.resource_control = Some(Arc::new(control));
     let store = store.with_budget(budget.clone());
     vault.heads = store.clone();

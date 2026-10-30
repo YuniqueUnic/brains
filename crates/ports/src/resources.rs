@@ -6,6 +6,15 @@ use brains_domain::{
 };
 use futures::future::BoxFuture;
 
+/// Cumulative bookkeeping rows observed at one operation-start timestamp.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AccountingUsage {
+    pub observed_at: i64,
+    pub rows_read: u64,
+    pub rows_written: u64,
+    pub unmeasured_operations: u64,
+}
+
 pub trait ResourceSettingsStore: Send + Sync {
     fn load(&self) -> BoxFuture<'_, DomainResult<Option<ResourceSettings>>>;
     fn save<'a>(
@@ -42,8 +51,8 @@ pub trait UsageStore: Send + Sync {
         self.accounting_bounds()
     }
     /// Cumulative measured bookkeeping rows for this store's request lifetime.
-    fn accounting_usage(&self) -> (u64, u64) {
-        (0, 0)
+    fn accounting_usage(&self) -> Vec<AccountingUsage> {
+        vec![]
     }
     /// Check all projected charges without consuming them. D1 implements this
     /// as one read-only statement; other stores retain their existing behavior.
@@ -55,10 +64,14 @@ pub trait UsageStore: Send + Sync {
     fn flush_accounting<'a>(
         &'a self,
         charges: &'a [BudgetCharge],
-    ) -> BoxFuture<'a, DomainResult<(u64, u64)>> {
+        observed_at: i64,
+    ) -> BoxFuture<'a, DomainResult<AccountingUsage>> {
         Box::pin(async move {
             self.observe(charges).await?;
-            Ok((0, 0))
+            Ok(AccountingUsage {
+                observed_at,
+                ..Default::default()
+            })
         })
     }
     fn debit<'a>(&'a self, charges: &'a [BudgetCharge]) -> BoxFuture<'a, DomainResult<()>>;

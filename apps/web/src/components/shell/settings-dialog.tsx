@@ -207,13 +207,21 @@ export function SettingsDialog({
                 tab === "resources" ? "flex min-h-0 flex-1 flex-col" : "hidden"
               }
             >
-              {open && <ResourceUsage />}
+              {open && <VisitedResourceUsage active={tab === "resources"} />}
             </Tabs.Panel>
           )}
         </Tabs.Root>
       </DialogContent>
     </Dialog>
   );
+}
+
+function VisitedResourceUsage({ active }: { active: boolean }) {
+  const [visited, setVisited] = useState(active);
+  useEffect(() => {
+    if (active) setVisited(true);
+  }, [active]);
+  return visited ? <ResourceUsage /> : null;
 }
 
 function SettingRow({

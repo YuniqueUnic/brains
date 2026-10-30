@@ -98,14 +98,18 @@ async fn run(
     sql: &str,
     params: &[JsValue],
 ) -> DomainResult<()> {
+    let observed_at = time::OffsetDateTime::now_utc().unix_timestamp();
     let result = db
         .prepare(sql)
         .bind(params)
         .map_err(|e| index_err(what, e))?
         .run()
         .await
-        .map_err(|e| index_err(what, e))?;
-    accounting.record(&result)?;
+        .map_err(|e| {
+            accounting.unmeasured(observed_at);
+            index_err(what, e)
+        })?;
+    accounting.record(&result, observed_at)?;
     if result.success() {
         Ok(())
     } else {
@@ -123,14 +127,18 @@ async fn query_rows<T: for<'a> serde::de::Deserialize<'a>>(
     sql: &str,
     params: &[JsValue],
 ) -> DomainResult<Vec<T>> {
+    let observed_at = time::OffsetDateTime::now_utc().unix_timestamp();
     let result = db
         .prepare(sql)
         .bind(params)
         .map_err(|e| index_err(what, e))?
         .all()
         .await
-        .map_err(|e| index_err(what, e))?;
-    accounting.record(&result)?;
+        .map_err(|e| {
+            accounting.unmeasured(observed_at);
+            index_err(what, e)
+        })?;
+    accounting.record(&result, observed_at)?;
     if !result.success() {
         return Err(index_msg(
             what,

@@ -1356,6 +1356,10 @@
           "evidence": {
             "type": "string"
           },
+          "expires_at": {
+            "format": "int64",
+            "type": "integer"
+          },
           "key": {
             "type": "string"
           },
@@ -1366,6 +1370,10 @@
           "meter": {
             "type": "string"
           },
+          "observed_at": {
+            "format": "int64",
+            "type": "integer"
+          },
           "reserved": {
             "format": "double",
             "type": "number"
@@ -1375,6 +1383,9 @@
             "type": "integer"
           },
           "rule": {
+            "type": "string"
+          },
+          "source": {
             "type": "string"
           },
           "unit": {

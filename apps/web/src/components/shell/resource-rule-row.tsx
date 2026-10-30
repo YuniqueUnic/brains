@@ -37,8 +37,10 @@ export function ResourceRuleRow({
   const limit = effectiveBudget(configured, defaults);
   const active = usage.filter(
     (item) =>
-      item.reset_at == null || Number(item.reset_at) > Date.now() / 1000,
+      (item.reset_at == null || Number(item.reset_at) > Date.now() / 1000) &&
+      (item.expires_at == null || Number(item.expires_at) > Date.now() / 1000),
   );
+  const sample = usage.find((item) => item.observed_at != null);
   const amount =
     active.reduce((sum, item) => sum + item.consumed, 0) /
     displayScale(rule.measure.unit);
@@ -62,7 +64,7 @@ export function ResourceRuleRow({
   const number = (n: number) =>
     n.toLocaleString(i18n.language, { maximumFractionDigits: 3 });
   return (
-    <div className="py-3">
+    <div className="py-3" data-testid={`resource-rule-${rule.id}`}>
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <div className="min-w-0">
           <p className="text-body-sm">
@@ -76,7 +78,10 @@ export function ResourceRuleRow({
         </div>
         <div className="flex items-start gap-2">
           <div className="text-right text-body-sm tabular-nums">
-            <span>{usage.length ? number(amount) : t("noMeasurement")}</span>
+            <span>{active.length
+              ? active.some(item => item.evidence === "unknown")
+                ? t("atLeast", { amount: number(amount) }) : number(amount)
+              : t("noMeasurement")}</span>
             {limit != null && (
               <span className="block text-meta-lg text-muted-foreground">
                 {t("ofLimit", { amount: number(limit), unit })}
@@ -94,7 +99,7 @@ export function ResourceRuleRow({
           </Button>
         </div>
       </div>
-      {usage.length > 0 && (
+      {(active.length > 0 || held > 0) && (
         <>
           <meter
             aria-label={t("budgetUsed", { rule: rule.id })}
@@ -106,7 +111,7 @@ export function ResourceRuleRow({
           <p className="mt-1 text-meta-lg text-muted-foreground">
             {[
               ...new Set(
-                usage.map((item) =>
+                active.map((item) =>
                   t(`evidence.${item.evidence}`, {
                     defaultValue: item.evidence,
                   }),
@@ -121,6 +126,19 @@ export function ResourceRuleRow({
               : ""}
           </p>
         </>
+      )}
+      {sample?.observed_at != null && (
+        <p className="mt-1 break-words text-meta-lg text-muted-foreground">
+          {t("observed", {
+            source: t(`sources.${sample.source}`, { defaultValue: sample.source }),
+            date: new Date(Number(sample.observed_at) * 1000).toLocaleString(i18n.language),
+          })}
+          {sample.expires_at != null
+            ? ` · ${t(Number(sample.expires_at) > Date.now() / 1000 ? "validUntil" : "sampleExpired", {
+                date: new Date(Number(sample.expires_at) * 1000).toLocaleString(i18n.language),
+              })}`
+            : ""}
+        </p>
       )}
       <p className="mt-1 text-meta-lg text-muted-foreground">
         {t(`enforcement.${rule.enforcement}`, {

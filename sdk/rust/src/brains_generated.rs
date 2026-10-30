@@ -127,6 +127,12 @@ pub mod brains {
         pub limit: f64,
         #[serde(skip_serializing_if = "Option::is_none")]
         pub reset_at: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub observed_at: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub expires_at: Option<i64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub source: Option<String>,
     }
     impl ResourceUsage {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
@@ -3082,6 +3088,12 @@ pub mod brains {
             pub limit: f64,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub reset_at: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub observed_at: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub expires_at: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source: Option<String>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::ResourceUsage> for brains_ResourceUsage {
@@ -3096,6 +3108,9 @@ pub mod brains {
                     reserved: value.reserved,
                     limit: value.limit,
                     reset_at: value.reset_at,
+                    observed_at: value.observed_at,
+                    expires_at: value.expires_at,
+                    source: value.source,
                 }
             }
         }
@@ -3112,6 +3127,9 @@ pub mod brains {
                     reserved: value.reserved,
                     limit: value.limit,
                     reset_at: value.reset_at,
+                    observed_at: value.observed_at,
+                    expires_at: value.expires_at,
+                    source: value.source,
                 }
             }
         }
@@ -5052,6 +5070,12 @@ pub mod brains {
             pub limit: f64,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub reset_at: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub observed_at: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub expires_at: Option<i64>,
+            #[serde(default, skip_serializing_if = "Option::is_none")]
+            pub source: Option<String>,
         }
         #[allow(unused_variables, unreachable_code)]
         impl From<super::ResourceUsage> for brains_ResourceUsage {
@@ -5066,6 +5090,9 @@ pub mod brains {
                     reserved: value.reserved,
                     limit: value.limit,
                     reset_at: value.reset_at,
+                    observed_at: value.observed_at,
+                    expires_at: value.expires_at,
+                    source: value.source,
                 }
             }
         }
@@ -5082,6 +5109,9 @@ pub mod brains {
                     reserved: value.reserved,
                     limit: value.limit,
                     reset_at: value.reset_at,
+                    observed_at: value.observed_at,
+                    expires_at: value.expires_at,
+                    source: value.source,
                 }
             }
         }

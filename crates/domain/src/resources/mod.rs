@@ -1,10 +1,12 @@
 //! Provider facts, application policy and usage are separate values.
 
+mod observation;
 mod profile;
 mod quantity;
 mod settings;
 mod window;
 
+pub use observation::*;
 pub use profile::*;
 pub use quantity::*;
 pub use settings::*;
@@ -94,6 +96,8 @@ pub struct BudgetCharge {
     pub evidence: UsageEvidence,
     pub action: AdmissionAction,
     #[serde(default)]
+    pub block_unknown: bool,
+    #[serde(default)]
     pub mode: ChargeMode,
 }
 
@@ -123,6 +127,12 @@ pub struct BudgetUsage {
     pub reserved: f64,
     pub limit: f64,
     pub reset_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observed_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 impl BudgetUsage {
