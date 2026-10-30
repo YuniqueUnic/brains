@@ -1,5 +1,7 @@
 use crate::{DomainError, resources::*};
 
+mod observations;
+
 fn profile() -> ResourceProfile {
     ResourceProfile::parse(CLOUDFLARE_FREE_PROFILE).unwrap()
 }

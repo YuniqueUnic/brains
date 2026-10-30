@@ -72,6 +72,9 @@ export namespace brains {
         reserved: number;
         limit: number;
         reset_at?: number;
+        observed_at?: number;
+        expires_at?: number;
+        source?: string;
     }
     export interface ResourceCapability {
         profile_id: string;

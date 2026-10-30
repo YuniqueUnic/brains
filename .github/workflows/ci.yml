@@ -99,6 +99,7 @@ jobs:
         run: |
           python3 tests/cloudflare-resources.py
           python3 tests/cloudflare-usage.py
+          python3 tests/cloudflare-observations.py
       - name: Typecheck e2e suite
         run: pnpm --dir tests/e2e exec tsc --noEmit
 
@@ -338,6 +339,8 @@ jobs:
         run: python3 scripts/run-workerd.py -- python3 tests/resource-settings.py
       - name: D1 ledger receipt conservation
         run: python3 scripts/run-workerd.py --entrypoint tests/fixtures/d1-ledger-worker.mjs -- python3 tests/d1-ledger-accounting.py
+      - name: D1 failure finalization and provider observations
+        run: python3 scripts/run-workerd.py --entrypoint tests/fixtures/d1-ledger-worker.mjs -- python3 tests/d1-ledger-failures.py
       - name: Cost amplification and managed-job recovery
         run: python3 scripts/run-workerd.py --entrypoint tests/fixtures/cloudflare-cost-worker.mjs -- python3 tests/cloudflare-cost-workflows.py
       - uses: actions/download-artifact@v8

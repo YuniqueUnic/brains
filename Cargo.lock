@@ -1055,6 +1055,7 @@ dependencies = [
  "brains-build-info",
  "brains-domain",
  "brains-ports",
+ "futures",
  "hex",
  "hmac",
  "serde",

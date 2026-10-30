@@ -134,6 +134,12 @@ impl ResourceProfile {
                 .when_exhausted
                 .or(self.policy.when_exhausted)
                 .unwrap_or_default(),
+            block_unknown: rule
+                .policy
+                .when_charge_unknown
+                .or(self.policy.when_charge_unknown)
+                .unwrap_or_default()
+                == AdmissionAction::Block,
             mode: ChargeMode::Increment,
         })
     }
@@ -189,6 +195,12 @@ impl ResourceProfile {
                 .when_exhausted
                 .or(self.policy.when_exhausted)
                 .unwrap_or_default(),
+            block_unknown: rule
+                .policy
+                .when_charge_unknown
+                .or(self.policy.when_charge_unknown)
+                .unwrap_or_default()
+                == AdmissionAction::Block,
             mode: ChargeMode::Gauge,
         })
     }

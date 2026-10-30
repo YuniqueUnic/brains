@@ -99,6 +99,9 @@ struct ResourceUsage {
     double reserved;
     double limit;
     @optional int64 reset_at;
+    @optional int64 observed_at;
+    @optional int64 expires_at;
+    @optional string source;
 };
 struct ResourceCapability { string profile_id; string reviewed_at; string coverage; };
 struct AdmissionState {

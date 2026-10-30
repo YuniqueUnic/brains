@@ -45,6 +45,14 @@ def compose_services(config, env):
     account = env.get("BRAINS_RESOURCE_ACCOUNT") or env.get("CLOUDFLARE_ACCOUNT_ID")
     if account:
         config["vars"]["BRAINS_RESOURCE_ACCOUNT"] = account
+    observations = structured_setting(env, "BRAINS_RESOURCE_OBSERVATIONS")
+    if observations is not None:
+        if observations.get("account") != account:
+            raise ValueError("Provider observation account does not match deployment")
+        encoded = json.dumps(observations, separators=(",", ":"), ensure_ascii=True)
+        if len(encoded) > 4000:
+            raise ValueError("Provider observations must fit within 4000 ASCII bytes")
+        config["vars"]["BRAINS_RESOURCE_OBSERVATIONS"] = encoded
     if profile is not None:
         for key in ("profile", "rules"):
             if key not in profile:

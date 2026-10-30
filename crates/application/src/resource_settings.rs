@@ -8,6 +8,7 @@ pub struct ResourceControl {
     pub settings: ResourceSettings,
     pub source: &'static str,
     pub usage: Arc<dyn UsageStore>,
+    pub observations: Vec<BudgetUsage>,
     store: Arc<dyn ResourceSettingsStore>,
     stored_revision: Option<String>,
 }
@@ -49,9 +50,36 @@ impl ResourceControl {
             settings,
             source,
             usage,
+            observations: vec![],
             store,
             stored_revision,
         })
+    }
+
+    pub fn with_snapshot(
+        mut self,
+        snapshot: ProviderSnapshot,
+        account: &str,
+    ) -> DomainResult<Self> {
+        if snapshot.account != account {
+            return Err(DomainError::InvalidArgument(
+                "observation account does not match deployment".into(),
+            ));
+        }
+        let now = time::OffsetDateTime::now_utc();
+        let mut keys = BTreeSet::new();
+        for observation in snapshot.observations {
+            let Some(usage) = observation.usage(&self.settings.profile, account, now)? else {
+                continue;
+            };
+            if !keys.insert(usage.key.clone()) {
+                return Err(DomainError::InvalidArgument(
+                    "duplicate provider observation".into(),
+                ));
+            }
+            self.observations.push(usage);
+        }
+        Ok(self)
     }
 
     pub async fn update(&self, input: ResourceSettingsUpdate) -> DomainResult<ResourceSettings> {

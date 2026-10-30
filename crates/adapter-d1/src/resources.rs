@@ -1,5 +1,5 @@
 use brains_domain::{DomainError, DomainResult, resources::*};
-use brains_ports::resources::UsageStore;
+use brains_ports::resources::{AccountingUsage, UsageStore};
 use futures::future::BoxFuture;
 use wasm_bindgen::JsValue;
 use worker::{D1Database, send::SendFuture};
@@ -10,7 +10,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-const EXISTING_ROWS_BOUND: (u64, u64) = (2, 2);
+const UPDATE_ROW_COST: (u64, u64) = (1, 1);
+const UPSERT_ROW_BOUND: (u64, u64) = (2, 5);
 
 pub struct D1UsageStore {
     db: D1Database,
@@ -63,15 +64,18 @@ impl UsageStore for D1UsageStore {
     }
 
     fn accounting_bounds_for(&self, charges: &[BudgetCharge]) -> (u64, u64) {
-        if self.closing_rows_exist(charges) {
-            // Two primary-key updates of unindexed values; no index writes.
-            EXISTING_ROWS_BOUND
-        } else {
-            self.accounting_bounds()
-        }
+        let keys = self.persisted_keys.lock().expect("D1 persisted keys");
+        charges.iter().fold((0, 0), |total, charge| {
+            let cost = if keys.contains(&charge.key) {
+                UPDATE_ROW_COST
+            } else {
+                UPSERT_ROW_BOUND
+            };
+            (total.0 + cost.0, total.1 + cost.1)
+        })
     }
 
-    fn accounting_usage(&self) -> (u64, u64) {
+    fn accounting_usage(&self) -> Vec<AccountingUsage> {
         self.accounting.usage()
     }
 
@@ -105,15 +109,21 @@ impl UsageStore for D1UsageStore {
     fn flush_accounting<'a>(
         &'a self,
         charges: &'a [BudgetCharge],
-    ) -> BoxFuture<'a, DomainResult<(u64, u64)>> {
+        observed_at: i64,
+    ) -> BoxFuture<'a, DomainResult<AccountingUsage>> {
         Box::pin(SendFuture::new(async move {
-            let sql = if self.closing_rows_exist(charges) {
-                include_str!("sql/accounting-update.sql")
-            } else {
-                include_str!("sql/accounting.sql")
-            };
             let mut statements = Vec::new();
             for charge in charges {
+                let known = self
+                    .persisted_keys
+                    .lock()
+                    .expect("D1 persisted keys")
+                    .contains(&charge.key);
+                let sql = if known {
+                    include_str!("sql/accounting-update.sql")
+                } else {
+                    include_str!("sql/accounting.sql")
+                };
                 let json = serde_json::to_string(charge)
                     .map_err(|error| DomainError::Internal(error.to_string()))?;
                 statements.push(
@@ -124,18 +134,29 @@ impl UsageStore for D1UsageStore {
                 );
             }
             if statements.is_empty() {
-                return Ok((0, 0));
+                return Ok(AccountingUsage {
+                    observed_at,
+                    ..Default::default()
+                });
             }
-            let results = self
-                .db
-                .batch(statements)
-                .await
-                .map_err(|error| index_err("final accounting", error))?;
-            let mut cost = (0, 0);
+            let results = self.db.batch(statements).await.map_err(|error| {
+                self.accounting.unmeasured(observed_at);
+                index_err("final accounting", error)
+            })?;
+            let mut cost = AccountingUsage {
+                observed_at,
+                ..Default::default()
+            };
             for result in results {
-                let receipt = self.accounting.record(&result)?;
-                cost.0 += receipt.0;
-                cost.1 += receipt.1;
+                match self.accounting.record(&result, observed_at) {
+                    Ok(receipt) => {
+                        cost.rows_read += receipt.rows_read;
+                        cost.rows_written += receipt.rows_written;
+                    }
+                    // Its already-written bound covers the final SQL even
+                    // when a receipt is missing. Never replay the batch.
+                    Err(_) => cost.unmeasured_operations += 1,
+                }
                 if !result.success() {
                     return Err(DomainError::IndexUnavailable(
                         "final accounting failed".into(),
@@ -180,7 +201,7 @@ impl UsageStore for D1UsageStore {
                     std::slice::from_ref(&json),
                 )?,
                 prepare(
-                    "INSERT INTO resource_attempts(id,payload,state) SELECT ?1,?2,'reserved' WHERE NOT EXISTS (SELECT 1 FROM json_each(?2) c JOIN resource_usage u ON u.key=json_extract(c.value,'$.key') WHERE json_extract(c.value,'$.action')='block' AND u.consumed+COALESCE((SELECT SUM(reserved) FROM resource_usage WHERE meter=u.meter AND reserved>0),0)+json_extract(c.value,'$.amount')>json_extract(c.value,'$.limit')) ON CONFLICT(id) DO NOTHING",
+                    "INSERT INTO resource_attempts(id,payload,state) SELECT ?1,?2,'reserved' WHERE NOT EXISTS (SELECT 1 FROM json_each(?2) c JOIN resource_usage u ON u.key=json_extract(c.value,'$.key') WHERE (json_extract(c.value,'$.action')='block' AND u.consumed+COALESCE((SELECT SUM(reserved) FROM resource_usage WHERE meter=u.meter AND reserved>0),0)+json_extract(c.value,'$.amount')>json_extract(c.value,'$.limit')) OR (COALESCE(json_extract(c.value,'$.block_unknown'),0)=1 AND (u.evidence='unknown' OR json_extract(c.value,'$.evidence')='unknown'))) ON CONFLICT(id) DO NOTHING",
                     &[id.clone(), json.clone()],
                 )?,
                 prepare(
@@ -188,13 +209,13 @@ impl UsageStore for D1UsageStore {
                     &[id.clone(), json.clone()],
                 )?,
             ];
-            let results = self
-                .db
-                .batch(statements)
-                .await
-                .map_err(|e| index_err("reserve usage", e))?;
+            let observed_at = time::OffsetDateTime::now_utc().unix_timestamp();
+            let results = self.db.batch(statements).await.map_err(|e| {
+                self.accounting.unmeasured(observed_at);
+                index_err("reserve usage", e)
+            })?;
             for result in &results {
-                self.accounting.record(result)?;
+                self.accounting.record(result, observed_at)?;
             }
             if results.iter().any(|r| !r.success()) {
                 return Err(DomainError::IndexUnavailable(
@@ -250,14 +271,20 @@ impl UsageStore for D1UsageStore {
 }
 
 impl D1UsageStore {
-    fn closing_rows_exist(&self, charges: &[BudgetCharge]) -> bool {
-        let keys = self.persisted_keys.lock().expect("D1 persisted keys");
-        charges.len() == 2 && charges.iter().all(|charge| keys.contains(&charge.key))
-    }
-
     async fn exhausted(&self, charges: &[BudgetCharge]) -> DomainResult<()> {
         let usage = self.usage().await?;
         for charge in charges {
+            if charge.block_unknown
+                && (charge.evidence == UsageEvidence::Unknown
+                    || usage
+                        .iter()
+                        .any(|row| row.key == charge.key && row.evidence == UsageEvidence::Unknown))
+            {
+                return Err(DomainError::ResourcePolicy(format!(
+                    "usage is unknown for {}",
+                    charge.rule
+                )));
+            }
             let consumed = usage
                 .iter()
                 .find(|row| row.key == charge.key)
@@ -287,6 +314,7 @@ impl D1UsageStore {
             serde_json::to_string(charges).map_err(|e| DomainError::Internal(e.to_string()))?;
         // Materialize admission once so every meter is applied, or none is.
         let sql = include_str!("sql/debit.sql");
+        let observed_at = time::OffsetDateTime::now_utc().unix_timestamp();
         let result = self
             .db
             .prepare(sql)
@@ -297,9 +325,13 @@ impl D1UsageStore {
             .map_err(|e| index_err("usage debit", e))?
             .all()
             .await
-            .map_err(|e| index_err("usage debit", e))?;
-        self.accounting.record(&result)?;
+            .map_err(|e| {
+                self.accounting.unmeasured(observed_at);
+                index_err("usage debit", e)
+            })?;
+        self.accounting.record(&result, observed_at)?;
         if !result.success() {
+            self.accounting.unmeasured(observed_at);
             return Err(DomainError::IndexUnavailable(
                 result
                     .error()
@@ -310,9 +342,10 @@ impl D1UsageStore {
         struct Applied {
             key: String,
         }
-        let applied = result
-            .results::<Applied>()
-            .map_err(|e| index_err("usage debit result", e))?;
+        let applied = result.results::<Applied>().map_err(|e| {
+            self.accounting.unmeasured(observed_at);
+            index_err("usage debit result", e)
+        })?;
         if applied.len() != charges.len() {
             return Err(self.exhausted(charges).await.err().unwrap_or_else(|| {
                 DomainError::Internal("quota transaction applied a partial charge set".into())

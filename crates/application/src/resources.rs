@@ -1,16 +1,18 @@
 //! Budget orchestration: provider facts resolve a charge; a store admits it.
 
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::{collections::BTreeMap, sync::Arc};
 
 use brains_domain::{DomainResult, HexId, resources::*};
-use brains_ports::resources::UsageStore;
+use brains_ports::resources::{AccountingUsage, UsageStore};
 
 pub struct ResourceBudget {
     pub profile: ResourceProfile,
     pub account: String,
     store: Arc<dyn UsageStore>,
     enforced: bool,
-    accounted: futures::lock::Mutex<(u64, u64)>,
+    accounted: futures::lock::Mutex<BTreeMap<i64, AccountingUsage>>,
+    closing_failed: AtomicBool,
 }
 
 impl ResourceBudget {
@@ -28,7 +30,8 @@ impl ResourceBudget {
             account,
             store,
             enforced: true,
-            accounted: futures::lock::Mutex::new((0, 0)),
+            accounted: futures::lock::Mutex::new(BTreeMap::new()),
+            closing_failed: AtomicBool::new(false),
         }
     }
 
@@ -44,7 +47,7 @@ impl ResourceBudget {
         self.check_accounted(vec![]).await?;
         // Previously incurred bookkeeping is never a refundable reservation.
         // Zero-amount D1 guards still participate in the atomic admission.
-        let charges = self.with_accounting(primary, (0, 0), UsageEvidence::Exact)?;
+        let charges = self.with_accounting(primary, &[], UsageEvidence::Exact, now())?;
         let reservation = Reservation {
             attempt_id: HexId::generate().as_str().to_owned(),
             charges,
@@ -99,6 +102,7 @@ impl ResourceBudget {
             Ok(mut charge) => {
                 if !self.enforced {
                     charge.action = AdmissionAction::Observe;
+                    charge.block_unknown = false;
                 }
                 Ok(Some(charge))
             }
@@ -109,6 +113,9 @@ impl ResourceBudget {
 
     /// Debit a known attempt before dispatch; a cancelled dispatch overcounts safely.
     pub async fn debit(&self, service: &str, metric: &str, amount: f64) -> DomainResult<()> {
+        if self.enforced {
+            self.settle_previous_accounting().await?;
+        }
         let charges = self.charges(service, metric, amount, UsageEvidence::Bounded)?;
         if amount == 0.0 {
             return self.check_accounted(charges).await;
@@ -121,13 +128,26 @@ impl ResourceBudget {
         self.apply_accounted(charges, false).await
     }
 
+    /// Record incomplete measurement without inventing a row amount.
+    pub async fn record_unmeasured(&self, observed_at: i64) -> DomainResult<()> {
+        let receipt = AccountingUsage {
+            observed_at,
+            unmeasured_operations: 1,
+            ..Default::default()
+        };
+        let charges =
+            self.with_accounting(vec![], &[receipt], UsageEvidence::Exact, observed_at)?;
+        self.record(charges).await
+    }
+
     async fn check_accounted(&self, charges: Vec<BudgetCharge>) -> DomainResult<()> {
         let accounted = self.accounted.lock().await;
         let usage = self.store.accounting_usage();
         let charges = self.with_accounting(
             charges,
-            (usage.0 - accounted.0, usage.1 - accounted.1),
+            &pending(&usage, &accounted),
             UsageEvidence::Exact,
+            now(),
         )?;
         if charges.is_empty() {
             return Ok(());
@@ -142,71 +162,162 @@ impl ResourceBudget {
         let usage = self.store.accounting_usage();
         let charges = self.with_accounting(
             charges,
-            (usage.0 - accounted.0, usage.1 - accounted.1),
+            &pending(&usage, &accounted),
             UsageEvidence::Exact,
+            now(),
         )?;
-        if charges
-            .iter()
-            .any(|charge| charge.amount > 0.0 || charge.mode == ChargeMode::Gauge)
-        {
+        if charges.iter().any(|charge| {
+            charge.amount > 0.0
+                || charge.mode == ChargeMode::Gauge
+                || charge.evidence == UsageEvidence::Unknown
+        }) {
             if enforce {
-                self.store.debit(&charges).await?;
+                if let Err(error) = self.store.debit(&charges).await {
+                    if !matches!(
+                        error,
+                        brains_domain::DomainError::QuotaExceeded { .. }
+                            | brains_domain::DomainError::ResourcePolicy(_)
+                    ) {
+                        *accounted = usage
+                            .into_iter()
+                            .map(|row| (row.observed_at, row))
+                            .collect();
+                    }
+                    return Err(error);
+                }
             } else {
-                self.store.observe(&charges).await?;
+                if let Err(error) = self.store.observe(&charges).await {
+                    *accounted = usage
+                        .into_iter()
+                        .map(|row| (row.observed_at, row))
+                        .collect();
+                    return Err(error);
+                }
             }
         }
-        *accounted = usage;
+        *accounted = usage
+            .into_iter()
+            .map(|row| (row.observed_at, row))
+            .collect();
         Ok(())
     }
 
-    /// Close a completed request or bounded background scope without recursively
-    /// charging the final accounting write. Repeating an idle flush is a no-op.
+    /// Close one completed scope. Its own SQL cost belongs to the closing
+    /// dispatch window; pending receipts retain their original dispatch time.
     pub async fn flush_accounting(&self) -> DomainResult<()> {
+        self.close_accounting(now()).await
+    }
+
+    pub(crate) async fn close_accounting(&self, observed_at: i64) -> DomainResult<()> {
         let mut accounted = self.accounted.lock().await;
+        if self.closing_failed.load(Ordering::Relaxed) {
+            return Err(brains_domain::DomainError::IndexUnavailable(
+                "final accounting has an unresolved commit; it cannot be replayed".into(),
+            ));
+        }
         let usage = self.store.accounting_usage();
-        if usage == *accounted {
+        let pending = pending(&usage, &accounted);
+        if pending.is_empty() {
             return Ok(());
         }
-        // Freeze the keys before choosing the closing cost: an old window's
-        // materialized rows do not establish that the new window exists.
+        let guards = self.with_accounting(vec![], &[], UsageEvidence::Bounded, observed_at)?;
         let mut charges = self.with_accounting(
-            vec![],
-            (usage.0 - accounted.0, usage.1 - accounted.1),
+            guards.clone(),
+            &pending,
             UsageEvidence::Bounded,
+            observed_at,
         )?;
         let bound = self.store.accounting_bounds_for(&charges);
         for charge in &mut charges {
-            charge.amount += match charge.measure.metric.as_str() {
-                "rows_read" => bound.0,
-                "rows_written" => bound.1,
-                _ => 0,
-            } as f64;
+            if guards.iter().any(|guard| guard.key == charge.key) {
+                charge.amount += match charge.measure.metric.as_str() {
+                    "rows_read" => bound.0,
+                    "rows_written" => bound.1,
+                    _ => 0,
+                } as f64;
+            }
         }
-        let closing_cost = self.store.flush_accounting(&charges).await?;
-        // A background operation may have completed during this write. Only
-        // acknowledge the closing write's own receipt, not a newer snapshot.
-        *accounted = (usage.0 + closing_cost.0, usage.1 + closing_cost.1);
+        let result = self.store.flush_accounting(&charges, observed_at).await;
+        // A missing response can follow a committed write. Do not replay its
+        // input receipts; newly returned facts remain independently pending.
+        *accounted = usage
+            .into_iter()
+            .map(|row| (row.observed_at, row))
+            .collect();
+        let closing_cost = result.inspect_err(|_| {
+            self.closing_failed.store(true, Ordering::Relaxed);
+        })?;
+        let receipt = accounted
+            .entry(closing_cost.observed_at)
+            .or_insert(AccountingUsage {
+                observed_at: closing_cost.observed_at,
+                ..Default::default()
+            });
+        receipt.rows_read += closing_cost.rows_read;
+        receipt.rows_written += closing_cost.rows_written;
+        receipt.unmeasured_operations += closing_cost.unmeasured_operations;
+        Ok(())
+    }
+
+    async fn settle_previous_accounting(&self) -> DomainResult<()> {
+        let observed_at = now();
+        let mut accounted = self.accounted.lock().await;
+        let usage = self.store.accounting_usage();
+        let pending = pending(&usage, &accounted);
+        if pending.is_empty() {
+            return Ok(());
+        }
+        let charges = self.with_accounting(vec![], &pending, UsageEvidence::Exact, observed_at)?;
+        if charges.iter().any(|charge| {
+            (charge.amount > 0.0 || charge.evidence == UsageEvidence::Unknown)
+                && charge.window.end.is_some_and(|end| end <= observed_at)
+        }) {
+            // Historical, already-incurred work cannot gate a new window.
+            let result = self.store.observe(&charges).await;
+            *accounted = usage
+                .into_iter()
+                .map(|row| (row.observed_at, row))
+                .collect();
+            result?;
+        }
         Ok(())
     }
 
     fn with_accounting(
         &self,
         mut charges: Vec<BudgetCharge>,
-        usage: (u64, u64),
+        usage: &[AccountingUsage],
         evidence: UsageEvidence,
+        observed_at: i64,
     ) -> DomainResult<Vec<BudgetCharge>> {
-        let now = time::OffsetDateTime::now_utc();
-        let (reads, writes) = usage;
-        for (metric, amount) in [("rows_read", reads), ("rows_written", writes)] {
-            if self.store.accounting_bounds() != (0, 0) || amount > 0 {
-                charges.extend(self.measured_charge(self.profile.charge(
-                    "d1",
-                    metric,
-                    amount as f64,
-                    &self.account,
-                    evidence,
-                    now,
-                ))?);
+        let guard = AccountingUsage {
+            observed_at,
+            ..Default::default()
+        };
+        for receipt in usage.iter().chain(std::iter::once(&guard)) {
+            let at = time::OffsetDateTime::from_unix_timestamp(receipt.observed_at)
+                .map_err(|error| brains_domain::DomainError::Internal(error.to_string()))?;
+            for (metric, amount) in [
+                ("rows_read", receipt.rows_read),
+                ("rows_written", receipt.rows_written),
+            ] {
+                if (self.store.accounting_bounds() != (0, 0)
+                    || amount > 0
+                    || receipt.unmeasured_operations > 0)
+                    && let Some(mut charge) = self.measured_charge(self.profile.charge(
+                        "d1",
+                        metric,
+                        amount as f64,
+                        &self.account,
+                        evidence,
+                        at,
+                    ))?
+                {
+                    if receipt.unmeasured_operations > 0 {
+                        charge.evidence = UsageEvidence::Unknown;
+                    }
+                    charges.push(charge);
+                }
             }
         }
         let mut merged = std::collections::BTreeMap::<String, BudgetCharge>::new();
@@ -214,6 +325,7 @@ impl ResourceBudget {
             if let Some(existing) = merged.get_mut(&charge.key) {
                 existing.amount += charge.amount;
                 existing.evidence = existing.evidence.max(charge.evidence);
+                existing.block_unknown |= charge.block_unknown;
             } else {
                 merged.insert(charge.key.clone(), charge);
             }
@@ -254,11 +366,9 @@ impl ResourceBudget {
         }
         let now = time::OffsetDateTime::now_utc().unix_timestamp();
         let outcome = if matches!(outcome, Settlement::Consume)
-            && reservation
-                .charges
-                .iter()
-                .any(|charge| charge.window.end.is_some_and(|end| end <= now))
-        {
+            && reservation.charges.iter().any(|charge| {
+                charge.amount > 0.0 && charge.window.end.is_some_and(|end| end <= now)
+            }) {
             Settlement::Uncertain
         } else {
             outcome
@@ -312,7 +422,7 @@ impl ResourceBudget {
         }
         let charges = match self
             .charges(service, metric, 1.0, evidence)
-            .and_then(|charges| self.with_accounting(charges, (0, 0), UsageEvidence::Exact))
+            .and_then(|charges| self.with_accounting(charges, &[], UsageEvidence::Exact, now()))
         {
             Ok(charges) => charges,
             Err(error) => return unavailable(error.to_string()),
@@ -320,6 +430,13 @@ impl ResourceBudget {
         let usage = match self.usage().await {
             Ok(usage) => usage,
             Err(error) => return unavailable(error.code().into()),
+        };
+        let unknown = |charge: &&BudgetCharge| {
+            charge.block_unknown
+                && (charge.evidence == UsageEvidence::Unknown
+                    || usage
+                        .iter()
+                        .any(|row| row.key == charge.key && row.evidence == UsageEvidence::Unknown))
         };
         let exhausted = |charge: &&BudgetCharge| {
             let consumed = usage
@@ -334,7 +451,8 @@ impl ResourceBudget {
             charge.action == AdmissionAction::Block
                 && consumed + reserved + charge.amount > charge.limit
         };
-        let failed = charges.iter().find(exhausted);
+        let unmeasured = charges.iter().find(unknown);
+        let failed = unmeasured.or_else(|| charges.iter().find(exhausted));
         let charge = failed.unwrap_or_else(|| {
             charges
                 .iter()
@@ -350,7 +468,14 @@ impl ResourceBudget {
             .sum::<f64>();
         AdmissionState {
             state: if failed.is_some() { "blocked" } else { "ready" }.into(),
-            reason: failed.map(|_| "quota_exhausted".into()),
+            reason: failed.map(|_| {
+                if unmeasured.is_some() {
+                    "usage_unknown"
+                } else {
+                    "quota_exhausted"
+                }
+                .into()
+            }),
             rule: Some(charge.rule.clone()),
             limit: Some(charge.limit),
             consumed: Some(consumed),
@@ -359,4 +484,28 @@ impl ResourceBudget {
             reset_at: charge.window.end,
         }
     }
+}
+
+fn now() -> i64 {
+    time::OffsetDateTime::now_utc().unix_timestamp()
+}
+
+fn pending(
+    usage: &[AccountingUsage],
+    accounted: &BTreeMap<i64, AccountingUsage>,
+) -> Vec<AccountingUsage> {
+    usage
+        .iter()
+        .filter_map(|row| {
+            let previous = accounted.get(&row.observed_at).copied().unwrap_or_default();
+            let delta = AccountingUsage {
+                observed_at: row.observed_at,
+                rows_read: row.rows_read - previous.rows_read,
+                rows_written: row.rows_written - previous.rows_written,
+                unmeasured_operations: row.unmeasured_operations - previous.unmeasured_operations,
+            };
+            (delta.rows_read > 0 || delta.rows_written > 0 || delta.unmeasured_operations > 0)
+                .then_some(delta)
+        })
+        .collect()
 }

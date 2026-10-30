@@ -6,7 +6,7 @@
 mod security;
 mod services;
 
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use brains_adapter_d1::D1Index;
 use brains_adapter_r2::R2ContentStore;
@@ -112,9 +112,17 @@ async fn build_state(
         limits.clone(),
         CursorSigner::new(cursor_key),
     );
-    services::configure(env, &mut vault, store)
-        .await
-        .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
+    if let Err(error) = services::configure(env, &mut vault, store).await {
+        if let Some(budget) = &vault.resources
+            && let Err(accounting) = budget.flush_accounting().await
+        {
+            return Err(Box::new(plain_error(
+                503,
+                &format!("resource accounting: {}", accounting.code()),
+            )));
+        }
+        return Err(Box::new(plain_error(500, &error.to_string())));
+    }
     let capabilities = {
         let mut capabilities = Capabilities::cloudflare_rust(
             brains_build_info::VERSION,
@@ -181,6 +189,26 @@ fn worker_semantics(env: &Env) -> brains_domain::SemanticCapability {
 
 #[worker::event(fetch)]
 async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse, worker::Error> {
+    let ctx = Rc::new(ctx);
+    let driver = ctx.clone();
+    let (send, receive) = futures::channel::oneshot::channel();
+    // Own execution and receipt acknowledgement independently of the response
+    // consumer. Disconnecting it never replays an operation or interrupts its
+    // commit/acknowledgement boundary while waitUntil remains alive.
+    ctx.wait_until(async move {
+        let result = serve(req, env, driver).await;
+        let _ = send.send(result);
+    });
+    receive
+        .await
+        .map_err(|_| worker::Error::RustError("request execution was terminated".into()))?
+}
+
+async fn serve(
+    req: HttpRequest,
+    env: Env,
+    ctx: Rc<Context>,
+) -> Result<FetchResponse, worker::Error> {
     let path = req.uri().path().to_owned();
     // /api, /api/* and /healthz are answered by the shared axum router
     // (healthz lives there too); anything else belongs to Static Assets.
@@ -305,7 +333,7 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
     let mut router = brains_api_http::routes::build_router(state);
     // `Router::call` is infallible: it resolves to the §11.3 error mapping
     // inside the shared axum layer.
-    let response = router.call(req).await?;
+    let response = router.call(req).await;
     if let Some(budget) = &budget
         && let Err(error) = budget.flush_accounting().await
     {
@@ -314,6 +342,7 @@ async fn fetch(req: HttpRequest, env: Env, ctx: Context) -> Result<FetchResponse
             &format!("resource accounting: {}", error.code()),
         ));
     }
+    let response = response?;
     if let Some(semantic) = semantic.filter(|_| mutated && response.status().is_success()) {
         ctx.wait_until(async move {
             let _ = semantic.reconcile(semantic.background_work(), 1).await;

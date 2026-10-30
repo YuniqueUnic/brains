@@ -51,6 +51,9 @@ async fn build_report(
             ("workers", "requests", brains_domain::resources::ProviderLimit::Allowance { .. })
             | ("r2", "class_a_operations" | "class_b_operations", _) => "attempt-admission",
             ("d1", "rows_read" | "rows_written", _) => "observed-and-ledger-admission",
+            ("d1", "storage", brains_domain::resources::ProviderLimit::Allowance { .. }) => {
+                "provider-snapshot"
+            }
             ("d1", "storage", brains_domain::resources::ProviderLimit::Ceiling { .. }) => {
                 "observed-watermark"
             }
@@ -76,6 +79,10 @@ async fn build_report(
         })
         .collect();
     let mut usage = control.usage.usage().await?;
+    for observation in &control.observations {
+        usage.retain(|item| item.key != observation.key);
+        usage.push(observation.clone());
+    }
     for item in &mut usage {
         if let Some(rule) = profile.rules.iter().find(|rule| rule.id == item.rule)
             && let Some(limit) = rule.effective_limit(&profile.policy)?

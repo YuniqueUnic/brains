@@ -34,6 +34,8 @@ VARIABLES = (
     "BRAINS_WORKER_CPU_MS",
     "BRAINS_WORKER_SUBREQUESTS",
     "BRAINS_WORKER_LOG_SAMPLE_RATE",
+    "BRAINS_RESOURCE_ACCOUNT",
+    "BRAINS_OBSERVATION_TTL_SECONDS",
     "BRAINS_MCP_WORKER_NAME",
     "BRAINS_MCP_HOSTNAME",
 )
@@ -104,7 +106,7 @@ def configure(env, repository, environment):
             )
             print(f"Configured secret {key}")
     values = {key: env[key] for key in VARIABLES if key in env}
-    for key in ("BRAINS_CLOUD_CONFIG", "BRAINS_RESOURCE_PROFILE"):
+    for key in ("BRAINS_CLOUD_CONFIG", "BRAINS_RESOURCE_PROFILE", "BRAINS_RESOURCE_OBSERVATIONS"):
         setting = structured_setting(env, key)
         if setting is not None:
             values[key] = json.dumps(setting, separators=(",", ":"))

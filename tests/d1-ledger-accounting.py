@@ -50,13 +50,11 @@ def conservation(before, after):
     groups = collections.defaultdict(list)
     for row in closing:
         groups[row["batch"]].append(row)
-    assert groups and all(len(rows) == 2 for rows in groups.values()), groups
+    assert groups and all(len(rows) >= 2 and len(rows) % 2 == 0 for rows in groups.values()), groups
     for metric, index, rule in (("rows_read", 0, "d1-reads"), ("rows_written", 1, "d1-writes")):
         allowance = 0
         for rows in groups.values():
-            known = rows[0]["sql"].startswith("UPDATE")
-            assert all(row["sql"].startswith("UPDATE") == known for row in rows)
-            bound = ((2, 2) if known else (4, 10))[index]
+            bound = sum(((1, 1) if row["sql"].startswith("UPDATE") else (2, 5))[index] for row in rows)
             assert sum(row[metric] for row in rows) <= bound, rows
             allowance += bound
         actual = sum(row[metric] for row in statements)

@@ -13,7 +13,7 @@ async fn closing_cost_requires_both_exact_window_keys() {
     for index in 0..2 {
         let mut mixed = existing.clone();
         mixed[index].key.push_str("-new-window");
-        assert_eq!(store.accounting_bounds_for(&mixed), (4, 10));
+        assert_eq!(store.accounting_bounds_for(&mixed), (3, 6));
     }
 
     let now = time::OffsetDateTime::now_utc().unix_timestamp();
