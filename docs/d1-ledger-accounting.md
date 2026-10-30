@@ -1,36 +1,53 @@
-# D1 ledger accounting measurement
+# D1 ledger receipt conservation
 
-## Workload and environment
+D1 application and bookkeeping statements record their returned `meta.rows_read` and `meta.rows_written`. The next ledger write carries unacknowledged bookkeeping receipts once. [PR #65](https://github.com/YuniqueUnic/brains/pull/65) removed the original per-call allowance; this follow-up removes the remaining worst-case closing allowance from requests whose counter rows are already known to exist.
 
-The baseline uses production source at `e606d223324c39498de243ea61c4dddd3d72e17f`. Both runs build the release Worker and execute the same 26 requests in a fresh isolated local workerd instance: three file creates, three updates, six raw reads, six index listings, four FTS searches, three hybrid searches and one resources report. The dated resource profile and its 80% policy are unchanged. Only the disposable instance's required billing dates are supplied through the settings API.
+## Closing paths
 
-The environment is macOS arm64, Rust 1.96.0, Node 24.22.1, pnpm 10.28.2, Wrangler 4.151.0 and worker-build 0.8.7, with Worker compatibility date `2026-10-19`. R2 and D1 use real local workerd bindings. Managed AI Search is a deterministic no-network fake; hybrid queries still execute the real D1 reservation and settlement statements.
+A successful debit returns the keys it materialized. The D1 store remembers those keys for the request lifetime, after metadata and result validation. A successful closing batch also establishes its keys. Final accounting resolves its window keys once, then selects one of two paths:
 
-`tests/fixtures/d1-ledger-worker.mjs` intercepts every application and bookkeeping D1 result once, including each result of a batch. The simulator returns usable integer `meta.rows_read` and `meta.rows_written`; these measurements do not substitute fake D1 costs. The wrapper waits for bounded background work before returning, so the comparison covers completed foreground and background scopes. An uninstrumented inspection query reads the settled ledger before and after the workload. Inspection, fixture setup and migrations are outside both deltas; usage tables are never cleared. The workload also calls the real `GET /api/v1/resources`, whose response is a snapshot before that request's final flush.
+| Evidence for the two resolved keys | Closing SQL | Closing bound |
+| --- | --- | --- |
+| Both were successfully materialized | Two primary-key UPDATEs of `consumed` and `evidence` | 2 reads / 2 writes |
+| Either key is unknown | Two point upserts | 4 reads / 10 writes |
 
-## Results
+The UPDATE touches no indexed column and has no table trigger. It avoids the rule-index rewrite performed by the upsert. The fallback covers fresh and partially existing rows, rejected admissions and work that has not successfully materialized both keys. Old-window keys do not prove new-window existence. Proof uses existing returned results, without another query, table or shared global cache. Native stores retain their zero-cost default.
 
-| Meter | Before: ledger / D1 metadata | Before ratio | After: ledger / D1 metadata | After ratio |
+The closing batch records pending receipts plus its own bound without recursively metering itself. Acknowledgement covers only the pre-write receipt snapshot and that batch's measured cost; concurrent receipts remain pending. An idle repeated flush issues no SQL. Evidence remains bounded because the final SQL cost is selected before that batch returns, even when the measured cost equals the selected bound.
+
+## Local before and after
+
+Baseline source is `187a53f3a4981a100c1af349334f5f1e867000fe` (0.8.3), rebuilt before the comparison. Both versions use macOS arm64, Rust 1.96.0, Node 24.22.1, pnpm 10.28.2, Wrangler 4.151.0 and worker-build 0.8.7, with compatibility date `2026-10-19`. Each run starts fresh isolated local workerd data with real D1/R2 bindings. Only managed AI Search is a deterministic no-network fake. The dated resource catalog and 80% policy are unchanged; required disposable billing dates are supplied through the settings API.
+
+The first workload has 26 requests: three creates, three updates, six raw reads, six index listings, four FTS searches, three hybrid searches and one resources report. Subsequent lightweight journeys use those same three notes and run before synthetic probes. The browser journey performs session lookup, a store listing, capabilities, raw file read, resources and one resources refresh.
+
+Every table cell is **ledger delta / sum of returned D1 metadata**:
+
+| Workload | Before reads | After reads | Before writes | After writes |
 | --- | --- | --- | --- | --- |
-| Rows written | 6,237 / 1,202 | 5.1889x | 1,316 / 1,124 | 1.1708x |
-| Rows read | 12,441 / 5,270 | 2.3607x | 4,716 / 4,652 | 1.0138x |
+| Mixed workload, 26 requests | 4,718 / 4,654 | 4,653 / 4,653 | 1,316 / 1,124 | 1,060 / 1,060 |
+| Resources report, 10 requests | 340 / 320 | 320 / 320 | 160 / 100 | 80 / 80 |
+| Capabilities, 10 requests | 410 / 390 | 390 / 390 | 160 / 100 | 80 / 80 |
+| Raw file, 10 requests | 1,290 / 1,270 | 1,270 / 1,270 | 340 / 280 | 260 / 260 |
+| Browser journey, 6 requests | 363 / 351 | 351 / 351 | 126 / 90 | 78 / 78 |
 
-The before workload executes 311 D1 statements. Baseline admission statements cost 20–31 reads and 4–9 writes each; the reservation batch's three statements cost 5–6 reads / 6–9 writes, 7 reads / 2 writes and 10 reads / 12 writes respectively. Settlement costs 23–24 reads and four writes. Exact metadata now covers those varying costs instead of adding 64 reads and 32 writes on every call.
+The mixed workload's write ratio improves from 1.1708x to 1.0000x; the lightweight resource-report ratio improves from 1.6000x to 1.0000x. All listed after paths have no surplus over their returned metadata. Time-dependent queue predicates can change read counts slightly between runs; each run must independently conserve its receipts.
 
-The after workload closes 32 scopes: 26 requests and six mutation-triggered background scopes. Its only over-count is the final batch bound: 64 extra reads and 192 extra writes across those 32 batches. For each meter, the regression asserts `ledger delta = sum(all statement metadata) - sum(final batch metadata) + closed scopes × final batch bound`. It also requires `actual <= ledger <= 2 × actual` for this fixed workload. Read totals can vary slightly with SQLite timing-dependent predicates; conservation and the stated ratio bound must hold on every run.
+The mixed workload closes 32 scopes: 26 requests and six bounded mutation-triggered background scopes. Their UPDATE batches cost 64 reads and 64 writes, exactly the included closing amount. This is not a universal exactness claim: the rejected-admission journey still measures ledger/actual 28/26 reads and 10/4 writes, while a simulated scheduled-query failure measures 18/16 reads and 10/4 writes. Those scopes lack successful key proofs and retain the conservative upsert path.
 
-The final batch consists of two direct primary-key upserts with no scan or trigger. Separate probes execute the production closing SQL after the workload, against fresh and then existing keys, with all real migration indexes installed:
+Separate production-SQL probes run after every business journey, with all real migration indexes installed:
 
-| Two-statement closing batch | Actual reads | Actual writes | Bound used |
+| Two-statement batch | Actual reads | Actual writes | Additional check |
 | --- | --- | --- | --- |
-| Fresh keys | 0 | 10 | 4 reads / 10 writes |
-| Existing keys | 2 | 4 | 4 reads / 10 writes |
+| Upsert, both keys fresh | 0 | 10 | Within fallback bound |
+| Upsert, both keys existing | 2 | 4 | Within fallback bound |
+| Upsert, either one key existing | 1 | 7 | Both directions tested |
+| UPDATE, both keys proven | 2 | 2 | Matches known-row bound |
+| UPDATE, both keys holding reservations | 2 | 2 | Reserved total remains 6 |
 
-A fresh row writes the table plus its primary-key, meter, reset and rule indexes; the held-reservation partial index excludes a fresh zero-reservation row. Two reads per point upsert leave a small lookup/conflict margin. The bound applies once per completed scope and the batch does not recursively meter itself. Repeated idle flushes issue no SQL. Any future change to these statements, indexes or triggers must remeasure this bound; CI exercises the fresh and existing paths.
+A fresh row writes its table and primary-key, meter, reset and rule indexes. A fresh zero-reservation row does not enter the held partial index. UPDATE modifies neither an index input nor reserved amounts. Future SQL, index, trigger or relevant runtime changes must remeasure these bounds.
 
-## Reproduce
-
-Build the web assets once if they are absent, then use the documented local simulation path. `scripts/run-workerd.py` generates an isolated configuration, applies `wrangler d1 migrations apply BRAINS_INDEX --local`, starts `wrangler dev --local`, supplies random local-only credentials and cleans up the processes. It strips cloud credentials and does not load the production dotenv file.
+## Reproduce and inspect
 
 ```bash
 pnpm --dir apps/web build
@@ -40,14 +57,18 @@ python3 scripts/run-workerd.py --entrypoint tests/fixtures/d1-ledger-worker.mjs 
 python3 scripts/run-workerd.py -- bash tests/worker-smoke.sh
 ```
 
-For a baseline comparison, build the baseline production source with the same fixture and use `--baseline --record /tmp/d1-ledger-before.json`. Keep each run's isolated data separate. Do not point this fixture or workload at a deployed Worker or a `cloud` CLI profile. Raw evidence contains SQL text but no bound arguments or credentials; it remains a local artifact.
+For the before measurement, build baseline production source with the same fixture and workload, adding `--baseline --record /tmp/d1-ledger-before.json`. Keep each run's isolated data separate. The runner generates its own configuration and local credentials, applies `wrangler d1 migrations apply BRAINS_INDEX --local`, starts `wrangler dev --local` and cleans up its processes. It strips cloud credentials and does not load the production dotenv file. Never point the fixture at a deployed Worker or cloud profile.
 
-The harness also checks read-only zero admissions, 404 responses, stale file writes, conflicting and successful settings updates, rejected request admission, scheduled reconciliation and a simulated reconciliation-query failure. Each completed journey must conserve all returned D1 receipts. Application unit tests use a store with known receipt costs to cover one final bound, concurrent receipts and acknowledgements, repeated flushes, rejected admissions, reservation release and native zero-cost defaults.
+The fixture intercepts every application and bookkeeping D1 result exactly once, including batch results. The simulator supplies usable integer metadata; no fake D1 costs are substituted. It waits for bounded background work and inspects settled ledger totals outside the measured SQL path. Setup, migrations and inspection SQL are excluded from both deltas; no usage table is cleared. The normal resources response is also captured, before that request's own final flush.
 
-## Limits and operational effect
+For each meter, the test requires `ledger delta = all statement metadata - closing statement metadata + sum(selected closing bounds)`, and separately requires `ledger delta >= all metadata`. Lightweight normal paths additionally require equality. The fixed mixed workload retains its upper bound of twice actual usage. The JSON record includes the fixed workload, all journey statements/deltas and closing probes. Raw SQL is retained locally without bound arguments or credentials.
 
-These results establish the local accounting relationship for the measured SQL and completed scopes. They do not measure real Cloudflare D1, production traffic, provider-wide usage or invoices. Cloudflare statement metadata and analytics remain the provider source of truth; account dashboards aggregate other databases and clients. See [dashboard comparison](cloudflare-quotas.md#compare-with-cloudflare-usage) and [Cloudflare's D1 row accounting](https://developers.cloudflare.com/d1/platform/pricing/).
+Unit tests use known-cost stores for sequential/concurrent receipts, closing-time arrivals, repeated flushes, zero checks, rejected admission, reservation release, partial key proofs, new-window keys and native defaults. Runtime journeys cover normal reads, browser flow, 404, stale writes, settings conflicts/save, 429 and scheduled success/failure.
 
-There is no schema or data migration. Existing inflated totals remain until their original windows reset. No usage table, resource rule, limit or 80% fraction changes. Observing already-completed work can exceed an application cap by its measured cost and closing bound; it does not authorize new work or repeat a provider attempt. Unknown-charge and exhaustion policies, atomic multi-meter admission and release-only-uncharged settlement remain in place.
+## Operational boundaries
 
-Pre-existing gaps remain outside this fix: state construction can fail after its initial settings query and before a budget exists; runtime cancellation, a failed final D1 write or termination of `waitUntil` work can prevent completion; receipts pending across a UTC boundary are assigned to the flush window. The local fixture intentionally waits for background completion and does not prove durable accounting under those failures. The ledger is application admission control, not an account-wide zero-overage guarantee.
+These are local completed-scope measurements, not a real Cloudflare D1 billing comparison or production load test. A dashboard snapshot cannot by itself isolate duplicate accounting: align the UTC window, time cutoff, database/producer scope and metric. Cloudflare account summaries include all databases; this application ledger does not import them. See [dashboard comparison](cloudflare-quotas.md#compare-with-cloudflare-usage) and [Cloudflare D1 metrics](https://developers.cloudflare.com/d1/observability/metrics-analytics/).
+
+No schema or data migration is needed. Existing inflated totals remain until their original windows reset. No limits, rules, fraction or usage tables change. Already-completed I/O can exceed an application cap slightly before later admission rejects work; the implementation neither raises the cap nor retries provider attempts to conceal that result.
+
+Pre-existing gaps remain outside this change: initial state construction can fail before a budget exists; cancellation, final D1 failure or background termination can prevent finalization; pending receipts crossing UTC rollover are assigned to the flush window; the application-query adapter still treats missing metadata as unmeasured/zero. No new account-wide billing guarantee follows from the successful local cases.

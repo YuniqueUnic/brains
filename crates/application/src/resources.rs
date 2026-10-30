@@ -167,16 +167,21 @@ impl ResourceBudget {
         if usage == *accounted {
             return Ok(());
         }
-        let bound = self.store.accounting_bounds();
-        // Resolve one window for both the pending receipt and the closing bound.
-        let charges = self.with_accounting(
+        // Freeze the keys before choosing the closing cost: an old window's
+        // materialized rows do not establish that the new window exists.
+        let mut charges = self.with_accounting(
             vec![],
-            (
-                usage.0 - accounted.0 + bound.0,
-                usage.1 - accounted.1 + bound.1,
-            ),
+            (usage.0 - accounted.0, usage.1 - accounted.1),
             UsageEvidence::Bounded,
         )?;
+        let bound = self.store.accounting_bounds_for(&charges);
+        for charge in &mut charges {
+            charge.amount += match charge.measure.metric.as_str() {
+                "rows_read" => bound.0,
+                "rows_written" => bound.1,
+                _ => 0,
+            } as f64;
+        }
         let closing_cost = self.store.flush_accounting(&charges).await?;
         // A background operation may have completed during this write. Only
         // acknowledge the closing write's own receipt, not a newer snapshot.

@@ -97,7 +97,16 @@ export default {
     if (path.startsWith("/_ledger/")) {
       if (!await isAdmin(request, original)) return new Response("unauthorized", { status: 401 });
       if (path === "/_ledger/probe-closing") {
-        const { sql, charges } = await request.json();
+        const { sql, charges, seedSql, seed = [], held = false } = await request.json();
+        if (seed.length) {
+          await original.BRAINS_INDEX.batch(seed.map(charge =>
+            original.BRAINS_INDEX.prepare(seedSql).bind(JSON.stringify(charge))));
+          if (held) {
+            await original.BRAINS_INDEX.batch(seed.map(charge => original.BRAINS_INDEX.prepare(
+              "UPDATE resource_usage SET reserved=3 WHERE key=?1",
+            ).bind(charge.key)));
+          }
+        }
         const execute = () => original.BRAINS_INDEX.batch(charges.map(charge =>
           original.BRAINS_INDEX.prepare(sql).bind(JSON.stringify(charge))));
         const fresh = await execute();
@@ -106,7 +115,10 @@ export default {
           rows_read: results.reduce((sum, result) => sum + result.meta.rows_read, 0),
           rows_written: results.reduce((sum, result) => sum + result.meta.rows_written, 0),
         });
-        return Response.json({ fresh: costs(fresh), existing: costs(existing) });
+        const reserved = await original.BRAINS_INDEX.prepare(
+          "SELECT SUM(reserved) AS held FROM resource_usage WHERE key IN (SELECT json_extract(value,'$.key') FROM json_each(?1))",
+        ).bind(JSON.stringify(charges)).first("held");
+        return Response.json({ fresh: costs(fresh), existing: costs(existing), reserved });
       }
       if (path === "/_ledger/tick") {
         failReconcile = new URL(request.url).searchParams.has("fail");

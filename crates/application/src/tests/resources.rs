@@ -6,6 +6,8 @@ use futures::future::BoxFuture;
 
 use crate::resources::ResourceBudget;
 
+mod closing_windows;
+
 #[derive(Default)]
 struct RecordedUsage {
     observations: Mutex<Vec<BudgetCharge>>,
@@ -210,6 +212,19 @@ impl UsageStore for MeasuredUsage {
         self.state.lock().unwrap().accounting
     }
 
+    fn accounting_bounds_for(&self, charges: &[BudgetCharge]) -> (u64, u64) {
+        let state = self.state.lock().unwrap();
+        if charges.len() == 2
+            && charges
+                .iter()
+                .all(|charge| state.charges.iter().any(|row| row.key == charge.key))
+        {
+            (2, 2)
+        } else {
+            self.accounting_bounds()
+        }
+    }
+
     fn check<'a>(&'a self, charges: &'a [BudgetCharge]) -> BoxFuture<'a, DomainResult<()>> {
         Box::pin(async move {
             let mut state = self.state.lock().unwrap();
@@ -282,7 +297,12 @@ impl UsageStore for MeasuredUsage {
         charges: &'a [BudgetCharge],
     ) -> BoxFuture<'a, DomainResult<(u64, u64)>> {
         Box::pin(async move {
-            let cost = (2, if self.fresh_closing { 10 } else { 4 });
+            let bound = self.accounting_bounds_for(charges);
+            let cost = if bound == (2, 2) {
+                bound
+            } else {
+                (2, if self.fresh_closing { 10 } else { 4 })
+            };
             let mut state = self.state.lock().unwrap();
             assert_eq!(charges.len(), 2);
             assert!(charges.iter().all(|c| c.evidence == UsageEvidence::Bounded));
@@ -345,7 +365,7 @@ async fn measured_query_sequence_counts_receipts_once_and_closes_with_one_bound(
     budget.flush_accounting().await.unwrap();
     let real = store.real();
     let ledger = store.ledger();
-    assert_eq!(ledger, (real.0 + 4 - 2, real.1 + 10 - 4));
+    assert_eq!(ledger, real);
     assert!(ledger.0 >= real.0 && ledger.0 <= 2 * real.0);
     assert!(ledger.1 >= real.1 && ledger.1 <= 2 * real.1);
     let state = store.state.lock().unwrap();
@@ -403,10 +423,7 @@ async fn receipt_arriving_during_closing_remains_pending() {
     budget.flush_accounting().await.unwrap();
     budget.flush_accounting().await.unwrap();
     let real = store.real();
-    assert_eq!(
-        store.ledger(),
-        (real.0 + 2 * (4 - 2), real.1 + 2 * (10 - 4))
-    );
+    assert_eq!(store.ledger(), (real.0 + 4 - 2, real.1 + 10 - 4));
     budget.flush_accounting().await.unwrap();
     assert_eq!(store.state.lock().unwrap().flushes, 2);
 }
@@ -429,7 +446,7 @@ async fn concurrent_completed_queries_do_not_duplicate_bookkeeping_receipts() {
     }
     budget.flush_accounting().await.unwrap();
     let real = store.real();
-    assert_eq!(store.ledger(), (real.0 + 4 - 2, real.1 + 10 - 4));
+    assert_eq!(store.ledger(), real);
 }
 
 #[tokio::test]
@@ -484,7 +501,7 @@ async fn released_provider_reservation_never_refunds_bookkeeping() {
         .unwrap();
     budget.flush_accounting().await.unwrap();
     let real = store.real();
-    assert_eq!(store.ledger(), (real.0 + 4 - 2, real.1 + 10 - 4));
+    assert_eq!(store.ledger(), real);
     assert_eq!(
         store.state.lock().unwrap().consumed("semantic_queries"),
         0.0

@@ -44,17 +44,24 @@ def consumed(snapshot, rule):
 
 def conservation(before, after):
     statements = after["measurements"]
-    closing = [row for row in statements if row["sql"].startswith("INSERT INTO resource_usage")
-               and "VALUES (" in row["sql"]]
+    closing = [row for row in statements if (
+        row["sql"].startswith("INSERT INTO resource_usage") and "VALUES (" in row["sql"]
+    ) or row["sql"].startswith("UPDATE resource_usage SET consumed=consumed+")]
     groups = collections.defaultdict(list)
     for row in closing:
         groups[row["batch"]].append(row)
     assert groups and all(len(rows) == 2 for rows in groups.values()), groups
-    for metric, bound, rule in (("rows_read", 4, "d1-reads"), ("rows_written", 10, "d1-writes")):
-        assert all(sum(row[metric] for row in rows) <= bound for rows in groups.values()), groups
+    for metric, index, rule in (("rows_read", 0, "d1-reads"), ("rows_written", 1, "d1-writes")):
+        allowance = 0
+        for rows in groups.values():
+            known = rows[0]["sql"].startswith("UPDATE")
+            assert all(row["sql"].startswith("UPDATE") == known for row in rows)
+            bound = ((2, 2) if known else (4, 10))[index]
+            assert sum(row[metric] for row in rows) <= bound, rows
+            allowance += bound
         actual = sum(row[metric] for row in statements)
         delta = consumed(after, rule) - consumed(before, rule)
-        expected = actual - sum(row[metric] for row in closing) + len(groups) * bound
+        expected = actual - sum(row[metric] for row in closing) + allowance
         assert delta == expected, (metric, delta, expected, actual)
         assert delta >= actual
     return len(groups)
@@ -121,26 +128,40 @@ else:
     checks = [row for row in after["measurements"] if row["sql"].endswith("AS allowed;")]
     assert checks and all(row["rows_written"] == 0 for row in checks)
 
-    # Exercise the same terminal SQL against fresh and existing keys, including
-    # all indexes from the real migrations. Probes are outside the workload.
-    sql = (Path(__file__).resolve().parent.parent / "crates/adapter-d1/src/sql/accounting.sql").read_text()
-    charges = [{"key": "closing-probe-" + uuid.uuid4().hex, "meter": "probe-" + metric,
-                "rule": "probe-" + metric, "measure": {"metric": metric, "unit": "row"},
-                "amount": 0, "limit": 100, "window": {"start": 0, "end": 4102444800},
-                "evidence": "bounded", "action": "observe", "mode": "increment"}
-               for metric in ("rows_read", "rows_written")]
-    report["closing_cost_probe"] = request("POST", "/_ledger/probe-closing", {"sql": sql, "charges": charges})
-    for cost in report["closing_cost_probe"].values():
-        assert cost["rows_read"] <= 4 and cost["rows_written"] <= 10, cost
 
-    def journey(label, operation):
-        initial = request("GET", "/_ledger/start")
-        operation()
-        final = request("GET", "/_ledger/snapshot")
-        conservation(initial, final)
-        print(label + ": receipt conservation PASS", flush=True)
-        return initial, final
+report["journeys"] = {}
+def journey(label, operation):
+    initial = request("GET", "/_ledger/start")
+    operation()
+    final = request("GET", "/_ledger/snapshot")
+    closed = conservation(initial, final) if not args.baseline else None
+    report["journeys"][label] = {
+        "closed_scopes": closed, "statements": final["measurements"],
+        "metrics": {metric: {
+            "ledger": consumed(final, rule) - consumed(initial, rule),
+            "actual": sum(row[metric] for row in final["measurements"]),
+        } for metric, rule in (("rows_read", "d1-reads"), ("rows_written", "d1-writes"))},
+    }
+    print(label + (": baseline recorded" if args.baseline else ": receipt conservation PASS"), flush=True)
+    return initial, final
 
+for label, path in (("resource report", "/api/v1/resources"),
+                    ("capabilities", "/api/v1/capabilities"),
+                    ("raw file", "/api/v1/file?path=ledger/note-0.md")):
+    initial, final = journey(label + " x10", lambda path=path: [request("GET", path) for _ in range(10)])
+    if not args.baseline:
+        for metric, rule in (("rows_read", "d1-reads"), ("rows_written", "d1-writes")):
+            assert consumed(final, rule) - consumed(initial, rule) == sum(row[metric] for row in final["measurements"])
+
+def browser_read():
+    request("GET", "/api/v1/session")
+    request("POST", "/api/v1/files/query", {"source": "store", "include_deleted": True, "limit": 100})
+    for path in ("/api/v1/capabilities", "/api/v1/file?path=ledger/note-0.md", "/api/v1/resources", "/api/v1/resources"):
+        request("GET", path)
+journey("browser open, file and usage refresh", browser_read)
+
+
+if not args.baseline:
     journey("router error", lambda: request("GET", "/api/v1/does-not-exist", expected=404))
     journey("stale file write", lambda: request("PUT", "/api/v1/file?path=ledger/note-0.md", b"stale",
                                                {"Content-Type": "text/markdown", "If-Match": '"' + "0" * 32 + '"'}, expected=412))
@@ -165,7 +186,38 @@ else:
         initial, final = journey("scheduled reconciliation" + suffix,
                                  lambda suffix=suffix: request("POST", "/_ledger/tick" + suffix, {}))
         assert consumed(initial, "worker-requests") == consumed(final, "worker-requests")
-    if args.record:
-        args.record.write_text(json.dumps(report, indent=2) + "\n")
+    # Exercise the same terminal SQL against fresh and existing keys, including
+    # all indexes from the real migrations. Probes are outside the workload.
+    sql = (Path(__file__).resolve().parent.parent / "crates/adapter-d1/src/sql/accounting.sql").read_text()
+    charges = [{"key": "closing-probe-" + uuid.uuid4().hex, "meter": "probe-" + metric,
+                "rule": "probe-" + metric, "measure": {"metric": metric, "unit": "row"},
+                "amount": 0, "limit": 100, "window": {"start": 0, "end": 4102444800},
+                "evidence": "bounded", "action": "observe", "mode": "increment"}
+               for metric in ("rows_read", "rows_written")]
+    report["closing_cost_probe"] = request("POST", "/_ledger/probe-closing", {"sql": sql, "charges": charges})
+    for cost in (report["closing_cost_probe"]["fresh"], report["closing_cost_probe"]["existing"]):
+        assert cost["rows_read"] <= 4 and cost["rows_written"] <= 10, cost
+
+    update_sql = (Path(__file__).resolve().parent.parent / "crates/adapter-d1/src/sql/accounting-update.sql").read_text()
+    report["mixed_closing_probes"] = []
+    for index in (0, 1):
+        mixed = [{**charge, "key": "mixed-" + uuid.uuid4().hex} for charge in charges]
+        result = request("POST", "/_ledger/probe-closing", {
+            "sql": sql, "charges": mixed, "seedSql": sql, "seed": [mixed[index]],
+        })
+        assert result["fresh"]["rows_read"] <= 4 and result["fresh"]["rows_written"] <= 10, result
+        report["mixed_closing_probes"].append(result)
+    report["known_closing_probes"] = []
+    for held in (False, True):
+        known = [{**charge, "key": "known-" + uuid.uuid4().hex} for charge in charges]
+        result = request("POST", "/_ledger/probe-closing", {
+            "sql": update_sql, "charges": known, "seedSql": sql, "seed": known, "held": held,
+        })
+        assert result["fresh"] == result["existing"] == {"rows_read": 2, "rows_written": 2}, result
+        assert result["reserved"] == (6 if held else 0), result
+        report["known_closing_probes"].append(result)
+
     print(json.dumps({"closing_cost_probe": report["closing_cost_probe"], "closed_scopes": report["closed_scopes"]}))
+if args.record:
+    args.record.write_text(json.dumps(report, indent=2) + "\n")
 print("D1 ledger workload: PASS", flush=True)
