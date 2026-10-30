@@ -36,6 +36,11 @@ pub trait UsageStore: Send + Sync {
     fn accounting_bounds(&self) -> (u64, u64) {
         (0, 0)
     }
+    /// Closing cost for these resolved keys. Stores may use a smaller bound
+    /// when successful statements have already established the rows exist.
+    fn accounting_bounds_for(&self, _charges: &[BudgetCharge]) -> (u64, u64) {
+        self.accounting_bounds()
+    }
     /// Cumulative measured bookkeeping rows for this store's request lifetime.
     fn accounting_usage(&self) -> (u64, u64) {
         (0, 0)
@@ -46,7 +51,7 @@ pub trait UsageStore: Send + Sync {
         self.debit(charges)
     }
     /// Persist the remaining accounting charge and return this write's own
-    /// measured cost. It must fit accounting_bounds to close without recursion.
+    /// measured cost. It must fit accounting_bounds_for to close without recursion.
     fn flush_accounting<'a>(
         &'a self,
         charges: &'a [BudgetCharge],

@@ -83,8 +83,9 @@ request("POST", "/api/v1/files/query", {"source": "store", "prefix": "empty/", "
 after = control()
 assert consumed(after, "r2-class-b") == consumed(before, "r2-class-b")
 # This fixed empty-page journey has 15 measured bookkeeping writes plus one
-# ten-write closing bound. A phantom zero-read debit would add another write.
-assert consumed(after, "d1-writes") - consumed(before, "d1-writes") == 25
+# two-write closing bound for the confirmed existing rows. A phantom zero-read
+# debit would add another write.
+assert consumed(after, "d1-writes") - consumed(before, "d1-writes") == 17
 print("empty authoritative page: no phantom R2 read or redundant ledger write", flush=True)
 
 put("cost/live.md", "# Live source\nVersioned content remains authoritative.")

@@ -5,11 +5,17 @@ use wasm_bindgen::JsValue;
 use worker::{D1Database, send::SendFuture};
 
 use super::{D1Accounting, index_err, query_rows};
-use std::sync::Arc;
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
+};
+
+const EXISTING_ROWS_BOUND: (u64, u64) = (2, 2);
 
 pub struct D1UsageStore {
     db: D1Database,
     accounting: Arc<D1Accounting>,
+    persisted_keys: Mutex<BTreeSet<String>>,
 }
 
 impl D1UsageStore {
@@ -17,6 +23,7 @@ impl D1UsageStore {
         Self {
             db,
             accounting: Arc::default(),
+            persisted_keys: Mutex::default(),
         }
     }
 
@@ -55,6 +62,15 @@ impl UsageStore for D1UsageStore {
         (4, 10)
     }
 
+    fn accounting_bounds_for(&self, charges: &[BudgetCharge]) -> (u64, u64) {
+        if self.closing_rows_exist(charges) {
+            // Two primary-key updates of unindexed values; no index writes.
+            EXISTING_ROWS_BOUND
+        } else {
+            self.accounting_bounds()
+        }
+    }
+
     fn accounting_usage(&self) -> (u64, u64) {
         self.accounting.usage()
     }
@@ -91,13 +107,18 @@ impl UsageStore for D1UsageStore {
         charges: &'a [BudgetCharge],
     ) -> BoxFuture<'a, DomainResult<(u64, u64)>> {
         Box::pin(SendFuture::new(async move {
+            let sql = if self.closing_rows_exist(charges) {
+                include_str!("sql/accounting-update.sql")
+            } else {
+                include_str!("sql/accounting.sql")
+            };
             let mut statements = Vec::new();
             for charge in charges {
                 let json = serde_json::to_string(charge)
                     .map_err(|error| DomainError::Internal(error.to_string()))?;
                 statements.push(
                     self.db
-                        .prepare(include_str!("sql/accounting.sql"))
+                        .prepare(sql)
                         .bind(&[JsValue::from_str(&json)])
                         .map_err(|error| index_err("final accounting", error))?,
                 );
@@ -121,6 +142,10 @@ impl UsageStore for D1UsageStore {
                     ));
                 }
             }
+            self.persisted_keys
+                .lock()
+                .expect("D1 persisted keys")
+                .extend(charges.iter().map(|charge| charge.key.clone()));
             Ok(cost)
         }))
     }
@@ -225,6 +250,11 @@ impl UsageStore for D1UsageStore {
 }
 
 impl D1UsageStore {
+    fn closing_rows_exist(&self, charges: &[BudgetCharge]) -> bool {
+        let keys = self.persisted_keys.lock().expect("D1 persisted keys");
+        charges.len() == 2 && charges.iter().all(|charge| keys.contains(&charge.key))
+    }
+
     async fn exhausted(&self, charges: &[BudgetCharge]) -> DomainResult<()> {
         let usage = self.usage().await?;
         for charge in charges {
@@ -276,14 +306,22 @@ impl D1UsageStore {
                     .unwrap_or_else(|| "usage debit failed".into()),
             ));
         }
+        #[derive(serde::Deserialize)]
+        struct Applied {
+            key: String,
+        }
         let applied = result
-            .results::<serde_json::Value>()
+            .results::<Applied>()
             .map_err(|e| index_err("usage debit result", e))?;
         if applied.len() != charges.len() {
             return Err(self.exhausted(charges).await.err().unwrap_or_else(|| {
                 DomainError::Internal("quota transaction applied a partial charge set".into())
             }));
         }
+        self.persisted_keys
+            .lock()
+            .expect("D1 persisted keys")
+            .extend(applied.into_iter().map(|row| row.key));
         Ok(())
     }
 }
