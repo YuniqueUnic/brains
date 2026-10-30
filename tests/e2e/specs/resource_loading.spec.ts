@@ -10,6 +10,9 @@ describe("on-demand resource settings", () => {
       await page.setViewportSize({ width, height: 900 });
       actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
       await actor.attemptsTo(SignIn());
+      const capabilities = await CallBrainsApi.as(actor).get("capabilities");
+      expect(capabilities.ok).toBe(true);
+      const supportsResources = Boolean((await capabilities.json()).features.resource_policy);
       let reads = 0;
       page.on("request", request => {
         if (request.method() === "GET" && new URL(request.url()).pathname === "/api/v1/resources") reads++;
@@ -21,7 +24,8 @@ describe("on-demand resource settings", () => {
       expect(reads).toBe(0);
       const resourceTab = page.getByRole("tab", { name: "用量与额度", exact: true });
       // Native profiles have no resource control. They still must not fetch it.
-      if (await resourceTab.count() === 0) return;
+      if (!supportsResources) { await expect(resourceTab).toHaveCount(0); return; }
+      await expect(resourceTab).toBeVisible();
       await resourceTab.click();
       await expect(page.getByTestId("resource-settings-body")).toBeVisible();
       expect(reads).toBe(1);
@@ -61,6 +65,9 @@ describe("on-demand resource settings", () => {
       await page.addInitScript(language => localStorage.setItem("brains-lang", language), example.language);
       actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
       await actor.attemptsTo(SignIn());
+      const capabilities = await CallBrainsApi.as(actor).get("capabilities");
+      expect(capabilities.ok).toBe(true);
+      const supportsResources = Boolean((await capabilities.json()).features.resource_policy);
       let expired = false;
       await page.route("**/api/v1/resources", async route => {
         const response = await route.fetch();
@@ -77,7 +84,8 @@ describe("on-demand resource settings", () => {
       });
       await page.getByTestId("open-settings").click();
       const tab = page.getByRole("tab", { name: example.tab, exact: true });
-      if (await tab.count() === 0) return;
+      if (!supportsResources) { await expect(tab).toHaveCount(0); return; }
+      await expect(tab).toBeVisible();
       await tab.click();
       await page.getByLabel(example.language === "en" ? "Filter by service" : "按服务筛选", { exact: true }).selectOption("d1");
       const row = page.getByTestId("resource-rule-d1-account-storage");
@@ -101,6 +109,9 @@ describe("on-demand resource settings", () => {
   it("ignores a delayed response from a closed settings dialog", async ({ actor, page }) => {
     actor.whoCan(CallBrainsApi.using(Instance.baseUrl, Instance.token));
     await actor.attemptsTo(SignIn());
+    const capabilities = await CallBrainsApi.as(actor).get("capabilities");
+    expect(capabilities.ok).toBe(true);
+    const supportsResources = Boolean((await capabilities.json()).features.resource_policy);
     let release!: () => void;
     const held = new Promise<void>(resolve => { release = resolve; });
     let arrived!: () => void;
@@ -120,7 +131,8 @@ describe("on-demand resource settings", () => {
     try {
       await page.getByTestId("open-settings").click();
       const tab = page.getByRole("tab", { name: "用量与额度", exact: true });
-      if (await tab.count() === 0) return;
+      if (!supportsResources) { await expect(tab).toHaveCount(0); return; }
+      await expect(tab).toBeVisible();
       await tab.click();
       await started;
       await expect(page.getByTestId("settings-dialog").getByRole("status")).toContainText("正在加载用量与额度");
