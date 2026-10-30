@@ -23,6 +23,14 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.8.4](https://github.com/YuniqueUnic/brains/compare/v0.8.3...v0.8.4) (2026-10-30)
+
+
+### Bug Fixes
+
+* **resources:** bound D1 closing cost by materialized rows ([1da5459](https://github.com/YuniqueUnic/brains/commit/1da5459cc2731182ea40b4564d5f8ec556e2c84c))
+* **resources:** finalize D1 receipts across failures and UTC windows ([ef9487b](https://github.com/YuniqueUnic/brains/commit/ef9487bb365f4a5583afbc9f1dfe211fa2000a0e))
+
 ## [0.8.3](https://github.com/YuniqueUnic/brains/compare/v0.8.2...v0.8.3) (2026-10-29)
 
 
