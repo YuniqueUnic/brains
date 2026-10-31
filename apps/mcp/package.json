@@ -16,6 +16,6 @@
     "@modelcontextprotocol/client": "2.4.0",
     "@types/node": "^22.0.0",
     "typescript": "~6.0.3",
-    "wrangler": "^4.151.0"
+    "wrangler": "^4.154.0"
   }
 }
