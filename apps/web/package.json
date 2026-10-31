@@ -20,7 +20,7 @@
     "@codemirror/search": "^6.7.2",
     "@codemirror/state": "^6.5.2",
     "@codemirror/view": "^6.36.8",
-    "@lezer/common": "^1.5.3",
+    "@lezer/common": "^1.5.4",
     "@lezer/highlight": "^1.2.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
