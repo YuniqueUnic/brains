@@ -745,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "brains-adapter-cloudflare"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-adapter-d1",
  "brains-adapter-r2",
@@ -765,7 +765,7 @@ dependencies = [
 
 [[package]]
 name = "brains-adapter-convert"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-domain",
  "brains-ports",
@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "brains-adapter-d1"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-application",
  "brains-domain",
@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "brains-adapter-fs"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-domain",
  "brains-ports",
@@ -810,7 +810,7 @@ dependencies = [
 
 [[package]]
 name = "brains-adapter-r2"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-application",
  "brains-domain",
@@ -824,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "brains-adapter-turso"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-domain",
  "brains-ports",
@@ -836,7 +836,7 @@ dependencies = [
 
 [[package]]
 name = "brains-api-http"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "async-trait",
  "axum",
@@ -861,7 +861,7 @@ dependencies = [
 
 [[package]]
 name = "brains-api-types"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-domain",
  "serde",
@@ -870,7 +870,7 @@ dependencies = [
 
 [[package]]
 name = "brains-application"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-adapter-fs",
  "brains-adapter-turso",
@@ -893,11 +893,11 @@ dependencies = [
 
 [[package]]
 name = "brains-build-info"
-version = "0.9.0"
+version = "0.9.1"
 
 [[package]]
 name = "brains-cli"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -928,7 +928,7 @@ dependencies = [
 
 [[package]]
 name = "brains-client"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-adapter-convert",
  "brains-api-types",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "brains-domain"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "base64 0.23.1",
  "getrandom 0.4.3",
@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "brains-format"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-domain",
  "pulldown-cmark",
@@ -986,7 +986,7 @@ dependencies = [
 
 [[package]]
 name = "brains-local"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-adapter-fs",
  "brains-adapter-turso",
@@ -997,7 +997,7 @@ dependencies = [
 
 [[package]]
 name = "brains-ports"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "brains-domain",
  "brains-format",
@@ -1010,7 +1010,7 @@ dependencies = [
 
 [[package]]
 name = "brains-sdk"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1019,7 +1019,7 @@ dependencies = [
 
 [[package]]
 name = "brains-server"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "axum",
  "brains-adapter-convert",
@@ -1047,7 +1047,7 @@ dependencies = [
 
 [[package]]
 name = "brains-worker"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "axum",
  "base64 0.23.1",

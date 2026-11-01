@@ -23,6 +23,13 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.9.1](https://github.com/YuniqueUnic/brains/compare/v0.9.0...v0.9.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **web:** expose token and session controls in demo and account menu ([#84](https://github.com/YuniqueUnic/brains/issues/84)) ([4dd07f2](https://github.com/YuniqueUnic/brains/commit/4dd07f2135a65937643144edcbdd192e27550cd0))
+
 ## [0.9.0](https://github.com/YuniqueUnic/brains/compare/v0.8.4...v0.9.0) (2026-11-01)
 
 
