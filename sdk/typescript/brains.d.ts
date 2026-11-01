@@ -368,6 +368,10 @@ export namespace brains {
     export interface OkResult {
         ok: boolean;
     }
+    export interface TokenRotationInput {
+        current_token: string;
+        replacement_token: string;
+    }
     export interface PatchEdit {
         old_text: string;
         new_text: string;

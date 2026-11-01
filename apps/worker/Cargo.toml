@@ -26,6 +26,8 @@ serde.workspace = true
 serde_json.workspace = true
 tower.workspace = true
 sha2.workspace = true
+time.workspace = true
+wasm-bindgen = "0.2"
 worker = { version = "=0.8.7", features = ["axum", "http", "d1"] }
 
 [package.metadata.wasm-pack.profile.release]

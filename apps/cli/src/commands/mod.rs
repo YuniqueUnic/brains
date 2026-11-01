@@ -1,5 +1,6 @@
 //! CLI command handlers, grouped by user task.
 
+pub(crate) mod auth;
 pub(crate) mod check;
 pub(crate) mod checkpoint;
 pub(crate) mod convert;

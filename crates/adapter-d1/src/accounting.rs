@@ -20,7 +20,7 @@ impl D1Accounting {
             .collect()
     }
 
-    pub(crate) fn unmeasured(&self, observed_at: i64) {
+    pub fn unmeasured(&self, observed_at: i64) {
         let mut rows = self.rows.lock().expect("D1 accounting lock");
         rows.entry(observed_at)
             .or_insert(AccountingUsage {

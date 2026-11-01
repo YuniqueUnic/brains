@@ -36,7 +36,7 @@ Try the [browser demo](https://YuniqueUnic.github.io/brains/). No account or ser
 - **Delete is a tombstone; restore is a new revision.** Generations only move forward. Nothing is ever destroyed by accident, and the history panel can bring any contentful revision back.
 - **Local and cloud profiles sync in both directions.** `bsx sync` uses per-file revision bases and CAS, merges non-overlapping text edits, and leaves divergent files untouched for an explicit resolution.
 - **Portable current files and complete reachable history.** `bsx import/export` moves readable working trees; `--format archive` preserves reachable revisions and blobs across FS/Turso and R2/D1. `profile use --verify-with` validates content and the rebuilt index before selecting the daily profile. See the [portable workflow](docs/portable-workflow.md) for the different guarantees, resumable failures, shell completion and Git-aware build versions.
-- **The on-disk layout is the backup.** `vaults/{vault}/heads|revisions|blobs` — copy the directory and you have a complete raw backup; the index (Turso/D1) is a rebuildable projection you can delete at any time.
+- **Portable content and explicit runtime state.** `vaults/{vault}/heads|revisions|blobs` preserves content and revision history. File indexes are rebuildable; credentials and runtime settings require their own backup. On Cloudflare, keep the D1 security and resource tables as well as R2 content. See [security and recovery](docs/security.md).
 - **One HTTP contract, three clients.** The Web app, remote CLI and `curl`/agents speak the same versioned REST API; standalone CLI calls the same application layer directly, backed by the same axum layer on both runtimes.
 - **Bounded everything.** Literal-scan windows never fake a complete search; a lost index degrades loudly (`503` / `building`), and oversized text is stored but never indexed.
 
@@ -94,13 +94,15 @@ standalone use, server handoff and multiple servers. One process owns a data
 directory at a time: while a server owns it, access it through a remote profile.
 See the [runbook](docs/runbook.md) for server startup, auth, backups and recovery.
 
+Remote credentials can be changed with `bsx --profile cloud auth rotate-token --stdin-token` or Settings → Security. `bsx --profile cloud auth logout-all` ends browser sessions while preserving the bearer token. See [token rotation, session revocation and recovery](docs/security.md).
+
 ## Cloudflare local simulation (no cloud account needed)
 
 For a real Cloudflare deployment, use the [dotenv and GitHub Actions deployment guide](docs/cloudflare.md). Local and Actions deployments share one entry point. Optional cloud conversion, URL import, quota admission and managed semantic retrieval use the same protected API; see [cloud architecture](docs/cloudflare-ai-plan.md).
 
 Review [cost amplification and controls](docs/cloudflare-cost-safety.md) before enabling managed services or increasing limits. It covers reported billing incidents, authentication before metered work, bounded scans, failed-job recovery and the limits of application accounting.
 
-The same axum layer runs as a Worker over R2 (content) + D1 (rebuildable index). `wrangler dev` executes it in a local workerd with simulated R2/D1 — the protocol behavior is the production behavior:
+The same axum layer runs as a Worker over R2 (content) + D1 (file index and persistent runtime state). `wrangler dev` executes it in a local workerd with simulated R2/D1 — the protocol behavior is the production behavior:
 
 ```bash
 rustup target add wasm32-unknown-unknown

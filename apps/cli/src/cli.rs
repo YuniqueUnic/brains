@@ -84,6 +84,11 @@ enum Command {
         #[arg(long)]
         stdin_token: bool,
     },
+    /// Rotate a remote credential or revoke its browser sessions.
+    Auth {
+        #[command(subcommand)]
+        command: AuthCommand,
+    },
     /// List files.
     Ls(LsArgs),
     /// Print a file's current bytes to stdout.
@@ -407,6 +412,18 @@ pub(crate) enum SyncSide {
 }
 
 #[derive(Subcommand)]
+pub(crate) enum AuthCommand {
+    /// Replace this principal's token and revoke all its sessions; save only the selected profile.
+    RotateToken {
+        /// Read the replacement token from stdin, never from command arguments.
+        #[arg(long, required = true)]
+        stdin_token: bool,
+    },
+    /// Revoke every browser session for this principal; keep the bearer token valid.
+    LogoutAll,
+}
+
+#[derive(Subcommand)]
 pub(crate) enum ProfileCommand {
     Add {
         name: String,
@@ -511,6 +528,15 @@ pub(crate) fn run() -> i32 {
             action.clone(),
         );
     }
+    if let Command::Auth { command } = cli.command {
+        return match commands::auth::run(&config, cli.profile.as_deref(), command) {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("bsx: {error}");
+                error.exit_code()
+            }
+        };
+    }
     let connection = match config.resolve(cli.profile.as_deref()) {
         Ok(connection) => connection,
         Err(message) => {
@@ -551,7 +577,10 @@ pub(crate) fn run() -> i32 {
         }),
         Command::Whoami { json } => commands::system::whoami(client, json),
         Command::Profile { command } => commands::system::profile_command(&mut config, command),
-        Command::Login { .. } | Command::Init { .. } | Command::Update { .. } => {
+        Command::Login { .. }
+        | Command::Init { .. }
+        | Command::Update { .. }
+        | Command::Auth { .. } => {
             unreachable!("handled before opening the library")
         }
         Command::Ls(args) => commands::query::ls(client, args),

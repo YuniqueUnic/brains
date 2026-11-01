@@ -149,5 +149,16 @@ export namespace brains {
         return: types.brains.OkResult;
         set_cookie?: string;
     }
+    export interface SessionsRevokeAllResponse {
+        return: types.brains.OkResult;
+        set_cookie?: string;
+    }
+    export interface SessionsRotateTokenRequest {
+        input: types.brains.TokenRotationInput;
+    }
+    export interface SessionsRotateTokenResponse {
+        return: types.brains.OkResult;
+        set_cookie?: string;
+    }
 }
 export {};

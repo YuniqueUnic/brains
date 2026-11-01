@@ -25,6 +25,8 @@ Initialization writes `BRAINS_MCP_API_TOKEN` and `BRAINS_MCP_ACCESS_TOKEN` to th
 
 A custom hostname must belong to the selected Cloudflare account. Without one, Wrangler uses the Worker's configured default ingress. The endpoint is `/mcp`. Missing or incorrect ingress credentials return 401; a missing upstream credential returns 503. Tool execution remains subject to Brains scope, revision, size and resource policies. A narrow reader must pass its explicit prefix to search/list rather than asking for the entire vault.
 
+A first `mcp-reader` identity can be bootstrapped through core deployment even after owner credentials have been rotated. Once an identity has persisted security state, rotate its upstream token through the shared API or `bsx auth rotate-token`; changing its bootstrap hash does not replace the active token. Update `BRAINS_MCP_API_TOKEN` privately before redeploying the adapter. Actual MCP deployment verifies the active upstream token and read-only scopes at the configured HTTPS core origin. Offline `mcp-check` only proves bundling, not live authentication. See [token and session management](security.md).
+
 ## Owner-only Access portal
 
 Create the portal only after its upstream MCP Worker is reachable. Cloudflare's portal is a managed outer layer; it does not replace the adapter or Brains authorization. Start with one owner and the three read-only tools. [Official portal setup](https://developers.cloudflare.com/cloudflare-one/access-controls/ai-controls/mcp-portals/).

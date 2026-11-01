@@ -31,7 +31,7 @@ bsx ls
   --web-dist apps/web/dist
 ```
 
-- 推荐通过环境变量 `BRAINS_TOKEN` 提供全库 root token，避免值进入进程参数。`--token` 同样注册或替换 root token；首次启动且没有配置时生成并打印一次，之后使用数据目录内的注册表。
+- 推荐通过环境变量 `BRAINS_TOKEN` 提供全库 root token，避免值进入进程参数。`--token` 同样只初始化空注册表，不会替换已有令牌；首次启动且没有配置时生成并打印一次，之后使用数据目录内的注册表。
 - `--web-dist`：同源托管 Web 应用；缺省时纯 API 服务。
 - `--origin`：额外允许的 cookie 流 Origin；默认仅同源。
 - 服务启动时自动应用 `migrations/` 内嵌 SQL（索引库）；无需手工迁移。
@@ -220,5 +220,5 @@ Worker 始终设置 Secure Cookie。WebKit 浏览器验证需 HTTPS，可用 `py
 
 - **搜索结果落后/缺失**：索引是有界投影，可能短暂落后于 HEAD（`complete=false` 或 503 Pending）。运行 `bsx reindex --all-pages` 重建；无需重启。
 - **412 VersionConflict**：另一客户端已推进 HEAD。重新读取后基于新基线重做；Web 端冲突视图提供三栏比较。
-- **token 丢失**：`--token` 重新注册即替换 root token；`secret.key` 删除会使所有 Web 会话失效（重登录即可），不影响数据。
+- **token 丢失**：按 [令牌与会话恢复](security.md#operator-recovery) 停服后更新目标注册表的摘要和会话代次。`--token` 不会重置已有凭据；不要只改摘要而保留旧会话。
 - **误删文件**：删除是墓碑（tombstone），历史保留；`bsx restore` 或 Web 回收站恢复，恢复产生新修订（generation 只前进）。

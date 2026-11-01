@@ -841,6 +841,7 @@ dependencies = [
  "brains-application",
  "brains-domain",
  "brains-ports",
+ "futures",
  "hex",
  "hmac",
  "js-sys",
@@ -1061,7 +1062,9 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "time",
  "tower",
+ "wasm-bindgen",
  "worker",
 ]
 
