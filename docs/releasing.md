@@ -11,7 +11,9 @@ Brains 的产品版本统一管理，Rust、Web、Worker、SDK 和验收工具�
 3. 合并版本 PR 后，release-please 创建 `v<version>` tag 与 Release。它从默认分支启动 Release 工作流，工作流检出该 tag 的源码，构建原生、Web、Worker 产物。
 4. Release 工作流校验产品版本及 tag 对应的提交，然后把带 SHA-256 的资产上传到该 Release；不再独立创建 tag 或覆盖发布说明。Release 页面出现不等于资产构建完成，以该工作流和资产清单为准。
 
-工作流使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需复制 xidl 的个人令牌配置。仓库需允许 Actions 创建 PR；由自动令牌创建的 PR，其工作流可能需要有写权限的成员批准运行。该令牌创建的 tag 不会自动触发 tag-push 工作流，因此这里使用 `workflow_dispatch`。
+工作流使用 GitHub 自动提供的 `GITHUB_TOKEN`，无需复制个人令牌。GitHub 会让该令牌创建或更新的 PR 工作流等待批准，因此 Release Please 在更新版本 PR 后主动批准其最新提交的 CI、Pages demo 和 Auto merge；后续版本更新也自动处理，不再逐次手动批准。批准只接受本仓库内 `github-actions[bot]` 创建、目标为 `main`、源分支恰为 `release-please--branches--main--components--brains` 的请求，并在每次批准前核对请求仍开放且提交未变化。该步骤不检出或执行 PR 代码，也不会批准其它贡献者或分支的工作流；现有必需检查仍须通过后才能合并。
+
+仓库需允许 Actions 创建 PR，并为 Release Please 提供工作流内声明的 `actions: write` 权限。新提交的检查尚未出现在 GitHub API 时，批准步骤最多等待 27 秒；超时或接口拒绝会明确失败，修复原因后重跑 Release Please 即可处理仍开放的版本 PR。其它贡献者继续遵循仓库的首次贡献者审批策略。`GITHUB_TOKEN` 创建的 tag 不会自动触发 tag-push 工作流，因此资产构建使用 `workflow_dispatch`。依据：[GitHub 自动令牌触发规则](https://docs.github.com/en/actions/concepts/security/github_token)、[批准工作流接口](https://docs.github.com/en/rest/actions/workflow-runs#approve-a-workflow-run-for-a-fork-pull-request)。
 
 Release 已创建而构建或分发失败时，在仓库目录手动重跑资产工作流。`--ref main` 选择最新构建脚本，`version` 选择已有发布标签：
 

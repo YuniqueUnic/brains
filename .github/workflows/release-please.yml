@@ -25,6 +25,59 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      # GITHUB_TOKEN-created PRs otherwise wait for approval on every update.
+      # Only this repository's release bot and exact release branch are trusted.
+      - name: Approve trusted release pull request workflows
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = 'release-please--branches--main--components--brains';
+            const botId = 41898282; // github-actions[bot]
+            const paths = new Set([
+              '.github/workflows/ci.yml',
+              '.github/workflows/pages.yml',
+              '.github/workflows/auto-merge.yml',
+            ]);
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', head: `${owner}:${branch}`,
+            });
+            const pull = pulls.find(pr =>
+              pr.user.id === botId && pr.user.type === 'Bot' &&
+              pr.head.repo?.id === context.payload.repository.id &&
+              pr.head.ref === branch && pr.base.ref === 'main');
+            if (!pull) {
+              core.info('No open release-bot pull request needs workflow approval.');
+              return;
+            }
+            const sha = pull.head.sha;
+            for (let attempt = 0; attempt < 10; attempt++) {
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                owner, repo, event: 'pull_request', head_sha: sha, per_page: 100,
+              });
+              const observed = new Set();
+              for (const run of runs) {
+                if (!paths.has(run.path) || run.head_branch !== branch ||
+                    run.actor?.id !== botId ||
+                    !run.pull_requests.some(pr => pr.number === pull.number)) continue;
+                observed.add(run.path);
+                if (run.conclusion !== 'action_required') continue;
+                const { data: current } = await github.rest.pulls.get({
+                  owner, repo, pull_number: pull.number,
+                });
+                if (current.state !== 'open' || current.head.sha !== sha) {
+                  core.info('Release pull request changed; its next update will approve the new head.');
+                  return;
+                }
+                await github.rest.actions.approveWorkflowRun({
+                  owner, repo, run_id: run.id,
+                });
+                core.info(`Approved ${run.path} run ${run.id} for #${pull.number} at ${sha}.`);
+              }
+              if (observed.size === paths.size) return;
+              if (attempt < 9) await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+            throw new Error(`Expected release PR workflows have not appeared for #${pull.number} at ${sha}; rerun Release Please to retry.`);
       # Tags created with GITHUB_TOKEN do not trigger tag-push workflows.
       # Use the default branch's build recipe with the immutable release source.
       - name: Build release assets
