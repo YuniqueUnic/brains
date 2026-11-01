@@ -23,6 +23,18 @@
 
 * `bsx cp`/`mv`/`patch`/`diff` help text no longer leaks internal planning annotations like `(P1)`.
 
+## [0.9.0](https://github.com/YuniqueUnic/brains/compare/v0.8.4...v0.9.0) (2026-11-01)
+
+
+### Features
+
+* **auth:** support token rotation and server-side session revocation ([#80](https://github.com/YuniqueUnic/brains/issues/80)) ([9e919e6](https://github.com/YuniqueUnic/brains/commit/9e919e699e8cb1f6c98a48f6828a47ac759826d8))
+
+
+### Bug Fixes
+
+* **ci:** approve release PR checks and complete automated publishing ([#82](https://github.com/YuniqueUnic/brains/issues/82)) ([e4a635d](https://github.com/YuniqueUnic/brains/commit/e4a635dc03dbc552086e07b4730dc995adc6e063))
+
 ## [0.8.4](https://github.com/YuniqueUnic/brains/compare/v0.8.3...v0.8.4) (2026-10-30)
 
 
