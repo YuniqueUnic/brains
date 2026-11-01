@@ -3,6 +3,11 @@
 //! checks for cookie-driven mutations. Tokens are stored only as SHA-256
 //! hashes; plaintext exists solely at bootstrap and on the client.
 
+mod registry;
+mod store;
+
+use futures::future::BoxFuture;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
@@ -81,6 +86,8 @@ pub struct TokenRecord {
     pub token_sha256: String,
     pub scopes: Vec<String>,
     pub enabled: bool,
+    #[serde(default)]
+    pub session_epoch: String,
     /// Plaintext, stored ONLY for tokens this instance generated itself so a
     /// restart neither rotates nor loses the root credential. Tokens supplied
     /// via `--token`/`BRAINS_TOKEN` are recorded as hashes only (0600 file).
@@ -91,6 +98,8 @@ pub struct TokenRecord {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct RegistryFile {
     pub tokens: Vec<TokenRecord>,
+    #[serde(default)]
+    pub revoked_sessions: BTreeMap<String, u64>,
 }
 
 pub struct SecurityStore {
@@ -106,6 +115,8 @@ pub struct SessionClaims {
     pub tid: String,
     pub exp: u64,
     pub nonce: String,
+    #[serde(default)]
+    pub epoch: String,
 }
 
 fn b64(bytes: &[u8]) -> String {
@@ -135,6 +146,7 @@ pub fn sign_with_key(key: &[u8; 32], bytes: &[u8]) -> Vec<u8> {
 pub fn issue_session_with_key(
     key: &[u8; 32],
     principal: &Principal,
+    epoch: &str,
 ) -> DomainResult<(String, String, String)> {
     let tid = principal
         .actor
@@ -143,7 +155,12 @@ pub fn issue_session_with_key(
         .to_owned();
     let nonce = brains_domain::HexId::generate().as_str().to_owned();
     let exp = now_unix() + SESSION_TTL_SECONDS;
-    let claims = SessionClaims { tid, exp, nonce };
+    let claims = SessionClaims {
+        tid,
+        exp,
+        nonce,
+        epoch: epoch.to_owned(),
+    };
     let json = serde_json::to_vec(&claims).expect("serializes");
     let value = format!("{}.{}", b64(&json), b64(&sign_with_key(key, &json)));
     let csrf = b64(&sign_with_key(key, format!("csrf:{value}").as_bytes()));
@@ -156,11 +173,11 @@ pub fn verify_session_with_key(key: &[u8; 32], cookie_value: &str) -> DomainResu
     let (encoded, sig) = cookie_value.split_once('.').ok_or_else(unauthenticated)?;
     let json = unb64(encoded).map_err(|_| unauthenticated())?;
     let given = unb64(sig).map_err(|_| unauthenticated())?;
-    if sign_with_key(key, &json) != given {
-        return Err(unauthenticated());
-    }
+    let mut mac = Hmac::<Sha256>::new_from_slice(key).expect("hmac accepts any key length");
+    mac.update(&json);
+    mac.verify_slice(&given).map_err(|_| unauthenticated())?;
     let claims: SessionClaims = serde_json::from_slice(&json).map_err(|_| unauthenticated())?;
-    if claims.exp < now_unix() {
+    if claims.exp <= now_unix() {
         return Err(unauthenticated());
     }
     Ok(claims)
@@ -172,8 +189,19 @@ pub fn verify_session_with_key(key: &[u8; 32], cookie_value: &str) -> DomainResu
 pub trait Security: Send + Sync {
     fn authenticate(&self, token: &str) -> DomainResult<Principal>;
     fn authenticate_session(&self, cookie_value: &str) -> DomainResult<Principal>;
-    fn issue_session(&self, principal: &Principal) -> DomainResult<(String, String, String)>;
+    fn issue_session(&self, auth: &AuthSource) -> DomainResult<(String, String, String)>;
     fn csrf_for(&self, cookie_value: &str) -> String;
+    fn rotate_token<'a>(
+        &'a self,
+        auth: &'a AuthSource,
+        current: &'a str,
+        replacement: &'a str,
+    ) -> BoxFuture<'a, DomainResult<()>>;
+    fn revoke_sessions<'a>(
+        &'a self,
+        auth: &'a AuthSource,
+        all: bool,
+    ) -> BoxFuture<'a, DomainResult<()>>;
 }
 
 impl Security for SecurityStore {
@@ -183,11 +211,32 @@ impl Security for SecurityStore {
     fn authenticate_session(&self, cookie_value: &str) -> DomainResult<Principal> {
         SecurityStore::authenticate_session(self, cookie_value)
     }
-    fn issue_session(&self, principal: &Principal) -> DomainResult<(String, String, String)> {
-        SecurityStore::issue_session(self, principal)
+    fn issue_session(&self, auth: &AuthSource) -> DomainResult<(String, String, String)> {
+        SecurityStore::issue_session(self, auth)
     }
     fn csrf_for(&self, cookie_value: &str) -> String {
         SecurityStore::csrf_for(self, cookie_value)
+    }
+    fn rotate_token<'a>(
+        &'a self,
+        auth: &'a AuthSource,
+        current: &'a str,
+        replacement: &'a str,
+    ) -> BoxFuture<'a, DomainResult<()>> {
+        Box::pin(async move {
+            self.mutate(|registry| {
+                registry.rotate_token(&self.signing_key, auth, current, replacement)
+            })
+        })
+    }
+    fn revoke_sessions<'a>(
+        &'a self,
+        auth: &'a AuthSource,
+        all: bool,
+    ) -> BoxFuture<'a, DomainResult<()>> {
+        Box::pin(async move {
+            self.mutate(|registry| registry.revoke_sessions(&self.signing_key, auth, all))
+        })
     }
 }
 
@@ -195,12 +244,12 @@ impl Security for SecurityStore {
 /// Origin validation, bearer clients do not (design §15.2).
 #[derive(Clone)]
 pub enum AuthSource {
-    Bearer(Principal),
+    Bearer(Principal, String),
     Cookie(Principal, String),
 }
 
 impl AuthSource {
-    /// Authenticate and apply browser guards before any storage I/O. Both
+    /// Authenticate and apply browser guards before vault/provider I/O. Both
     /// native middleware and the Worker entrypoint use the same policy.
     pub fn authorize_request(
         security: &dyn Security,
@@ -240,7 +289,10 @@ impl AuthSource {
                 .strip_prefix("Bearer ")
                 .or_else(|| auth.strip_prefix("bearer "));
             if let Some(token) = token {
-                return Ok(Self::Bearer(security.authenticate(token.trim())?));
+                return Ok(Self::Bearer(
+                    security.authenticate(token.trim())?,
+                    token.trim().to_owned(),
+                ));
             }
         }
         if let Some(cookie) = cookie_value(headers, SESSION_COOKIE) {
@@ -252,13 +304,13 @@ impl AuthSource {
 
     pub fn principal(&self) -> &Principal {
         match self {
-            Self::Bearer(principal) | Self::Cookie(principal, _) => principal,
+            Self::Bearer(principal, _) | Self::Cookie(principal, _) => principal,
         }
     }
 
     pub fn cookie_value(&self) -> Option<&str> {
         match self {
-            Self::Bearer(_) => None,
+            Self::Bearer(_, _) => None,
             Self::Cookie(_, value) => Some(value),
         }
     }
@@ -334,157 +386,6 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
         .zip(b.iter())
         .fold(0u8, |acc, (x, y)| acc | (x ^ y))
         == 0
-}
-
-impl SecurityStore {
-    /// Load or create the registry at `data_dir/auth.json` and the signing
-    /// key at `data_dir/secret.key` (both 0600 on creation).
-    pub fn open(data_dir: &std::path::Path) -> DomainResult<Self> {
-        std::fs::create_dir_all(data_dir)
-            .map_err(|e| DomainError::Internal(format!("data dir: {e}")))?;
-        let path = data_dir.join("auth.json");
-        let registry = if path.exists() {
-            let raw = std::fs::read_to_string(&path)
-                .map_err(|e| DomainError::Internal(format!("auth registry: {e}")))?;
-            serde_json::from_str::<RegistryFile>(&raw)
-                .map_err(|e| DomainError::Internal(format!("auth registry corrupt: {e}")))?
-        } else {
-            let registry = RegistryFile { tokens: Vec::new() };
-            write_private(
-                &path,
-                &serde_json::to_vec_pretty(&registry).expect("serializes"),
-            )?;
-            registry
-        };
-        let key_path = data_dir.join("secret.key");
-        let signing_key: [u8; 32] = if key_path.exists() {
-            let raw = std::fs::read(&key_path)
-                .map_err(|e| DomainError::Internal(format!("secret key: {e}")))?;
-            raw.try_into()
-                .map_err(|_| DomainError::Internal("secret.key must be exactly 32 bytes".into()))?
-        } else {
-            use rand::RngExt;
-            let mut key = [0u8; 32];
-            rand::rng().fill(&mut key);
-            write_private(&key_path, &key)?;
-            key
-        };
-        Ok(Self {
-            path,
-            registry: RwLock::new(registry),
-            signing_key,
-        })
-    }
-
-    /// Idempotently ensure a whole-vault token exists. Returns the plaintext
-    /// plus whether this call created/replaced it: `None` keeps any existing
-    /// root token (recovering its stored plaintext) instead of rotating it,
-    /// so a reboot never orphans configured clients. Passing `Some(token)`
-    /// registers that exact token (bootstrap convenience for CLI/e2e).
-    pub fn ensure_root_token(&self, token: Option<&str>) -> DomainResult<(String, bool)> {
-        let mut registry = self.registry.write().expect("registry lock");
-        if let Some(existing) = registry.tokens.iter().find(|t| t.id == "default")
-            && existing.enabled
-            && token.is_none()
-        {
-            return Ok((existing.plaintext.clone().unwrap_or_default(), false));
-        }
-        let plaintext = match token {
-            Some(t) if t.is_empty() || t.chars().any(char::is_whitespace) => {
-                return Err(DomainError::InvalidArgument(
-                    "root token must be nonempty and contain no whitespace".into(),
-                ));
-            }
-            Some(t) => (t.to_owned(), None),
-            None => {
-                let generated = brains_domain::HexId::generate().as_str().to_owned()
-                    + brains_domain::HexId::generate().as_str();
-                let stored = generated.clone();
-                (generated, Some(stored))
-            }
-        };
-        let record = TokenRecord {
-            id: "default".into(),
-            name: "owner".into(),
-            token_sha256: hash_token(&plaintext.0),
-            scopes: vec!["read:/".into(), "write:/".into(), "admin:/".into()],
-            enabled: true,
-            plaintext: plaintext.1,
-        };
-        if let Some(slot) = registry.tokens.iter_mut().find(|t| t.id == record.id) {
-            *slot = record;
-        } else {
-            registry.tokens.push(record);
-        }
-        self.persist(&registry)?;
-        Ok((plaintext.0, true))
-    }
-
-    fn persist(&self, registry: &RegistryFile) -> DomainResult<()> {
-        write_private(
-            &self.path,
-            &serde_json::to_vec_pretty(registry).expect("serializes"),
-        )
-    }
-
-    /// Authenticate a plaintext bearer token into a request principal.
-    pub fn authenticate(&self, token: &str) -> DomainResult<Principal> {
-        let digest = hash_token(token);
-        let registry = self.registry.read().expect("registry lock");
-        let record = registry
-            .tokens
-            .iter()
-            .find(|t| t.enabled && t.token_sha256 == digest)
-            .ok_or(DomainError::Unauthenticated)?;
-        let scopes = record
-            .scopes
-            .iter()
-            .map(|s| Scope::parse(s))
-            .collect::<DomainResult<Vec<_>>>()?;
-        Ok(Principal {
-            actor: format!("token:{}", record.id),
-            scopes,
-        })
-    }
-
-    /// Principal for a session cookie value; checks signature, expiry and
-    /// that the token is still enabled (revocation must take effect).
-    pub fn authenticate_session(&self, cookie_value: &str) -> DomainResult<Principal> {
-        let claims = self.verify_session(cookie_value)?;
-        let registry = self.registry.read().expect("registry lock");
-        let record = registry
-            .tokens
-            .iter()
-            .find(|t| t.id == claims.tid && t.enabled)
-            .ok_or(DomainError::Unauthenticated)?;
-        let scopes = record
-            .scopes
-            .iter()
-            .map(|s| Scope::parse(s))
-            .collect::<DomainResult<Vec<_>>>()?;
-        Ok(Principal {
-            actor: format!("token:{}", record.id),
-            scopes,
-        })
-    }
-
-    /// Exchange a verified principal (bearer-authenticated) for a signed
-    /// session value plus its CSRF token.
-    pub fn issue_session(&self, principal: &Principal) -> DomainResult<(String, String, String)> {
-        issue_session_with_key(&self.signing_key, principal)
-    }
-
-    pub(crate) fn verify_session(&self, cookie_value: &str) -> DomainResult<SessionClaims> {
-        verify_session_with_key(&self.signing_key, cookie_value)
-    }
-
-    /// The CSRF token bound to a session value.
-    pub fn csrf_for(&self, cookie_value: &str) -> String {
-        b64(&sign_with_key(
-            &self.signing_key,
-            format!("csrf:{cookie_value}").as_bytes(),
-        ))
-    }
 }
 
 fn unauthenticated() -> DomainError {

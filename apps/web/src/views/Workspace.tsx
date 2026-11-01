@@ -59,9 +59,11 @@ type SidePanel =
 export default function Workspace({
   session,
   onLogout,
+  onSignedOut,
 }: {
   session: SessionInfo;
   onLogout: (reason?: string) => void;
+  onSignedOut: (reason: string) => void;
 }) {
   const { t } = useTranslation("workspace");
   const [mode, setMode] = useState<WorkspaceMode>("workspace");
@@ -779,7 +781,7 @@ export default function Workspace({
 
       {banner && <Banner message={banner} onClose={() => setBanner(null)} />}
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} showResources={showResourceUsage} />
+      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} showResources={showResourceUsage} onSignedOut={onSignedOut} />
       <CloudImportDialog mode={cloudImport} files={liveFiles} onClose={() => setCloudImport(null)} onComplete={async (path) => {
         await refreshFiles();
         const current=editorRef.current;

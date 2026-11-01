@@ -19,6 +19,7 @@ brains-domain.workspace = true
 brains-ports.workspace = true
 hex.workspace = true
 hmac.workspace = true
+futures.workspace = true
 rand.workspace = true
 serde.workspace = true
 async-trait = "0.1"

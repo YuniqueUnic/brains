@@ -1779,6 +1779,21 @@
         ],
         "type": "object"
       },
+      "brains.TokenRotationInput": {
+        "properties": {
+          "current_token": {
+            "type": "string"
+          },
+          "replacement_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_token",
+          "replacement_token"
+        ],
+        "type": "object"
+      },
       "brains.TransferBody": {
         "properties": {
           "expected_source_revision": {
@@ -5106,15 +5121,62 @@
               }
             }
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
           "500": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Error"
+                  "$ref": "#/components/schemas/brains.Internal"
                 }
               }
             },
-            "description": "Internal Server Error"
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
         "security": [],
@@ -5220,6 +5282,195 @@
               }
             },
             "description": "Error: Internal"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/session/revoke": {
+      "post": {
+        "operationId": "brains.Sessions.revoke_all",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.OkResult"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Internal"
+                }
+              }
+            },
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
+          }
+        },
+        "security": [],
+        "tags": [
+          "Sessions"
+        ]
+      }
+    },
+    "/token/rotate": {
+      "post": {
+        "operationId": "brains.Sessions.rotate_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/brains.TokenRotationInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.OkResult"
+                }
+              }
+            },
+            "description": "OK",
+            "headers": {
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.BadRequest"
+                }
+              }
+            },
+            "description": "Error: BadRequest"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Forbidden"
+                }
+              }
+            },
+            "description": "Error: Forbidden"
+          },
+          "412": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.PreconditionFailed"
+                }
+              }
+            },
+            "description": "Error: PreconditionFailed",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.QuotaExceeded"
+                }
+              }
+            },
+            "description": "Error: QuotaExceeded"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.Internal"
+                }
+              }
+            },
+            "description": "Error: Internal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/brains.ServiceUnavailable"
+                }
+              }
+            },
+            "description": "Error: ServiceUnavailable"
           }
         },
         "security": [],

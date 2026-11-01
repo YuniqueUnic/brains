@@ -1,15 +1,18 @@
 import resourceStrings from "./en-resources";
+import securityStrings from "./en-security";
 
 /** English strings, same namespace/key shape as zh-CN. The e2e suite runs
  * against zh-CN only, but keep phrasing consistent with the Chinese copy. */
 const en = {
 
   resources: resourceStrings,
+  security: securityStrings,
   common: {
     loading: "Loading…",
     newFile: "New",
     upload: "Upload",
     logout: "Log out",
+    security: "Security",
     cancel: "Cancel",
     create: "Create",
     close: "Close",
@@ -20,6 +23,7 @@ const en = {
     themeCycle: "Click to cycle",
   },
   login: {
+    logoutFailed: "Could not revoke this session. Check your connection and try logging out again.",
     demoSubtitle: "Try Brains in your browser. No account or token needed.",
     demoSubmit: "Enter demo",
     subtitle: "Sign in to this vault with the access token",

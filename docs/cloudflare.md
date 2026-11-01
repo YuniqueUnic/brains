@@ -69,7 +69,7 @@ Three app secrets are sent together with the code through `deploy --secrets-file
 | `BRAINS_BASE_URL` | Expected instance URL, used for post-deployment verification. |
 | `BRAINS_CUSTOM_DOMAIN`, `BRAINS_CUSTOM_DOMAIN_ZONE_ID` | Optional hostname and its zone ID for a Worker custom domain. Set both when using a custom domain. |
 | `BRAINS_ADMIN_TOKEN` | Private client login token used for authenticated verification; never uploaded as plaintext. |
-| `TOKEN_REGISTRY_JSON` | Worker registry containing token hashes, scopes and enabled flags. |
+| `TOKEN_REGISTRY_JSON` | Bootstrap token hashes/scopes. Persisted identities in D1 security_state supersede these values; new identity IDs can still be bootstrapped. |
 | `SESSION_SIGNING_KEY`, `CURSOR_SIGNING_KEY` | Different 32-byte keys, each encoded as 64 hex characters. |
 | `VAULT_ID` | Single vault managed by this instance. |
 | `MAX_TEXT_BYTES` | Text indexing threshold; larger content can still be stored up to the attachment limit. |
@@ -193,3 +193,9 @@ The settings flag `enforced` controls admission independently from measurement. 
 For an optional MCP Worker and owner-only portal, follow [the MCP guide](cloudflare-mcp.md). Actions can deploy the MCP Worker after the core when `deploy_mcp` is selected and its dedicated secrets/hostname are configured.
 
 R2 purge uses an ETag-conditional zero-byte HEAD vacancy marker so a concurrent restore cannot be erased by an unconditional delete. Listings and reads hide these markers; create-only writes can reuse the path. Current filesystem adapters also understand them in raw R2 backups. Restore raw backups with this version or newer; HTTP archives keep their normal logical file representation.
+
+## Active credentials and backups
+
+Apply all D1 migrations, including `0006_security_state.sql`, before upgrading the Worker. Active token changes and session revocations persist in D1 independently of code deployments. Existing persisted identities take precedence over bootstrap values; new IDs such as the first `mcp-reader` can be introduced through deployment configuration. `cloudflare:sync-admin-token` updates only bootstrap configuration. Use bsx or Web to rotate an active token, and update private deployment-verification credentials separately. Live MCP deployment verifies its upstream credential and read-only scopes against the configured core origin; an offline bundle check cannot verify active authentication.
+
+Back up D1 security_state and runtime resource settings along with the R2 vault. Rebuilding a file index does not mean deleting the database or its persistent tables. Follow [security and operator recovery](security.md) for token rotation, session invalidation, and deliberate bootstrap recovery.

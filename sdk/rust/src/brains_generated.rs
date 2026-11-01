@@ -589,6 +589,12 @@ pub mod brains {
     }
     impl OkResult {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct TokenRotationInput {
+        pub current_token: String,
+        pub replacement_token: String,
+    }
+    impl TokenRotationInput {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct PatchEdit {
         pub old_text: String,
         pub new_text: String,
@@ -10803,6 +10809,116 @@ pub mod brains {
             Self::Framework(err)
         }
     }
+    /// Typed error channel for `logout`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum SessionsLogoutError {
+        Forbidden(Forbidden),
+        PreconditionFailed(PreconditionFailed),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for SessionsLogoutError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for SessionsLogoutError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for SessionsLogoutError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    /// Typed error channel for `revoke_all`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum SessionsRevokeAllError {
+        Forbidden(Forbidden),
+        PreconditionFailed(PreconditionFailed),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for SessionsRevokeAllError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for SessionsRevokeAllError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for SessionsRevokeAllError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    /// Typed error channel for `rotate_token`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum SessionsRotateTokenError {
+        BadRequest(BadRequest),
+        Forbidden(Forbidden),
+        PreconditionFailed(PreconditionFailed),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for SessionsRotateTokenError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for SessionsRotateTokenError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for SessionsRotateTokenError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
     #[allow(
         non_snake_case,
         non_camel_case_types,
@@ -10855,6 +10971,29 @@ pub mod brains {
                     scopes: value.scopes.into_iter().collect(),
                     expires_at: value.expires_at,
                     csrf_token: value.csrf_token,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_TokenRotationInput {
+            pub current_token: String,
+            pub replacement_token: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::TokenRotationInput> for brains_TokenRotationInput {
+            fn from(value: super::TokenRotationInput) -> Self {
+                Self {
+                    current_token: value.current_token,
+                    replacement_token: value.replacement_token,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_TokenRotationInput> for super::TokenRotationInput {
+            fn from(value: brains_TokenRotationInput) -> Self {
+                Self {
+                    current_token: value.current_token,
+                    replacement_token: value.replacement_token,
                 }
             }
         }
@@ -10914,6 +11053,29 @@ pub mod brains {
                 }
             }
         }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_TokenRotationInput {
+            pub current_token: String,
+            pub replacement_token: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::TokenRotationInput> for brains_TokenRotationInput {
+            fn from(value: super::TokenRotationInput) -> Self {
+                Self {
+                    current_token: value.current_token,
+                    replacement_token: value.replacement_token,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_TokenRotationInput> for super::TokenRotationInput {
+            fn from(value: brains_TokenRotationInput) -> Self {
+                Self {
+                    current_token: value.current_token,
+                    replacement_token: value.replacement_token,
+                }
+            }
+        }
     }
     pub type SessionsLoginResponseInBody = __xidl_in_Sessions::brains_Session;
     pub struct SessionsLoginResponse {
@@ -10937,6 +11099,35 @@ pub mod brains {
     #[allow(clippy::useless_conversion, unreachable_code, unused_variables)]
     impl From<SessionsLogoutResponseInBody> for SessionsLogoutResponse {
         fn from(value: SessionsLogoutResponseInBody) -> Self {
+            Self {
+                r#return: value.into(),
+                set_cookie: ::core::default::Default::default(),
+            }
+        }
+    }
+    pub type SessionsRevokeAllResponseInBody = __xidl_in_Sessions::brains_OkResult;
+    pub struct SessionsRevokeAllResponse {
+        pub r#return: OkResult,
+        pub set_cookie: Option<String>,
+    }
+    #[allow(clippy::useless_conversion, unreachable_code, unused_variables)]
+    impl From<SessionsRevokeAllResponseInBody> for SessionsRevokeAllResponse {
+        fn from(value: SessionsRevokeAllResponseInBody) -> Self {
+            Self {
+                r#return: value.into(),
+                set_cookie: ::core::default::Default::default(),
+            }
+        }
+    }
+    pub type SessionsRotateTokenRequestOutBody = __xidl_out_Sessions::brains_TokenRotationInput;
+    pub type SessionsRotateTokenResponseInBody = __xidl_in_Sessions::brains_OkResult;
+    pub struct SessionsRotateTokenResponse {
+        pub r#return: OkResult,
+        pub set_cookie: Option<String>,
+    }
+    #[allow(clippy::useless_conversion, unreachable_code, unused_variables)]
+    impl From<SessionsRotateTokenResponseInBody> for SessionsRotateTokenResponse {
+        fn from(value: SessionsRotateTokenResponseInBody) -> Self {
             Self {
                 r#return: value.into(),
                 set_cookie: ::core::default::Default::default(),
@@ -11130,7 +11321,7 @@ pub mod brains {
             unreachable_code,
             unused_variables
         )]
-        pub async fn logout(&self) -> Result<SessionsLogoutResponse, xidl_rust_axum::Error> {
+        pub async fn logout(&self) -> Result<SessionsLogoutResponse, SessionsLogoutError> {
             let xidl_path = "/session".to_string();
             let mut req = self
                 .client
@@ -11177,8 +11368,337 @@ pub mod brains {
                 Ok(response)
             } else {
                 let status = resp.status();
+                if status.as_u16() == 403 {
+                    let headers = resp.headers().clone();
+                    let mut value: Forbidden = resp.json::<Forbidden>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception Forbidden body: {err}"),
+                        )
+                    })?;
+                    return Err(SessionsLogoutError::Forbidden(value));
+                }
+                if status.as_u16() == 412 {
+                    let headers = resp.headers().clone();
+                    let mut value: PreconditionFailed =
+                        resp.json::<PreconditionFailed>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception PreconditionFailed body: {err}"),
+                            )
+                        })?;
+                    value.etag = match headers.get("ETag") {
+                        Some(header_value) => {
+                            let header_str = header_value.to_str().map_err(|err| {
+                                xidl_rust_axum::Error::new(400, format!("{err:?}"))
+                            })?;
+                            Some(header_str.to_string())
+                        }
+                        None => None,
+                    };
+                    return Err(SessionsLogoutError::PreconditionFailed(value));
+                }
+                if status.as_u16() == 503 {
+                    let headers = resp.headers().clone();
+                    let mut value: ServiceUnavailable =
+                        resp.json::<ServiceUnavailable>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception ServiceUnavailable body: {err}"),
+                            )
+                        })?;
+                    return Err(SessionsLogoutError::ServiceUnavailable(value));
+                }
+                if status.as_u16() == 500 {
+                    let headers = resp.headers().clone();
+                    let mut value: Internal = resp.json::<Internal>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception Internal body: {err}"),
+                        )
+                    })?;
+                    return Err(SessionsLogoutError::Internal(value));
+                }
+                if status.as_u16() == 429 {
+                    let headers = resp.headers().clone();
+                    let mut value: QuotaExceeded =
+                        resp.json::<QuotaExceeded>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception QuotaExceeded body: {err}"),
+                            )
+                        })?;
+                    return Err(SessionsLogoutError::QuotaExceeded(value));
+                }
                 let body = resp.json::<xidl_rust_axum::ErrorBody>().await.ok();
-                Err(xidl_rust_axum::Error::from_http_response(status, body))
+                Err(SessionsLogoutError::Framework(
+                    xidl_rust_axum::Error::from_http_response(status, body),
+                ))
+            }
+        }
+        #[allow(
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            unused_variables
+        )]
+        pub async fn revoke_all(
+            &self,
+        ) -> Result<SessionsRevokeAllResponse, SessionsRevokeAllError> {
+            let xidl_path = "/session/revoke".to_string();
+            let mut req = self
+                .client
+                .http()
+                .request(
+                    xidl_rust_axum::reqwest::Method::POST,
+                    self.client.url(&xidl_path),
+                )
+                .build()
+                .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+            req.headers_mut().insert(
+                xidl_rust_axum::reqwest::header::ACCEPT,
+                xidl_rust_axum::reqwest::header::HeaderValue::from_str("application/json")
+                    .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?,
+            );
+            let auth_target = &self.client;
+            let _ = auth_target;
+            let resp = self
+                .client
+                .http()
+                .execute(req)
+                .await
+                .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+            if resp.status().is_success() {
+                let headers = resp.headers().clone();
+                let set_cookie: Option<String> = match headers.get("Set-Cookie") {
+                    Some(header_value) => {
+                        let header_str = header_value
+                            .to_str()
+                            .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?;
+                        Some(header_str.to_string())
+                    }
+                    None => None,
+                };
+                let body = resp
+                    .bytes()
+                    .await
+                    .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+                let body: SessionsRevokeAllResponseInBody =
+                    xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&body)?;
+                let mut response: SessionsRevokeAllResponse = body.into();
+                response.set_cookie = set_cookie;
+                Ok(response)
+            } else {
+                let status = resp.status();
+                if status.as_u16() == 403 {
+                    let headers = resp.headers().clone();
+                    let mut value: Forbidden = resp.json::<Forbidden>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception Forbidden body: {err}"),
+                        )
+                    })?;
+                    return Err(SessionsRevokeAllError::Forbidden(value));
+                }
+                if status.as_u16() == 412 {
+                    let headers = resp.headers().clone();
+                    let mut value: PreconditionFailed =
+                        resp.json::<PreconditionFailed>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception PreconditionFailed body: {err}"),
+                            )
+                        })?;
+                    value.etag = match headers.get("ETag") {
+                        Some(header_value) => {
+                            let header_str = header_value.to_str().map_err(|err| {
+                                xidl_rust_axum::Error::new(400, format!("{err:?}"))
+                            })?;
+                            Some(header_str.to_string())
+                        }
+                        None => None,
+                    };
+                    return Err(SessionsRevokeAllError::PreconditionFailed(value));
+                }
+                if status.as_u16() == 503 {
+                    let headers = resp.headers().clone();
+                    let mut value: ServiceUnavailable =
+                        resp.json::<ServiceUnavailable>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception ServiceUnavailable body: {err}"),
+                            )
+                        })?;
+                    return Err(SessionsRevokeAllError::ServiceUnavailable(value));
+                }
+                if status.as_u16() == 500 {
+                    let headers = resp.headers().clone();
+                    let mut value: Internal = resp.json::<Internal>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception Internal body: {err}"),
+                        )
+                    })?;
+                    return Err(SessionsRevokeAllError::Internal(value));
+                }
+                if status.as_u16() == 429 {
+                    let headers = resp.headers().clone();
+                    let mut value: QuotaExceeded =
+                        resp.json::<QuotaExceeded>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception QuotaExceeded body: {err}"),
+                            )
+                        })?;
+                    return Err(SessionsRevokeAllError::QuotaExceeded(value));
+                }
+                let body = resp.json::<xidl_rust_axum::ErrorBody>().await.ok();
+                Err(SessionsRevokeAllError::Framework(
+                    xidl_rust_axum::Error::from_http_response(status, body),
+                ))
+            }
+        }
+        #[allow(
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            unused_variables
+        )]
+        pub async fn rotate_token(
+            &self,
+            input: TokenRotationInput,
+        ) -> Result<SessionsRotateTokenResponse, SessionsRotateTokenError> {
+            let xidl_path = "/token/rotate".to_string();
+            let mut req = self
+                .client
+                .http()
+                .request(
+                    xidl_rust_axum::reqwest::Method::POST,
+                    self.client.url(&xidl_path),
+                )
+                .build()
+                .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+            req.headers_mut().insert(
+                xidl_rust_axum::reqwest::header::ACCEPT,
+                xidl_rust_axum::reqwest::header::HeaderValue::from_str("application/json")
+                    .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?,
+            );
+            let auth_target = &self.client;
+            let _ = auth_target;
+            let body: __xidl_out_Sessions::brains_TokenRotationInput = input.into();
+            let body = xidl_rust_axum::SerializeFactory::new("application/json").to_vec(&body)?;
+            req.headers_mut().insert(
+                xidl_rust_axum::reqwest::header::CONTENT_TYPE,
+                xidl_rust_axum::reqwest::header::HeaderValue::from_str("application/json")
+                    .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?,
+            );
+            *req.body_mut() = Some(xidl_rust_axum::reqwest::Body::from(body));
+            let resp = self
+                .client
+                .http()
+                .execute(req)
+                .await
+                .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+            if resp.status().is_success() {
+                let headers = resp.headers().clone();
+                let set_cookie: Option<String> = match headers.get("Set-Cookie") {
+                    Some(header_value) => {
+                        let header_str = header_value
+                            .to_str()
+                            .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?;
+                        Some(header_str.to_string())
+                    }
+                    None => None,
+                };
+                let body = resp
+                    .bytes()
+                    .await
+                    .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?;
+                let body: SessionsRotateTokenResponseInBody =
+                    xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&body)?;
+                let mut response: SessionsRotateTokenResponse = body.into();
+                response.set_cookie = set_cookie;
+                Ok(response)
+            } else {
+                let status = resp.status();
+                if status.as_u16() == 400 {
+                    let headers = resp.headers().clone();
+                    let mut value: BadRequest = resp.json::<BadRequest>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception BadRequest body: {err}"),
+                        )
+                    })?;
+                    return Err(SessionsRotateTokenError::BadRequest(value));
+                }
+                if status.as_u16() == 403 {
+                    let headers = resp.headers().clone();
+                    let mut value: Forbidden = resp.json::<Forbidden>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception Forbidden body: {err}"),
+                        )
+                    })?;
+                    return Err(SessionsRotateTokenError::Forbidden(value));
+                }
+                if status.as_u16() == 412 {
+                    let headers = resp.headers().clone();
+                    let mut value: PreconditionFailed =
+                        resp.json::<PreconditionFailed>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception PreconditionFailed body: {err}"),
+                            )
+                        })?;
+                    value.etag = match headers.get("ETag") {
+                        Some(header_value) => {
+                            let header_str = header_value.to_str().map_err(|err| {
+                                xidl_rust_axum::Error::new(400, format!("{err:?}"))
+                            })?;
+                            Some(header_str.to_string())
+                        }
+                        None => None,
+                    };
+                    return Err(SessionsRotateTokenError::PreconditionFailed(value));
+                }
+                if status.as_u16() == 503 {
+                    let headers = resp.headers().clone();
+                    let mut value: ServiceUnavailable =
+                        resp.json::<ServiceUnavailable>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception ServiceUnavailable body: {err}"),
+                            )
+                        })?;
+                    return Err(SessionsRotateTokenError::ServiceUnavailable(value));
+                }
+                if status.as_u16() == 500 {
+                    let headers = resp.headers().clone();
+                    let mut value: Internal = resp.json::<Internal>().await.map_err(|err| {
+                        xidl_rust_axum::Error::new(
+                            status.as_u16(),
+                            format!("exception Internal body: {err}"),
+                        )
+                    })?;
+                    return Err(SessionsRotateTokenError::Internal(value));
+                }
+                if status.as_u16() == 429 {
+                    let headers = resp.headers().clone();
+                    let mut value: QuotaExceeded =
+                        resp.json::<QuotaExceeded>().await.map_err(|err| {
+                            xidl_rust_axum::Error::new(
+                                status.as_u16(),
+                                format!("exception QuotaExceeded body: {err}"),
+                            )
+                        })?;
+                    return Err(SessionsRotateTokenError::QuotaExceeded(value));
+                }
+                let body = resp.json::<xidl_rust_axum::ErrorBody>().await.ok();
+                Err(SessionsRotateTokenError::Framework(
+                    xidl_rust_axum::Error::from_http_response(status, body),
+                ))
             }
         }
     }

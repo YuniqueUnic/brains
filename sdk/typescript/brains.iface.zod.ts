@@ -223,4 +223,21 @@ import { xjson } from "xidl-typescript-codec";
             set_cookie: z.coerce.string().optional(),
         });
     export type SessionsLogoutResponse = z.infer<typeof SessionsLogoutResponseSchema>;
+
+    export const SessionsRevokeAllResponseSchema = z.object({
+            return: models.brains.OkResultSchema,
+            set_cookie: z.coerce.string().optional(),
+        });
+    export type SessionsRevokeAllResponse = z.infer<typeof SessionsRevokeAllResponseSchema>;
+
+    export const SessionsRotateTokenRequestSchema = z.object({
+            input: models.brains.TokenRotationInputSchema,
+        });
+    export type SessionsRotateTokenRequest = z.infer<typeof SessionsRotateTokenRequestSchema>;
+
+    export const SessionsRotateTokenResponseSchema = z.object({
+            return: models.brains.OkResultSchema,
+            set_cookie: z.coerce.string().optional(),
+        });
+    export type SessionsRotateTokenResponse = z.infer<typeof SessionsRotateTokenResponseSchema>;
 }

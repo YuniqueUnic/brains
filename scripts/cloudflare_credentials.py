@@ -22,7 +22,7 @@ def sync_admin_token(path, env):
         and t.get("token_sha256") == digest
         for t in tokens
     ):
-        print("Configured admin token already matches the enabled registry.")
+        print("Configured admin token already matches the bootstrap registry. Active credentials require bsx auth rotate-token.")
         return
     owners = [
         t
@@ -49,5 +49,5 @@ def sync_admin_token(path, env):
     path.chmod(0o600)
     env["TOKEN_REGISTRY_JSON"] = encoded
     print(
-        "Owner token hash synchronized privately; signing keys and other principals retained."
+        "Bootstrap owner hash synchronized privately; active credentials require bsx auth rotate-token. Signing keys and other principals retained."
     )

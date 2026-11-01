@@ -1,15 +1,18 @@
 import resourceStrings from "./zh-CN-resources";
+import securityStrings from "./zh-CN-security";
 
 /** zh-CN strings, grouped by namespace. The e2e suite asserts several of
  * these verbatim (editor status labels, search hit header, logout text) —
  * treat changes to those values as contract changes. */
 const zhCN = {
   resources: resourceStrings,
+  security: securityStrings,
   common: {
     loading: "加载中…",
     newFile: "新建",
     upload: "上传",
     logout: "退出",
+    security: "安全",
     cancel: "取消",
     create: "创建",
     close: "关闭",
@@ -20,6 +23,7 @@ const zhCN = {
     themeCycle: "点击切换",
   },
   login: {
+    logoutFailed: "未能撤销当前会话，请检查网络后重试退出。",
     demoSubtitle: "无需账号或令牌，在浏览器中体验 Brains",
     demoSubmit: "进入演示",
     subtitle: "使用访问令牌登录本机知识库",

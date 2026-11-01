@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { Tooltip as TooltipPrimitive } from "@base-ui-components/react/tooltip";
 import { api, ApiError, type SessionInfo } from "./api/client";
 import { UiSettingsProvider } from "./components/shell/settings-dialog";
@@ -48,8 +48,9 @@ export default function App() {
       await api.deleteSession();
     } catch (error) {
       // Cookie already gone or auth expired: treat both as logged out.
-      if (!(error instanceof ApiError && (error.status === 401 || error.status === 403))) {
-        // fall through to local logout either way
+      if (!(error instanceof ApiError && error.status === 401)) {
+        toast.error(t("logoutFailed"));
+        return;
       }
     }
     // A mid-work expiry must EXPLAIN itself: the banner set in Workspace dies
@@ -61,7 +62,7 @@ export default function App() {
     <UiSettingsProvider>
       <TooltipPrimitive.Provider delay={400}>
         <Suspense fallback={<div role="status" className="flex h-full items-center justify-center text-muted-foreground">{t("connecting")}</div>}>
-          <Workspace session={state.session} onLogout={logout} />
+          <Workspace session={state.session} onLogout={logout} onSignedOut={(reason) => setState({ kind: "anonymous", error: reason })} />
         </Suspense>
         <Toaster
           position="bottom-center"

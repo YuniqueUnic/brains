@@ -589,6 +589,12 @@ pub mod brains {
     }
     impl OkResult {}
     #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
+    pub struct TokenRotationInput {
+        pub current_token: String,
+        pub replacement_token: String,
+    }
+    impl TokenRotationInput {}
+    #[derive(Debug, Clone, PartialEq, ::serde::Serialize, ::serde::Deserialize, Default)]
     pub struct PatchEdit {
         pub old_text: String,
         pub new_text: String,
@@ -14325,7 +14331,16 @@ pub mod brains {
             authorization: String,
         ) -> ::std::result::Result<SessionsLoginResponse, SessionsLoginError>;
         async fn current(&self) -> ::xidl_rust_axum::Result<Session>;
-        async fn logout(&self) -> ::xidl_rust_axum::Result<SessionsLogoutResponse>;
+        async fn logout(
+            &self,
+        ) -> ::std::result::Result<SessionsLogoutResponse, SessionsLogoutError>;
+        async fn revoke_all(
+            &self,
+        ) -> ::std::result::Result<SessionsRevokeAllResponse, SessionsRevokeAllError>;
+        async fn rotate_token(
+            &self,
+            input: TokenRotationInput,
+        ) -> ::std::result::Result<SessionsRotateTokenResponse, SessionsRotateTokenError>;
     }
     /// Typed error channel for `login`: one variant per
     /// declared `raises(...)` exception, plus the runtime fallback.
@@ -14446,6 +14461,531 @@ pub mod brains {
             }
         }
     }
+    /// Typed error channel for `logout`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum SessionsLogoutError {
+        Forbidden(Forbidden),
+        PreconditionFailed(PreconditionFailed),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for SessionsLogoutError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for SessionsLogoutError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for SessionsLogoutError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    impl ::xidl_rust_axum::axum::response::IntoResponse for SessionsLogoutError {
+        fn into_response(self) -> ::xidl_rust_axum::axum::response::Response {
+            match self {
+                Self::Framework(err) => {
+                    ::xidl_rust_axum::axum::response::IntoResponse::into_response(err)
+                }
+                Self::Forbidden(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(403u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::PreconditionFailed(err) => {
+                    let headers =
+                        (|| -> xidl_rust_axum::Result<::xidl_rust_axum::axum::http::HeaderMap> {
+                            let mut headers = ::xidl_rust_axum::axum::http::HeaderMap::new();
+                            for value in err.etag.as_ref().into_iter() {
+                                let value = value.to_string();
+                                let value =
+                                    ::xidl_rust_axum::axum::http::header::HeaderValue::from_str(
+                                        &value,
+                                    )
+                                    .map_err(|err| {
+                                        xidl_rust_axum::Error::new(
+                                            500,
+                                            format!("exception ETag: {err}"),
+                                        )
+                                    })?;
+                                headers.append("ETag", value);
+                            }
+                            Ok(headers)
+                        })();
+                    let headers = match headers {
+                        Ok(headers) => headers,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                err,
+                            );
+                        }
+                    };
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(412u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response.headers_mut().extend(headers);
+                    response
+                }
+                Self::ServiceUnavailable(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(503u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Internal(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+            }
+        }
+    }
+    /// Typed error channel for `revoke_all`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum SessionsRevokeAllError {
+        Forbidden(Forbidden),
+        PreconditionFailed(PreconditionFailed),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for SessionsRevokeAllError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for SessionsRevokeAllError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for SessionsRevokeAllError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    impl ::xidl_rust_axum::axum::response::IntoResponse for SessionsRevokeAllError {
+        fn into_response(self) -> ::xidl_rust_axum::axum::response::Response {
+            match self {
+                Self::Framework(err) => {
+                    ::xidl_rust_axum::axum::response::IntoResponse::into_response(err)
+                }
+                Self::Forbidden(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(403u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::PreconditionFailed(err) => {
+                    let headers =
+                        (|| -> xidl_rust_axum::Result<::xidl_rust_axum::axum::http::HeaderMap> {
+                            let mut headers = ::xidl_rust_axum::axum::http::HeaderMap::new();
+                            for value in err.etag.as_ref().into_iter() {
+                                let value = value.to_string();
+                                let value =
+                                    ::xidl_rust_axum::axum::http::header::HeaderValue::from_str(
+                                        &value,
+                                    )
+                                    .map_err(|err| {
+                                        xidl_rust_axum::Error::new(
+                                            500,
+                                            format!("exception ETag: {err}"),
+                                        )
+                                    })?;
+                                headers.append("ETag", value);
+                            }
+                            Ok(headers)
+                        })();
+                    let headers = match headers {
+                        Ok(headers) => headers,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                err,
+                            );
+                        }
+                    };
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(412u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response.headers_mut().extend(headers);
+                    response
+                }
+                Self::ServiceUnavailable(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(503u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Internal(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+            }
+        }
+    }
+    /// Typed error channel for `rotate_token`: one variant per
+    /// declared `raises(...)` exception, plus the runtime fallback.
+    #[derive(Debug)]
+    pub enum SessionsRotateTokenError {
+        BadRequest(BadRequest),
+        Forbidden(Forbidden),
+        PreconditionFailed(PreconditionFailed),
+        ServiceUnavailable(ServiceUnavailable),
+        Internal(Internal),
+        QuotaExceeded(QuotaExceeded),
+        Framework(xidl_rust_axum::Error),
+    }
+    impl ::std::fmt::Display for SessionsRotateTokenError {
+        fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+            match self {
+                Self::BadRequest(_) => f.write_str("HTTP 400: BadRequest"),
+                Self::Forbidden(_) => f.write_str("HTTP 403: Forbidden"),
+                Self::PreconditionFailed(_) => f.write_str("HTTP 412: PreconditionFailed"),
+                Self::ServiceUnavailable(_) => f.write_str("HTTP 503: ServiceUnavailable"),
+                Self::Internal(_) => f.write_str("HTTP 500: Internal"),
+                Self::QuotaExceeded(_) => f.write_str("HTTP 429: QuotaExceeded"),
+                Self::Framework(err) => ::std::fmt::Display::fmt(err, f),
+            }
+        }
+    }
+    impl ::std::error::Error for SessionsRotateTokenError {
+        fn source(&self) -> Option<&(dyn ::std::error::Error + 'static)> {
+            match self {
+                Self::Framework(err) => Some(err),
+                _ => None,
+            }
+        }
+    }
+    impl From<xidl_rust_axum::Error> for SessionsRotateTokenError {
+        fn from(err: xidl_rust_axum::Error) -> Self {
+            Self::Framework(err)
+        }
+    }
+    impl ::xidl_rust_axum::axum::response::IntoResponse for SessionsRotateTokenError {
+        fn into_response(self) -> ::xidl_rust_axum::axum::response::Response {
+            match self {
+                Self::Framework(err) => {
+                    ::xidl_rust_axum::axum::response::IntoResponse::into_response(err)
+                }
+                Self::BadRequest(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(400u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Forbidden(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(403u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::PreconditionFailed(err) => {
+                    let headers =
+                        (|| -> xidl_rust_axum::Result<::xidl_rust_axum::axum::http::HeaderMap> {
+                            let mut headers = ::xidl_rust_axum::axum::http::HeaderMap::new();
+                            for value in err.etag.as_ref().into_iter() {
+                                let value = value.to_string();
+                                let value =
+                                    ::xidl_rust_axum::axum::http::header::HeaderValue::from_str(
+                                        &value,
+                                    )
+                                    .map_err(|err| {
+                                        xidl_rust_axum::Error::new(
+                                            500,
+                                            format!("exception ETag: {err}"),
+                                        )
+                                    })?;
+                                headers.append("ETag", value);
+                            }
+                            Ok(headers)
+                        })();
+                    let headers = match headers {
+                        Ok(headers) => headers,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                err,
+                            );
+                        }
+                    };
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(412u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response.headers_mut().extend(headers);
+                    response
+                }
+                Self::ServiceUnavailable(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(503u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::Internal(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(500u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+                Self::QuotaExceeded(err) => {
+                    let body = match xidl_rust_axum::serde_json::to_vec(&err) {
+                        Ok(body) => body,
+                        Err(err) => {
+                            return ::xidl_rust_axum::axum::response::IntoResponse::into_response(
+                                xidl_rust_axum::Error::new(500, format!("{err:?}")),
+                            );
+                        }
+                    };
+                    let body = ::xidl_rust_axum::axum::body::Body::from(body);
+                    let mut response = ::xidl_rust_axum::axum::response::Response::new(body);
+                    *response.status_mut() =
+                        ::xidl_rust_axum::axum::http::StatusCode::from_u16(429u16).unwrap();
+                    response.headers_mut().insert(
+                        ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                        ::xidl_rust_axum::axum::http::HeaderValue::from_static("application/json"),
+                    );
+                    response
+                }
+            }
+        }
+    }
     #[allow(
         non_snake_case,
         non_camel_case_types,
@@ -14498,6 +15038,29 @@ pub mod brains {
                     scopes: value.scopes.into_iter().collect(),
                     expires_at: value.expires_at,
                     csrf_token: value.csrf_token,
+                }
+            }
+        }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_TokenRotationInput {
+            pub current_token: String,
+            pub replacement_token: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::TokenRotationInput> for brains_TokenRotationInput {
+            fn from(value: super::TokenRotationInput) -> Self {
+                Self {
+                    current_token: value.current_token,
+                    replacement_token: value.replacement_token,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_TokenRotationInput> for super::TokenRotationInput {
+            fn from(value: brains_TokenRotationInput) -> Self {
+                Self {
+                    current_token: value.current_token,
+                    replacement_token: value.replacement_token,
                 }
             }
         }
@@ -14557,6 +15120,29 @@ pub mod brains {
                 }
             }
         }
+        #[derive(::serde::Serialize, ::serde::Deserialize)]
+        pub struct brains_TokenRotationInput {
+            pub current_token: String,
+            pub replacement_token: String,
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<super::TokenRotationInput> for brains_TokenRotationInput {
+            fn from(value: super::TokenRotationInput) -> Self {
+                Self {
+                    current_token: value.current_token,
+                    replacement_token: value.replacement_token,
+                }
+            }
+        }
+        #[allow(unused_variables, unreachable_code)]
+        impl From<brains_TokenRotationInput> for super::TokenRotationInput {
+            fn from(value: brains_TokenRotationInput) -> Self {
+                Self {
+                    current_token: value.current_token,
+                    replacement_token: value.replacement_token,
+                }
+            }
+        }
     }
     #[derive(::serde::Deserialize)]
     struct SessionsLoginRequest {
@@ -14613,6 +15199,74 @@ pub mod brains {
             value.r#return.into()
         }
     }
+    pub type SessionsRevokeAllResponseOutBody = __xidl_out_Sessions::brains_OkResult;
+    pub struct SessionsRevokeAllResponse {
+        pub r#return: OkResult,
+        pub set_cookie: Option<String>,
+    }
+    #[allow(clippy::useless_conversion, unreachable_code, unused_variables)]
+    impl From<SessionsRevokeAllResponse> for SessionsRevokeAllResponseOutBody {
+        fn from(value: SessionsRevokeAllResponse) -> Self {
+            value.r#return.into()
+        }
+    }
+    pub type SessionsRotateTokenRequestInBody = __xidl_in_Sessions::brains_TokenRotationInput;
+    #[derive(::serde::Deserialize)]
+    struct SessionsRotateTokenRequest {
+        input: __xidl_in_Sessions::brains_TokenRotationInput,
+    }
+    #[allow(clippy::manual_async_fn, unused_mut)]
+    impl<S> ::xidl_rust_axum::axum::extract::FromRequest<S> for SessionsRotateTokenRequest
+    where
+        S: Send + Sync,
+    {
+        type Rejection = ::xidl_rust_axum::Error;
+        fn from_request(
+            req: ::xidl_rust_axum::axum::extract::Request,
+            state: &S,
+        ) -> impl ::core::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+            async move {
+                let (mut parts, body) = req.into_parts();
+                let _ = &body;
+                let _ = state;
+                let xidl_headers = &parts.headers;
+                let _ = xidl_headers;
+                if !::xidl_rust_axum::http::content_type_matches(xidl_headers, "application/json") {
+                    return Err(::xidl_rust_axum::Error::unsupported_media_type());
+                }
+                let xidl_body_bytes = <::xidl_rust_axum::axum::body::Bytes as ::xidl_rust_axum::axum::extract::FromRequest<
+                    S,
+                >>::from_request(
+                        ::xidl_rust_axum::axum::extract::Request::from_parts(
+                            parts,
+                            body,
+                        ),
+                        state,
+                    )
+                    .await
+                    .map_err(|err| ::xidl_rust_axum::Error::new(
+                        err.status().as_u16(),
+                        err.body_text(),
+                    ))?;
+                let xidl_body: SessionsRotateTokenRequestInBody =
+                    ::xidl_rust_axum::DeserializeFactory::new("application/json")
+                        .from_slice(&xidl_body_bytes)?;
+                let input = xidl_body;
+                Ok(Self { input })
+            }
+        }
+    }
+    pub type SessionsRotateTokenResponseOutBody = __xidl_out_Sessions::brains_OkResult;
+    pub struct SessionsRotateTokenResponse {
+        pub r#return: OkResult,
+        pub set_cookie: Option<String>,
+    }
+    #[allow(clippy::useless_conversion, unreachable_code, unused_variables)]
+    impl From<SessionsRotateTokenResponse> for SessionsRotateTokenResponseOutBody {
+        fn from(value: SessionsRotateTokenResponse) -> Self {
+            value.r#return.into()
+        }
+    }
     pub struct SessionsServer<T> {
         inner: ::std::sync::Arc<T>,
     }
@@ -14640,6 +15294,14 @@ pub mod brains {
                 .route(
                     "/session",
                     xidl_rust_axum::axum::routing::delete(Self::logout),
+                )
+                .route(
+                    "/session/revoke",
+                    xidl_rust_axum::axum::routing::post(Self::revoke_all),
+                )
+                .route(
+                    "/token/rotate",
+                    xidl_rust_axum::axum::routing::post(Self::rotate_token),
                 )
                 .with_state(_svc)
         }
@@ -14778,6 +15440,129 @@ pub mod brains {
                     };
                     let mut resp = {
                         let body_value: SessionsLogoutResponseOutBody = resp_value.into();
+                        let _ = &body_value;
+                        let body = xidl_rust_axum::SerializeFactory::new("application/json")
+                            .to_vec(&body_value)?;
+                        ::xidl_rust_axum::axum::response::Response::builder()
+                            .status(
+                                ::xidl_rust_axum::axum::http::StatusCode::from_u16(200).unwrap(),
+                            )
+                            .header(
+                                ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                                "application/json",
+                            )
+                            .body(::xidl_rust_axum::axum::body::Body::from(body))
+                            .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?
+                    };
+                    let header_name = ::xidl_rust_axum::axum::http::HeaderName::from_bytes(
+                        "Set-Cookie".as_bytes(),
+                    )
+                    .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?;
+                    if let Some(value_str) = &set_cookie_header_value {
+                        let header_value =
+                            ::xidl_rust_axum::axum::http::HeaderValue::from_str(value_str)
+                                .map_err(|err| {
+                                    xidl_rust_axum::Error::new(400, format!("{err:?}"))
+                                })?;
+                        resp.headers_mut().insert(header_name, header_value);
+                    }
+                    resp
+                }
+                Err(err) => ::xidl_rust_axum::axum::response::IntoResponse::into_response(err),
+            };
+            Ok(resp)
+        }
+        #[allow(
+            clippy::let_and_return,
+            clippy::needless_return,
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            clippy::let_unit_value,
+            unused_variables
+        )]
+        async fn revoke_all(
+            ::xidl_rust_axum::axum::extract::State(svc): ::xidl_rust_axum::axum::extract::State<
+                ::std::sync::Arc<T>,
+            >,
+            headers: ::xidl_rust_axum::axum::http::HeaderMap,
+            uri: ::xidl_rust_axum::axum::http::Uri,
+        ) -> ::xidl_rust_axum::Result<::xidl_rust_axum::axum::response::Response> {
+            let _ = &headers;
+            if !xidl_rust_axum::http::accepts_media_type(&headers, "application/json") {
+                return Err(xidl_rust_axum::Error::not_acceptable());
+            }
+            let mut resp = match svc.revoke_all().await {
+                Ok(resp_value) => {
+                    let set_cookie_header_value: Option<String> = {
+                        let value = &resp_value.set_cookie;
+                        value.clone()
+                    };
+                    let mut resp = {
+                        let body_value: SessionsRevokeAllResponseOutBody = resp_value.into();
+                        let _ = &body_value;
+                        let body = xidl_rust_axum::SerializeFactory::new("application/json")
+                            .to_vec(&body_value)?;
+                        ::xidl_rust_axum::axum::response::Response::builder()
+                            .status(
+                                ::xidl_rust_axum::axum::http::StatusCode::from_u16(200).unwrap(),
+                            )
+                            .header(
+                                ::xidl_rust_axum::axum::http::header::CONTENT_TYPE,
+                                "application/json",
+                            )
+                            .body(::xidl_rust_axum::axum::body::Body::from(body))
+                            .map_err(|err| xidl_rust_axum::Error::new(500, format!("{err:?}")))?
+                    };
+                    let header_name = ::xidl_rust_axum::axum::http::HeaderName::from_bytes(
+                        "Set-Cookie".as_bytes(),
+                    )
+                    .map_err(|err| xidl_rust_axum::Error::new(400, format!("{err:?}")))?;
+                    if let Some(value_str) = &set_cookie_header_value {
+                        let header_value =
+                            ::xidl_rust_axum::axum::http::HeaderValue::from_str(value_str)
+                                .map_err(|err| {
+                                    xidl_rust_axum::Error::new(400, format!("{err:?}"))
+                                })?;
+                        resp.headers_mut().insert(header_name, header_value);
+                    }
+                    resp
+                }
+                Err(err) => ::xidl_rust_axum::axum::response::IntoResponse::into_response(err),
+            };
+            Ok(resp)
+        }
+        #[allow(
+            clippy::let_and_return,
+            clippy::needless_return,
+            clippy::useless_conversion,
+            unused_mut,
+            unreachable_code,
+            clippy::let_unit_value,
+            unused_variables
+        )]
+        async fn rotate_token(
+            ::xidl_rust_axum::axum::extract::State(svc): ::xidl_rust_axum::axum::extract::State<
+                ::std::sync::Arc<T>,
+            >,
+            headers: ::xidl_rust_axum::axum::http::HeaderMap,
+            uri: ::xidl_rust_axum::axum::http::Uri,
+            request: SessionsRotateTokenRequest,
+        ) -> ::xidl_rust_axum::Result<::xidl_rust_axum::axum::response::Response> {
+            let _ = &headers;
+            if !xidl_rust_axum::http::accepts_media_type(&headers, "application/json") {
+                return Err(xidl_rust_axum::Error::not_acceptable());
+            }
+            let SessionsRotateTokenRequest { input } = request;
+            let input: TokenRotationInput = input.into();
+            let mut resp = match svc.rotate_token(input).await {
+                Ok(resp_value) => {
+                    let set_cookie_header_value: Option<String> = {
+                        let value = &resp_value.set_cookie;
+                        value.clone()
+                    };
+                    let mut resp = {
+                        let body_value: SessionsRotateTokenResponseOutBody = resp_value.into();
                         let _ = &body_value;
                         let body = xidl_rust_axum::SerializeFactory::new("application/json")
                             .to_vec(&body_value)?;

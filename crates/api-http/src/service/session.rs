@@ -1,5 +1,5 @@
 //! Session lifecycle (IDL `Sessions`): stateless HMAC cookies, CSRF re-derived
-//! per request; logout only expires the cookie.
+//! per request; revocation is persisted before the cookie is cleared.
 
 use brains_domain::DomainError;
 
@@ -32,7 +32,7 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Sessions for SessionService<H, 
         let rid = ctx.request_id.as_str();
         // The middleware only lets Bearer credentials through to this point;
         // a session cookie is a typed 400 (already authenticated).
-        let AuthSource::Bearer(principal) = &ctx.auth else {
+        let AuthSource::Bearer(principal, _) = &ctx.auth else {
             return Err(contract::SessionsLoginError::BadRequest(
                 contract::BadRequest {
                     error: detail(
@@ -44,12 +44,11 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Sessions for SessionService<H, 
                 },
             ));
         };
-        let (value, csrf, expires_at) =
-            self.state.security.issue_session(principal).map_err(|e| {
-                contract::SessionsLoginError::Internal(contract::Internal {
-                    error: detail(&e, rid),
-                })
-            })?;
+        let (value, csrf, expires_at) = self
+            .state
+            .security
+            .issue_session(&ctx.auth)
+            .map_err(|e| super::error::login_error(e, rid))?;
         let cookie = self
             .state
             .session_cookie_policy
@@ -85,7 +84,15 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Sessions for SessionService<H, 
         })
     }
 
-    async fn logout(&self) -> ::xidl_rust_axum::Result<contract::SessionsLogoutResponse> {
+    async fn logout(
+        &self,
+    ) -> Result<contract::SessionsLogoutResponse, contract::SessionsLogoutError> {
+        let ctx = current();
+        self.state
+            .security
+            .revoke_sessions(&ctx.auth, false)
+            .await
+            .map_err(|e| super::error::logout_error(e, ctx.request_id.as_str()))?;
         Ok(contract::SessionsLogoutResponse {
             r#return: contract::OkResult { ok: true },
             set_cookie: Some(self.state.session_cookie_policy.cookie_header(
@@ -93,6 +100,44 @@ impl<H: Head, R: Rev, B: Blob, I: Idx> contract::Sessions for SessionService<H, 
                 0,
                 &current().headers,
             )),
+        })
+    }
+    async fn revoke_all(
+        &self,
+    ) -> Result<contract::SessionsRevokeAllResponse, contract::SessionsRevokeAllError> {
+        let ctx = current();
+        self.state
+            .security
+            .revoke_sessions(&ctx.auth, true)
+            .await
+            .map_err(|e| super::error::revoke_sessions_error(e, ctx.request_id.as_str()))?;
+        Ok(contract::SessionsRevokeAllResponse {
+            r#return: contract::OkResult { ok: true },
+            set_cookie: Some(
+                self.state
+                    .session_cookie_policy
+                    .cookie_header("", 0, &ctx.headers),
+            ),
+        })
+    }
+
+    async fn rotate_token(
+        &self,
+        input: contract::TokenRotationInput,
+    ) -> Result<contract::SessionsRotateTokenResponse, contract::SessionsRotateTokenError> {
+        let ctx = current();
+        self.state
+            .security
+            .rotate_token(&ctx.auth, &input.current_token, &input.replacement_token)
+            .await
+            .map_err(|e| super::error::rotate_token_error(e, ctx.request_id.as_str()))?;
+        Ok(contract::SessionsRotateTokenResponse {
+            r#return: contract::OkResult { ok: true },
+            set_cookie: Some(
+                self.state
+                    .session_cookie_policy
+                    .cookie_header("", 0, &ctx.headers),
+            ),
         })
     }
 }

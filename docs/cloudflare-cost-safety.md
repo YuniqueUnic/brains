@@ -41,7 +41,7 @@ R2 Standard allowances, Infrequent Access storage/retrieval rules and operation 
 
 The Worker previously loaded resource settings from D1 and wrote a request charge before the shared router authenticated the caller. Public health polling and unauthorized API traffic could therefore generate D1 operations even when they never reached a business handler.
 
-`AuthSource::authorize_request` now owns the shared credential, Origin and CSRF checks. The Worker runs that policy before loading D1/R2 services. `/healthz` is a storage-free liveness response. Shared native middleware uses the same policy. Traffic rejected by this early identity/Origin/CSRF gate and health traffic still consumes platform invocation/CPU capacity, but does not amplify into this application's D1/R2/AI operations. Authenticated requests can still incur setup/accounting before a later route, scope or input rejection.
+`AuthSource::authorize_request` now owns the shared credential, Origin and CSRF checks. The Worker runs that policy before loading D1/R2 services. `/healthz` is a storage-free liveness response. Shared native middleware uses the same policy. Traffic rejected by this early identity/Origin/CSRF gate and health traffic still consumes platform invocation/CPU capacity, but does not write the application ledger, access vault content/indexes, or invoke AI services. Durable credential/session revocation adds one bounded primary-key D1 security-state read before the gate; rejected-authentication lookup costs are outside the application usage report and remain visible in provider billing. Authenticated requests can still incur setup/accounting before a later route, scope or input rejection.
 
 ### Do not let failed requests dispatch background work
 

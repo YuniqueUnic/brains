@@ -2,6 +2,7 @@
 """Exercise separately built native FTS/basic binaries against the same vault."""
 import argparse
 import json
+import secrets
 from pathlib import Path
 import tempfile
 
@@ -48,8 +49,11 @@ def main():
         assert not (data / 'vaults/default/index.turso-basic.db').exists()
         assert not list((data / 'vaults/default').glob('index.turso-building.db*'))
         print('build switch: FTS → basic edit → FTS rebuild; history, tags, links, fresh search and capability snapshot passed')
+        # Switching builds must keep the same credential: bootstrap inputs no
+        # longer replace the active owner token when the server restarts.
+        server_token = secrets.token_urlsafe(32)
         for binary, available in [(args.basic_server, False), (args.fts_server, True)]:
-            with native_server(root, data, 'default', binary.resolve()) as (url, token):
+            with native_server(root, data, 'default', binary.resolve(), token=server_token) as (url, token):
                 name = 'remote-fts' if available else 'remote-basic'
                 basic.remote(name, url, token)
                 caps = json.loads(basic(name, 'capabilities', '--json'))['features']

@@ -427,6 +427,11 @@ struct OkResult {
     boolean ok;
 };
 
+struct TokenRotationInput {
+    string current_token;
+    string replacement_token;
+};
+
 struct PatchEdit {
     string old_text;
     string new_text;
@@ -875,7 +880,18 @@ interface Sessions {
     @delete(path = "/session")
     OkResult logout(
         @header @rename("Set-Cookie") @optional out string set_cookie
-    );
+    ) raises(Forbidden, PreconditionFailed, ServiceUnavailable, Internal, QuotaExceeded);
+
+    @post(path = "/session/revoke")
+    OkResult revoke_all(
+        @header @rename("Set-Cookie") @optional out string set_cookie
+    ) raises(Forbidden, PreconditionFailed, ServiceUnavailable, Internal, QuotaExceeded);
+
+    @post(path = "/token/rotate")
+    OkResult rotate_token(
+        @body TokenRotationInput input,
+        @header @rename("Set-Cookie") @optional out string set_cookie
+    ) raises(BadRequest, Forbidden, PreconditionFailed, ServiceUnavailable, Internal, QuotaExceeded);
 };
 
 };

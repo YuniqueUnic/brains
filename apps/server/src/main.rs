@@ -17,7 +17,7 @@ struct Args {
     bind: String,
     #[arg(long, env = "BRAINS_PORT", default_value_t = 45800)]
     port: u16,
-    /// Register (or replace) a whole-vault root token. Generated once if omitted.
+    /// Bootstrap a whole-vault token on first boot; existing credentials are kept.
     #[arg(
         long,
         env = "BRAINS_TOKEN",

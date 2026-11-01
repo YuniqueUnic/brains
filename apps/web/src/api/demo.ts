@@ -211,6 +211,14 @@ export const demoApi = {
   async deleteSession(): Promise<void> {
     await latency();
   },
+
+  async rotateToken(_current: string, _replacement: string): Promise<void> {
+    throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Demo mode has no server credentials");
+  },
+
+  async revokeSessions(): Promise<void> {
+    throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Demo mode has no server sessions");
+  },
   async listFiles(query: {
     prefix?: string; cursor?: string | null; limit?: number; include_deleted?: boolean;
     source?: "store" | "index"; tags?: string[]; sort?: string;
