@@ -610,15 +610,15 @@ exception HeadInternal {
 // GET /file: current-HEAD metadata or the raw bytes.
 @http
 union FilePayload switch (ContentType) {
-    case Json: Entry meta;
-    case OctetStream: sequence<octet> raw;
+    case ContentType::Json: Entry meta;
+    case ContentType::OctetStream: sequence<octet> raw;
 };
 
 // GET /revision: one immutable revision's metadata or its raw bytes.
 @http
 union RevisionPayload switch (ContentType) {
-    case Json: Revision meta;
-    case OctetStream: sequence<octet> raw;
+    case ContentType::Json: Revision meta;
+    case ContentType::OctetStream: sequence<octet> raw;
 };
 
 // Query filters are JSON values: tags are exact strings and combine with AND.
