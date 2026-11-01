@@ -9,13 +9,19 @@ name: Auto merge
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_pr:
+        description: "Trusted release PR number to resume publishing for"
+        required: true
+        type: string
 
 permissions:
   contents: write
   pull-requests: write
 
 concurrency:
-  group: auto-merge-${{ github.event.pull_request.number }}
+  group: auto-merge-${{ github.event.pull_request.number || inputs.release_pr }}
   cancel-in-progress: false
 
 jobs:
@@ -52,13 +58,86 @@ jobs:
 
   release:
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
     if: |
-      github.event.pull_request.user.id == 41898282 &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.head_ref == 'release-please--branches--main--components--brains'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.user.id == 41898282 &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.head_ref == 'release-please--branches--main--components--brains')
     steps:
+      - name: Resolve the trusted release request
+        id: release-pr
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const input = context.payload.pull_request?.number ?? context.payload.inputs?.release_pr;
+            if (!/^[1-9][0-9]*$/.test(String(input)) || !Number.isSafeInteger(Number(input))) {
+              throw new Error('A positive release PR number is required.');
+            }
+            const { data: pull } = await github.rest.pulls.get({
+              owner, repo, pull_number: Number(input),
+            });
+            if (pull.user.id !== 41898282 || pull.user.type !== 'Bot' ||
+                pull.head.repo?.id !== context.payload.repository.id ||
+                pull.head.ref !== 'release-please--branches--main--components--brains' ||
+                pull.base.ref !== 'main') {
+              throw new Error('Only this repository\'s release-bot request can publish.');
+            }
+            const expected = context.payload.pull_request?.head.sha ?? pull.head.sha;
+            if (pull.head.sha !== expected || (pull.state !== 'open' && !pull.merged)) {
+              core.info('Release request was superseded or closed without merging.');
+              return;
+            }
+            core.setOutput('active', 'true');
+            core.setOutput('number', String(pull.number));
+            core.setOutput('head', expected);
+            core.setOutput('merged', String(pull.merged));
       - name: Enable auto-merge for the release PR
-        run: gh pr merge --auto --squash "$PR_URL"
+        if: steps.release-pr.outputs.active == 'true' && steps.release-pr.outputs.merged != 'true'
+        run: gh pr merge --auto --squash --match-head-commit "$RELEASE_HEAD" "$PR_URL"
         env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_URL: https://github.com/${{ github.repository }}/pull/${{ steps.release-pr.outputs.number }}
+          RELEASE_HEAD: ${{ steps.release-pr.outputs.head }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish after the checked release request merges
+        if: steps.release-pr.outputs.active == 'true'
+        uses: actions/github-script@v9
+        env:
+          RELEASE_PR: ${{ steps.release-pr.outputs.number }}
+          RELEASE_HEAD: ${{ steps.release-pr.outputs.head }}
+        with:
+          retries: 2
+          script: |
+            const { owner, repo } = context.repo;
+            const expected = process.env.RELEASE_HEAD;
+            const deadline = Date.now() + 80 * 60 * 1000;
+            while (Date.now() < deadline) {
+              const { data: pull } = await github.rest.pulls.get({
+                owner, repo, pull_number: Number(process.env.RELEASE_PR),
+              });
+              if (pull.head.sha !== expected || pull.base.ref !== 'main' ||
+                  pull.user.id !== 41898282 || pull.user.type !== 'Bot' ||
+                  pull.head.repo?.id !== context.payload.repository.id ||
+                  pull.head.ref !== 'release-please--branches--main--components--brains') {
+                core.info('Release request changed; the next head owns publishing.');
+                return;
+              }
+              if (pull.merged) {
+                await github.rest.actions.createWorkflowDispatch({
+                  owner, repo, workflow_id: 'release-please.yml', ref: 'main',
+                });
+                core.info(`Dispatched Release Please after #${pull.number} merged at ${expected}.`);
+                return;
+              }
+              if (pull.state !== 'open') {
+                core.info('Release request closed without merging.');
+                return;
+              }
+              await new Promise(resolve => setTimeout(resolve, 15000));
+            }
+            throw new Error('Release request is still pending after 80 minutes. Inspect its required checks, then rerun Auto merge to resume publishing.');

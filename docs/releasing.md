@@ -15,7 +15,13 @@ Brains 的产品版本统一管理，Rust、Web、Worker、SDK 和验收工具�
 
 仓库需允许 Actions 创建 PR，并为 Release Please 提供工作流内声明的 `actions: write` 权限。新提交的检查尚未出现在 GitHub API 时，批准步骤最多等待 27 秒；超时或接口拒绝会明确失败，修复原因后重跑 Release Please 即可处理仍开放的版本 PR。其它贡献者继续遵循仓库的首次贡献者审批策略。`GITHUB_TOKEN` 创建的 tag 不会自动触发 tag-push 工作流，因此资产构建使用 `workflow_dispatch`。依据：[GitHub 自动令牌触发规则](https://docs.github.com/en/actions/concepts/security/github_token)、[批准工作流接口](https://docs.github.com/en/rest/actions/workflow-runs#approve-a-workflow-run-for-a-fork-pull-request)。
 
-同一自动令牌完成合并时，主分支的 `push` 工作流也可能不会触发。Release Please 因此还接收 CI、Pages demo 和 Auto merge 的完成事件，只处理同仓固定发布分支的成功 PR 工作流，并核对机器人身份、受检提交与实际已合并状态后才创建 Release。这三个工作流无论按什么顺序完成，最后一个完成事件都能再次核对合并结果。检查完成与自动合并有短暂间隔时，最多等待 27 秒；若合并仍受阻，本次不创建 Release，后续工作流完成或手动重跑再核对。普通 PR、其它分支、旧提交和未合并请求都不能借此发布；这个入口始终执行默认分支的工作流，不读取 PR 中的脚本。
+同一自动令牌完成合并时，主分支的 `push` 工作流也可能不会触发。Auto merge 因此在启用版本请求的自动合并后继续观察同一个提交，确认它实际合入 `main`，再显式派发默认分支上的 Release Please；不依赖隐式的检查完成事件。它持续核对机器人、同仓、固定分支和提交身份，新提交出现或请求未合并便关闭时退出。观察最多 80 分钟，超时或接口失败会明确报错；该观察任务不是合并必需检查，不会阻挡它正在等待的合并，也不占用 Release Please 的全局并发组。没有检出或执行请求文件，没有新增个人令牌。
+
+已合并请求的发布接续失败时，可重新运行 Auto merge，或从默认分支手动派发并指定请求编号；恢复入口仍核对相同的发布机器人与分支，已合并请求不会再次执行合并。下面以请求 `81` 为例：
+
+```bash
+gh workflow run auto-merge.yml --ref main -f release_pr=81
+```
 
 Release 已创建而构建或分发失败时，在仓库目录手动重跑资产工作流。`--ref main` 选择最新构建脚本，`version` 选择已有发布标签：
 
