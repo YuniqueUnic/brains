@@ -51,6 +51,7 @@ jobs:
               return;
             }
             const sha = pull.head.sha;
+            const approved = new Set();
             for (let attempt = 0; attempt < 10; attempt++) {
               const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
                 owner, repo, event: 'pull_request', head_sha: sha, per_page: 100,
@@ -61,7 +62,7 @@ jobs:
                     run.actor?.id !== botId ||
                     !run.pull_requests.some(pr => pr.number === pull.number)) continue;
                 observed.add(run.path);
-                if (run.conclusion !== 'action_required') continue;
+                if (run.conclusion !== 'action_required' || approved.has(run.id)) continue;
                 const { data: current } = await github.rest.pulls.get({
                   owner, repo, pull_number: pull.number,
                 });
@@ -72,6 +73,7 @@ jobs:
                 await github.rest.actions.approveWorkflowRun({
                   owner, repo, run_id: run.id,
                 });
+                approved.add(run.id);
                 core.info(`Approved ${run.path} run ${run.id} for #${pull.number} at ${sha}.`);
               }
               if (observed.size === paths.size) return;
