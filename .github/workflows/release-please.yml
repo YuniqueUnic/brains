@@ -3,6 +3,11 @@ name: Release Please
 on:
   push:
     branches: [main]
+  # A GITHUB_TOKEN auto-merge does not emit another push-triggered run.
+  workflow_run:
+    workflows: [CI, Pages demo, Auto merge]
+    types: [completed]
+    branches: [release-please--branches--main--components--brains]
   workflow_dispatch:
 
 permissions:
@@ -17,14 +22,107 @@ concurrency:
 
 jobs:
   release:
+    if: |
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_branch == 'release-please--branches--main--components--brains')
     runs-on: ubuntu-24.04
     steps:
+      - name: Confirm the checked release pull request has merged
+        if: github.event_name == 'workflow_run'
+        id: merged-release
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'all', base: 'main',
+              head: `${owner}:release-please--branches--main--components--brains`,
+            });
+            const pull = pulls.find(pr =>
+              pr.user.id === 41898282 && pr.user.type === 'Bot' &&
+              pr.head.repo?.id === context.payload.repository.id &&
+              pr.head.sha === run.head_sha);
+            if (!pull) return;
+            for (let attempt = 0; attempt < 10; attempt++) {
+              const { data: current } = await github.rest.pulls.get({
+                owner, repo, pull_number: pull.number,
+              });
+              if (current.head.sha !== run.head_sha) return;
+              if (current.merged) {
+                core.setOutput('ready', 'true');
+                return;
+              }
+              if (current.state !== 'open' || !current.auto_merge) return;
+              if (attempt < 9) await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+            core.warning('Release PR has not merged yet; a later completed check or a Release Please rerun can retry.');
       - uses: googleapis/release-please-action@v5
+        if: github.event_name != 'workflow_run' || steps.merged-release.outputs.ready == 'true'
         id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+      # GITHUB_TOKEN-created PRs otherwise wait for approval on every update.
+      # Only this repository's release bot and exact release branch are trusted.
+      - name: Approve trusted release pull request workflows
+        if: steps.release.outcome == 'success'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = 'release-please--branches--main--components--brains';
+            const botId = 41898282; // github-actions[bot]
+            const paths = new Set([
+              '.github/workflows/ci.yml',
+              '.github/workflows/pages.yml',
+              '.github/workflows/auto-merge.yml',
+            ]);
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', base: 'main', head: `${owner}:${branch}`,
+            });
+            const pull = pulls.find(pr =>
+              pr.user.id === botId && pr.user.type === 'Bot' &&
+              pr.head.repo?.id === context.payload.repository.id &&
+              pr.head.ref === branch && pr.base.ref === 'main');
+            if (!pull) {
+              core.info('No open release-bot pull request needs workflow approval.');
+              return;
+            }
+            const sha = pull.head.sha;
+            const approved = new Set();
+            for (let attempt = 0; attempt < 10; attempt++) {
+              const runs = await github.paginate(github.rest.actions.listWorkflowRunsForRepo, {
+                owner, repo, event: 'pull_request', head_sha: sha, per_page: 100,
+              });
+              const observed = new Set();
+              for (const run of runs) {
+                if (!paths.has(run.path) || run.head_branch !== branch ||
+                    run.actor?.id !== botId ||
+                    !run.pull_requests.some(pr => pr.number === pull.number)) continue;
+                observed.add(run.path);
+                if (run.conclusion !== 'action_required' || approved.has(run.id)) continue;
+                const { data: current } = await github.rest.pulls.get({
+                  owner, repo, pull_number: pull.number,
+                });
+                if (current.state !== 'open' || current.head.sha !== sha) {
+                  core.info('Release pull request changed; its next update will approve the new head.');
+                  return;
+                }
+                await github.rest.actions.approveWorkflowRun({
+                  owner, repo, run_id: run.id,
+                });
+                approved.add(run.id);
+                core.info(`Approved ${run.path} run ${run.id} for #${pull.number} at ${sha}.`);
+              }
+              if (observed.size === paths.size) return;
+              if (attempt < 9) await new Promise(resolve => setTimeout(resolve, 3000));
+            }
+            throw new Error(`Expected release PR workflows have not appeared for #${pull.number} at ${sha}; rerun Release Please to retry.`);
       # Tags created with GITHUB_TOKEN do not trigger tag-push workflows.
       # Use the default branch's build recipe with the immutable release source.
       - name: Build release assets
