@@ -30,7 +30,7 @@ repository = "https://github.com/YuniqueUnic/brains"
 
 [workspace.dependencies]
 brains-build-info = { path = "crates/build-info" }
-xidl-rust-axum = { version = "=0.105.2", default-features = false }
+xidl-rust-axum = { version = "=0.107.0", default-features = false }
 brains-domain = { path = "crates/domain" }
 brains-format = { path = "crates/format" }
 brains-ports = { path = "crates/ports" }
