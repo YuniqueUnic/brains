@@ -73,6 +73,7 @@ const en = {
     accessRead: "Read only",
     accessPermission: "Access: {{permission}}",
     accountMenu: "Account",
+    tokenAndSessions: "Token & sessions",
     panelFiles: "Files",
     panelTrash: "Trash",
     noFiles: "No files",

@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { FilePlus, Folder, LogOut, PanelLeft, Search, Settings2, Upload, UserRound } from "lucide-react";
+import { FilePlus, Folder, KeyRound, LogOut, PanelLeft, Search, Settings2, Upload, UserRound } from "lucide-react";
 import { Menu } from "@base-ui-components/react/menu";
 import { useTranslation } from "react-i18next";
 import { IS_DEMO, type SessionInfo } from "../../api/client";
@@ -37,6 +37,7 @@ export function TopBar({
   onUpload,
   cloudActions,
   onOpenSettings,
+  onOpenSecurity,
   onLogout,
 }: {
   session: SessionInfo;
@@ -48,6 +49,7 @@ export function TopBar({
   onUpload: (intent: UploadIntent) => void;
   cloudActions?: { url: boolean; convert: boolean };
   onOpenSettings: () => void;
+  onOpenSecurity: () => void;
   onLogout: () => void;
 }) {
   const { t } = useTranslation("workspace");
@@ -180,7 +182,7 @@ export function TopBar({
           </a>
         </Tooltip>
 
-        {/* Account chip, far right: hover reveals logout. */}
+        {/* Account chip: credentials, browser sessions and logout. */}
         <HoverMenu
           align="end"
           trigger={
@@ -199,6 +201,14 @@ export function TopBar({
           <div className="flex items-center gap-2 px-2.5 py-1.5 text-xs text-muted-foreground">
             <span className="min-w-0 flex-1 truncate">{t("accessPermission", { permission })}</span>
           </div>
+          <Menu.Item
+            className={menuItemClass()}
+            onClick={onOpenSecurity}
+            data-testid="open-security"
+          >
+            <KeyRound className="size-4 stroke-[1.5]" aria-hidden />
+            {t("tokenAndSessions")}
+          </Menu.Item>
           <Menu.Item
             className={menuItemClass({ danger: true })}
             onClick={() => onLogout()}

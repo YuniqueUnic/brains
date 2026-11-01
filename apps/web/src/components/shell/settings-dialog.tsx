@@ -14,7 +14,6 @@ import { SliderRow } from "../ui/slider-row";
 import { ToggleGroupSection } from "./toggle-section";
 import { ResourceUsage } from "./resource-usage";
 import { SecuritySettings } from "./security-settings";
-import { IS_DEMO } from "../../api/client";
 
 /*
  * UI-level settings (DESIGN feedback round 3): interface font, interface
@@ -72,13 +71,19 @@ export function UiSettingsProvider({
   return <>{children}</>;
 }
 
+export type SettingsTab = "interface" | "resources" | "security";
+
 export function SettingsDialog({
   open,
   onOpenChange,
+  tab,
+  onTabChange,
   showResources = false,
   onSignedOut,
 }: {
   open: boolean;
+  tab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
   showResources?: boolean;
   onOpenChange: (open: boolean) => void;
   onSignedOut?: (reason: string) => void;
@@ -89,7 +94,6 @@ export function SettingsDialog({
   const { t: tSecurity } = useTranslation("security");
   const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState<UiSettings>(loadUiSettings);
-  const [tab, setTab] = useState<string>("interface");
 
   const update = (patch: Partial<UiSettings>) => {
     setSettings((prev) => {
@@ -128,7 +132,7 @@ export function SettingsDialog({
         <Tabs.Root
           className="flex min-h-0 flex-1 flex-col"
           value={tab}
-          onValueChange={(value) => setTab(String(value))}
+          onValueChange={(value) => onTabChange(value as SettingsTab)}
         >
           <Tabs.List
             aria-label={tResources("tabsLabel")}
@@ -148,7 +152,7 @@ export function SettingsDialog({
                 {tResources("resourcesTab")}
               </Tabs.Tab>
             )}
-            {!IS_DEMO && onSignedOut && (
+            {onSignedOut && (
               <Tabs.Tab value="security" className="border-b-2 border-transparent px-1 py-2 text-body-sm text-muted-foreground outline-offset-4 data-[active]:border-foreground data-[active]:text-foreground">
                 {tCommon("security")}
               </Tabs.Tab>
@@ -209,7 +213,7 @@ export function SettingsDialog({
               </SettingRow>
             </div>
           </Tabs.Panel>
-          {!IS_DEMO && onSignedOut && (
+          {onSignedOut && (
             <Tabs.Panel value="security" className="min-h-0 overflow-y-auto pr-1">
               {open && <SecuritySettings onSignedOut={onSignedOut} />}
             </Tabs.Panel>

@@ -21,7 +21,9 @@ Keep the replacement token securely before sending the request. If the response 
 
 ## Web controls
 
-Open Settings → Security to change the access token or sign out all sessions. Changing a token requires the current token, matching replacement fields, and confirmation that the replacement has been saved. Signing out all sessions has a separate confirmation. Save unsaved edits before either action; success returns to the sign-in screen. Tokens remain in password fields only until completion or leaving the settings surface, and are never placed in localStorage, URLs, or responses.
+Open the account menu → Token & sessions to go directly to the security controls, or open Settings → Security. Changing a token requires the current token, matching replacement fields, and confirmation that the replacement has been saved. Signing out all sessions has a separate confirmation. Save unsaved edits before either action; success returns to the sign-in screen. Tokens remain in password fields only until completion or leaving the settings surface, and are never placed in localStorage, URLs, or responses.
+
+The public browser demo exposes the same controls with page-local synthetic credentials. Select Fill example values to try rotation without entering a real token. Rotation, session revocation, and ordinary logout return to the demo entry screen; Enter demo resumes the page without clearing saved demo files. Other tabs and real accounts are unaffected, and refreshing resets both the example credential and demo files.
 
 The regular Log out control revokes the current cookie on the server before clearing it in the browser. Replaying a copied cookie after logout fails. Signing out all sessions invalidates every existing cookie for the token while leaving bearer clients working. Other token identities and their sessions remain unchanged. Failed logout stays visible and can be retried; it does not claim that the server revoked a session when the request failed.
 

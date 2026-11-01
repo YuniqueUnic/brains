@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { api, ApiError } from "../../api/client";
+import { api, ApiError, IS_DEMO } from "../../api/client";
+import { demoSecurityExample } from "../../api/demo-session";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 
@@ -14,6 +15,15 @@ export function SecuritySettings({ onSignedOut }: { onSignedOut: (reason: string
   const [pending, setPending] = useState<"idle" | "rotate" | "revoke">("idle");
   const [error, setError] = useState<string | null>(null);
   const busy = pending !== "idle";
+
+  function fillExample() {
+    const example = demoSecurityExample();
+    setCurrent(example.current);
+    setReplacement(example.replacement);
+    setConfirmation(example.replacement);
+    setSaved(false);
+    setError(null);
+  }
 
   function explainFailure(cause: unknown) {
     setError(cause instanceof ApiError && cause.status === 403 ? t("currentRejected") : t("requestFailed"));
@@ -38,7 +48,7 @@ export function SecuritySettings({ onSignedOut }: { onSignedOut: (reason: string
       setCurrent("");
       setReplacement("");
       setConfirmation("");
-      onSignedOut(t("rotated"));
+      onSignedOut(t(IS_DEMO ? "demoRotated" : "rotated"));
     } catch (cause) {
       explainFailure(cause);
     } finally {
@@ -52,7 +62,7 @@ export function SecuritySettings({ onSignedOut }: { onSignedOut: (reason: string
     setPending("revoke");
     try {
       await api.revokeSessions();
-      onSignedOut(t("revoked"));
+      onSignedOut(t(IS_DEMO ? "demoRevoked" : "revoked"));
     } catch (cause) {
       explainFailure(cause);
     } finally {
@@ -62,10 +72,19 @@ export function SecuritySettings({ onSignedOut }: { onSignedOut: (reason: string
 
   return (
     <div className="flex flex-col gap-6 pb-1" aria-busy={busy}>
+      {IS_DEMO && (
+        <section className="flex flex-col items-start gap-3 rounded-md border border-border bg-muted/40 p-3" aria-label={t("demoTitle")}>
+          <div>
+            <h3 className="text-body font-medium">{t("demoTitle")}</h3>
+            <p className="mt-1 text-body-sm text-muted-foreground">{t("demoHint")}</p>
+          </div>
+          <Button variant="outline" disabled={busy} onClick={fillExample}>{t("fillExample")}</Button>
+        </section>
+      )}
       <form onSubmit={(event) => void rotate(event)} className="flex flex-col gap-3">
         <div>
           <h3 className="text-body font-medium">{t("rotateTitle")}</h3>
-          <p className="mt-1 text-body-sm text-muted-foreground">{t("rotateHint")}</p>
+          <p className="mt-1 text-body-sm text-muted-foreground">{t(IS_DEMO ? "demoRotateHint" : "rotateHint")}</p>
         </div>
         <label className="flex flex-col gap-1.5 text-body-sm">
           {t("currentToken")}
@@ -82,7 +101,7 @@ export function SecuritySettings({ onSignedOut }: { onSignedOut: (reason: string
         </label>
         <label className="flex items-start gap-2 text-body-sm text-muted-foreground">
           <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-foreground" checked={saved} onChange={(event) => setSaved(event.target.checked)} required disabled={busy} />
-          {t("savedConfirmation")}
+          {t(IS_DEMO ? "demoSavedConfirmation" : "savedConfirmation")}
         </label>
         <Button type="submit" variant="default" className="self-start" disabled={busy || !saved || !current || !replacement || !confirmation}>
           {pending === "rotate" ? t("rotating") : t("rotateAction")}
@@ -92,7 +111,7 @@ export function SecuritySettings({ onSignedOut }: { onSignedOut: (reason: string
       <section className="flex flex-col items-start gap-3 border-t border-border pt-5">
         <div>
           <h3 className="text-body font-medium">{t("revokeTitle")}</h3>
-          <p className="mt-1 text-body-sm text-muted-foreground">{t("revokeHint")}</p>
+          <p className="mt-1 text-body-sm text-muted-foreground">{t(IS_DEMO ? "demoRevokeHint" : "revokeHint")}</p>
         </div>
         {confirmRevoke ? (
           <div className="flex flex-col gap-2">

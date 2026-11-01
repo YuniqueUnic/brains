@@ -1,5 +1,13 @@
 export default {
   settingsHint: "Manage your access token and browser sessions.",
+  demoTitle: "Try token and session controls",
+  demoHint: "This demo simulates changes in this page only. Use the example values, never a real token. Refreshing resets the demo.",
+  fillExample: "Fill example values",
+  demoRotateHint: "Change the example token and leave this demo session. No server credentials are changed.",
+  demoSavedConfirmation: "I understand this changes only the example token and exits the demo.",
+  demoRotated: "Example token changed. Enter the demo again to continue.",
+  demoRevokeHint: "Simulate ending browser sessions. This exits only the current demo page; other tabs and real accounts are unaffected.",
+  demoRevoked: "Demo session ended. Enter the demo again to continue.",
   rotateTitle: "Change access token",
   rotateHint: "Replace your token and sign out every browser session using it, including this one. Update other clients with the replacement token.",
   currentToken: "Current token",

@@ -1,5 +1,13 @@
 export default {
   settingsHint: "管理访问令牌和浏览器会话。",
+  demoTitle: "体验令牌与会话管理",
+  demoHint: "演示操作仅在当前页面内模拟。请使用示例值，不要输入真实令牌；刷新页面会重置演示。",
+  fillExample: "填入示例值",
+  demoRotateHint: "更换示例令牌并退出当前演示会话，不会修改服务端凭据。",
+  demoSavedConfirmation: "我了解这只会更换示例令牌并退出演示。",
+  demoRotated: "示例令牌已更换，重新进入演示即可继续。",
+  demoRevokeHint: "模拟下线浏览器会话，仅退出当前演示页面，不影响其他标签页或真实账号。",
+  demoRevoked: "演示会话已结束，重新进入演示即可继续。",
   rotateTitle: "更换访问令牌",
   rotateHint: "更换后，旧令牌和使用它登录的所有浏览器会话立即失效，包括当前会话。其他客户端也需要更新令牌。",
   currentToken: "当前令牌",
