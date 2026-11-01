@@ -15,8 +15,9 @@ pub(crate) fn run(
         return Err(DomainError::InvalidArgument("unset BRAINS_URL/BRAINS_TOKEN and select a stored remote profile for credential changes".into()).into());
     }
     let name = selected.or(config.active.as_deref()).unwrap_or("default");
-    let Profile::Remote { url, token } =
-        config.resolve_named(name).map_err(ClientError::transport)?
+    let Profile::Remote { url, token } = config
+        .resolve_named(name)
+        .map_err(DomainError::InvalidArgument)?
     else {
         return Err(DomainError::InvalidArgument(
             "local profiles use filesystem permissions; select a remote server profile".into(),
