@@ -1,6 +1,7 @@
 import { parseMarkdownDocument } from "../lib/document-metadata";
 import { createMarkdownParser } from "../lib/markdown-parser";
 import { demoResourceStatus, updateDemoResources } from "./demo-resources";
+import { createDemoSession, endDemoSession, getDemoSession, rotateDemoToken } from "./demo-session";
 import { resolveReference } from "../components/markdown/references";
 import {
   ApiError,
@@ -179,8 +180,6 @@ async function transfer(source: string, target: string, expected: string, action
   };
 }
 
-const session: SessionInfo = { actor: "demo", scopes: ["read:/", "write:/", "admin:/"] };
-
 export const demoApi = {
   async getCapabilities() {
     return { features: { remote_conversion: false, remote_url_import: false, resource_policy: true } };
@@ -200,24 +199,28 @@ export const demoApi = {
     url.searchParams.set("file", path);
     return url.href;
   },
-  async createSession(_token: string): Promise<SessionInfo> {
+  async createSession(token: string): Promise<SessionInfo> {
     await latency();
-    return session;
+    return createDemoSession(token);
   },
   async getSession(): Promise<SessionInfo> {
     await initialize();
-    return session;
+    return getDemoSession();
   },
   async deleteSession(): Promise<void> {
     await latency();
+    endDemoSession();
   },
 
-  async rotateToken(_current: string, _replacement: string): Promise<void> {
-    throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Demo mode has no server credentials");
+  async rotateToken(current: string, replacement: string): Promise<void> {
+    await latency();
+    rotateDemoToken(current, replacement);
   },
 
   async revokeSessions(): Promise<void> {
-    throw new ApiError(501, "CAPABILITY_UNSUPPORTED", "Demo mode has no server sessions");
+    await latency();
+    getDemoSession();
+    endDemoSession();
   },
   async listFiles(query: {
     prefix?: string; cursor?: string | null; limit?: number; include_deleted?: boolean;

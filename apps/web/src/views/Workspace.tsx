@@ -12,7 +12,7 @@ import {
   type SessionInfo,
 } from "../api/client";
 import { TopBar, type UploadIntent } from "../components/shell/top-bar";
-import { SettingsDialog } from "../components/shell/settings-dialog";
+import { SettingsDialog, type SettingsTab } from "../components/shell/settings-dialog";
 import { Sidebar, type WorkspaceMode } from "../components/shell/sidebar";
 import { FileTree, collectFolders, type TreeActions } from "../components/tree/file-tree";
 import { expandEntry } from "../components/tree/selection";
@@ -103,7 +103,7 @@ export default function Workspace({
   const [cloudActions, setCloudActions] = useState({ url: false, convert: false });
   const [selecting, setSelecting] = useState(false);
   const [showResourceUsage,setShowResourceUsage]=useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<{ open: boolean; tab: SettingsTab }>({ open: false, tab: "interface" });
   const [batchRunning, setBatchRunning] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   // First vault walk: show sidebar skeletons instead of an empty list.
@@ -501,7 +501,7 @@ export default function Workspace({
       const meta = event.metaKey || event.ctrlKey;
       // A modal dialog owns the keyboard: ⌘K/⌘I/⌘N must not fight it (⌘N
       // over the new-file dialog would wipe the path being typed).
-      if (meta && dialog) return;
+      if (dialog || settings.open) return;
       if (meta && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setPaletteOpen((open) => !open);
@@ -551,7 +551,7 @@ export default function Workspace({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [propertiesOpen, contextPath, selected, treeActions, dialog, paletteOpen, dismissProperties, openProperties, isMobile, mobileTab, setMobileTab]);
+  }, [propertiesOpen, contextPath, selected, treeActions, dialog, settings.open, paletteOpen, dismissProperties, openProperties, isMobile, mobileTab, setMobileTab]);
 
   const toggleSidebar = () => {
     const panel = sidebarPanel.current;
@@ -717,7 +717,8 @@ export default function Workspace({
         onNewDocument={() => treeActions.onNewDocumentIn("")}
         onUpload={openUploadIntent}
         cloudActions={cloudActions}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => setSettings((previous) => ({ ...previous, open: true }))}
+        onOpenSecurity={() => setSettings({ open: true, tab: "security" })}
         onLogout={onLogout}
       />
 
@@ -781,7 +782,14 @@ export default function Workspace({
 
       {banner && <Banner message={banner} onClose={() => setBanner(null)} />}
 
-      <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} showResources={showResourceUsage} onSignedOut={onSignedOut} />
+      <SettingsDialog
+        open={settings.open}
+        onOpenChange={(open) => setSettings((previous) => ({ ...previous, open }))}
+        tab={settings.tab}
+        onTabChange={(tab) => setSettings((previous) => ({ ...previous, tab }))}
+        showResources={showResourceUsage}
+        onSignedOut={onSignedOut}
+      />
       <CloudImportDialog mode={cloudImport} files={liveFiles} onClose={() => setCloudImport(null)} onComplete={async (path) => {
         await refreshFiles();
         const current=editorRef.current;

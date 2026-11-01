@@ -73,6 +73,7 @@ const zhCN = {
     accessRead: "只读",
     accessPermission: "访问权限：{{permission}}",
     accountMenu: "账户",
+    tokenAndSessions: "令牌与会话",
     panelFiles: "文件",
     panelTrash: "回收站",
     noFiles: "没有文件",
