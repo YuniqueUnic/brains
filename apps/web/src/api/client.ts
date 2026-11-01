@@ -323,6 +323,20 @@ const httpApi = {
     setCsrfToken(null);
   },
 
+  async rotateToken(currentToken: string, replacementToken: string): Promise<void> {
+    await request<{ ok: true }>("/token/rotate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_token: currentToken, replacement_token: replacementToken } satisfies brains.TokenRotationInput),
+    });
+    setCsrfToken(null);
+  },
+
+  async revokeSessions(): Promise<void> {
+    await request<{ ok: true }>("/session/revoke", { method: "POST" });
+    setCsrfToken(null);
+  },
+
   async listFiles(query: {
     prefix?: string;
     cursor?: string | null;

@@ -376,3 +376,31 @@ error_from_domain!(
         Internal
     ]
 );
+
+error_from_domain!(
+    logout_error,
+    SessionsLogoutError,
+    [Forbidden, PreconditionFailed, ServiceUnavailable, Internal]
+);
+error_from_domain!(
+    revoke_sessions_error,
+    SessionsRevokeAllError,
+    [Forbidden, PreconditionFailed, ServiceUnavailable, Internal]
+);
+error_from_domain!(
+    rotate_token_error,
+    SessionsRotateTokenError,
+    [
+        BadRequest,
+        Forbidden,
+        PreconditionFailed,
+        ServiceUnavailable,
+        Internal
+    ]
+);
+
+error_from_domain!(
+    login_error,
+    SessionsLoginError,
+    [BadRequest, Forbidden, Internal]
+);

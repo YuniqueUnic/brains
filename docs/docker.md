@@ -96,7 +96,7 @@ BRAINS_DISABLE=document_conversion,semantic docker compose up -d
 | `BRAINS_VAULT` | `--vault` | vault 名称，默认 `default`；每个实例管理一个 vault |
 | `BRAINS_BIND` | `--bind` | 容器内监听地址，默认 `0.0.0.0` |
 | `BRAINS_PORT` | `--port` | 容器内端口，默认 `45800`；改动后同步修改端口映射 |
-| `BRAINS_TOKEN` | `--token` | 启动时注册或替换 root token |
+| `BRAINS_TOKEN` | `--token` | 仅在首次启动时初始化 root token；已有凭据用 bsx 或 Web 更换，恢复见 [安全说明](security.md#operator-recovery) |
 | `BRAINS_TOKEN_FILE` | `--token-file` | 启动时从 UTF-8 文件读取 root token，支持文件末尾换行 |
 | `BRAINS_NO_SEED` | `--no-seed` | `true` 时不创建引导笔记，默认 `false` |
 | `BRAINS_WEB_DIST` | `--web-dist` | Web 静态文件目录，可挂载另一个只读目录 |

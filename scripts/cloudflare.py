@@ -19,6 +19,7 @@ from cloudflare_mcp import initialize_mcp, deploy_mcp
 from cloudflare_setup import provision
 from cloudflare_actions import configure as configure_actions
 from cloudflare_credentials import sync_admin_token
+from cloudflare_http import base_url, NoRedirect
 from cloudflare_usage import synchronize as synchronize_usage
 from cloudflare_search import refresh as refresh_search
 from cloudflare_observations import account_storage
@@ -275,27 +276,6 @@ def wrangler(env, config, *args):
         ],
         env,
     )
-
-
-def base_url(env, allow_loopback=False):
-    require(env, ("BRAINS_BASE_URL",))
-    base = env["BRAINS_BASE_URL"].rstrip("/")
-    url = urllib.parse.urlsplit(base)
-    local = allow_loopback and url.hostname in ("localhost", "127.0.0.1", "::1")
-    if not url.hostname or not (
-        url.scheme == "https" or url.scheme == "http" and local
-    ):
-        raise ValueError("BRAINS_BASE_URL must be an HTTPS origin")
-    if url.username or url.password or url.query or url.fragment or url.path:
-        raise ValueError(
-            "BRAINS_BASE_URL must not contain credentials, a path, query or fragment"
-        )
-    return base
-
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return None
 
 
 def verify(env):

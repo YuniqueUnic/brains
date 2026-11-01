@@ -21,7 +21,7 @@ pub struct ServerConfig {
     pub vault: String,
     pub bind: String,
     pub port: u16,
-    /// Register (or replace) a whole-vault root token; `None` generates one.
+    /// Bootstrap a whole-vault token on first boot; `None` generates one.
     pub token: Option<String>,
     pub web_dist: Option<PathBuf>,
     pub allowed_origins: Vec<String>,

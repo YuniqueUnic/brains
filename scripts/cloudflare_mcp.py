@@ -8,6 +8,10 @@ import secrets
 import subprocess
 import tempfile
 import tomllib
+import urllib.error
+import urllib.request
+
+from cloudflare_http import base_url, NoRedirect
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -73,15 +77,22 @@ def deploy_mcp(env, dry_run=False):
     ):
         if not env.get(key):
             raise ValueError(f"Configure {key} before deploying MCP")
-    digest = hashlib.sha256(env["BRAINS_MCP_API_TOKEN"].encode()).hexdigest()
-    tokens = json.loads(env["TOKEN_REGISTRY_JSON"])["tokens"]
-    matching = [
-        t for t in tokens if t.get("enabled") and t.get("token_sha256") == digest
-    ]
-    if not matching or any(
-        not scope.startswith("read:") for t in matching for scope in t["scopes"]
-    ):
-        raise ValueError("The MCP upstream token must have read scopes only")
+    if dry_run:
+        print("Offline MCP bundle check: active upstream credentials are verified only during deployment.")
+    else:
+        origin = base_url(env)
+        request = urllib.request.Request(origin + "/api/v1/session", headers={
+            "Authorization": "Bearer " + env["BRAINS_MCP_API_TOKEN"],
+            "User-Agent": "brains-mcp-deploy-check",
+        })
+        try:
+            with urllib.request.build_opener(NoRedirect()).open(request, timeout=30) as response:
+                session = json.load(response)
+        except (urllib.error.URLError, ValueError):
+            raise ValueError("MCP upstream credential could not be verified at the configured HTTPS origin") from None
+        scopes = session.get("scopes", [])
+        if not scopes or any(not isinstance(scope, str) or not scope.startswith("read:") for scope in scopes):
+            raise ValueError("The active MCP upstream token must have read scopes only")
     root = ROOT / "apps/mcp"
     config = tomllib.loads((root / "wrangler.toml").read_text())
     config["main"] = str(root / config["main"])

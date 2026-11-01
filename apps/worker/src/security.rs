@@ -1,96 +1,174 @@
-//! Worker security backend (design §15.1): the token registry and signing
-//! keys come from Worker vars/secrets instead of the local `auth.json`, and
-//! reuse the exact same hashing, session-cookie and CSRF primitives as the
-//! file-backed store via `brains_api_http::auth`.
+//! D1-backed active credentials; deployment secrets are bootstrap inputs only.
+
+use std::sync::Arc;
 
 use base64::Engine;
-use brains_api_http::auth::{
-    Security, SessionClaims, TokenRecord, hash_token, issue_session_with_key, sign_with_key,
-    verify_session_with_key,
-};
-
-use brains_domain::{DomainError, DomainResult, Principal, Scope};
+use brains_adapter_d1::D1Accounting;
+use brains_api_http::auth::{AuthSource, RegistryFile, Security, sign_with_key};
+use brains_domain::{DomainError, DomainResult, Principal};
+use futures::future::BoxFuture;
+use wasm_bindgen::JsValue;
+use worker::{D1Database, send::SendFuture};
 
 pub struct EnvSecurity {
-    registry: Vec<TokenRecord>,
+    registry: RegistryFile,
+    revision: Option<String>,
     session_key: [u8; 32],
+    db: D1Database,
+    accounting: Arc<D1Accounting>,
+}
+
+fn unavailable() -> DomainError {
+    DomainError::StorageUnavailable(
+        "security state unavailable; check D1 and its migrations".into(),
+    )
 }
 
 impl EnvSecurity {
-    /// `TOKEN_REGISTRY_JSON`: `{"tokens":[{"id","name","token_sha256","scopes","enabled"}]}`.
-    /// Tokens live only as SHA-256 hashes; plaintext never reaches the Worker.
-    pub fn from_registry_json(registry_json: &str, session_key: [u8; 32]) -> DomainResult<Self> {
+    pub async fn load(
+        bootstrap: &str,
+        session_key: [u8; 32],
+        db: D1Database,
+        accounting: Arc<D1Accounting>,
+    ) -> DomainResult<Self> {
         #[derive(serde::Deserialize)]
-        struct Registry {
-            #[serde(default)]
-            tokens: Vec<TokenRecord>,
+        struct Row {
+            revision: String,
+            registry: String,
         }
-        let registry: Registry = serde_json::from_str(registry_json)
-            .map_err(|e| DomainError::Internal(format!("TOKEN_REGISTRY_JSON malformed: {e}")))?;
+        let observed_at = time::OffsetDateTime::now_utc().unix_timestamp();
+        let result = db
+            .prepare("SELECT revision,registry FROM security_state WHERE id=1")
+            .all()
+            .await
+            .map_err(|_| {
+                accounting.unmeasured(observed_at);
+                unavailable()
+            })?;
+        accounting.record(&result, observed_at)?;
+        if !result.success() {
+            return Err(unavailable());
+        }
+        let row = result
+            .results::<Row>()
+            .map_err(|_| unavailable())?
+            .into_iter()
+            .next();
+        let (revision, raw) = match &row {
+            Some(row) => (Some(row.revision.clone()), row.registry.as_str()),
+            None => (None, bootstrap),
+        };
+        let mut registry: RegistryFile = serde_json::from_str(raw)
+            .map_err(|_| DomainError::Internal("invalid security registry".into()))?;
+        if row.is_some() {
+            let bootstrap: RegistryFile = serde_json::from_str(bootstrap)
+                .map_err(|_| DomainError::Internal("invalid bootstrap registry".into()))?;
+            for record in bootstrap.tokens {
+                if !registry.tokens.iter().any(|t| t.id == record.id) {
+                    registry.tokens.push(record);
+                }
+            }
+        }
+        for record in &mut registry.tokens {
+            record.plaintext = None;
+        }
         Ok(Self {
-            registry: registry.tokens,
+            registry,
+            revision,
             session_key,
+            db,
+            accounting,
         })
+    }
+
+    async fn save(&self, registry: &RegistryFile) -> DomainResult<()> {
+        let revision = brains_domain::HexId::generate().as_str().to_owned();
+        let raw = serde_json::to_string(registry)
+            .map_err(|_| DomainError::Internal("cannot encode security state".into()))?;
+        let mut params = vec![JsValue::from_str(&revision), JsValue::from_str(&raw)];
+        let sql = if let Some(previous) = &self.revision {
+            params.push(JsValue::from_str(previous));
+            "UPDATE security_state SET revision=?1,registry=?2 WHERE id=1 AND revision=?3"
+        } else {
+            "INSERT INTO security_state(id,revision,registry) VALUES(1,?1,?2) ON CONFLICT(id) DO NOTHING"
+        };
+        let observed_at = time::OffsetDateTime::now_utc().unix_timestamp();
+        let result = self
+            .db
+            .prepare(sql)
+            .bind(&params)
+            .map_err(|_| unavailable())?
+            .run()
+            .await
+            .map_err(|_| {
+                self.accounting.unmeasured(observed_at);
+                unavailable()
+            })?;
+        self.accounting.record(&result, observed_at)?;
+        if !result.success() {
+            return Err(unavailable());
+        }
+        if result
+            .meta()
+            .map_err(|_| unavailable())?
+            .and_then(|m| m.changes)
+            != Some(1)
+        {
+            return Err(DomainError::RevisionConflict {
+                path: "security-state".into(),
+                current_revision: None,
+            });
+        }
+        Ok(())
     }
 }
 
 impl Security for EnvSecurity {
     fn authenticate(&self, token: &str) -> DomainResult<Principal> {
-        let digest = hash_token(token);
-        let record = self
-            .registry
-            .iter()
-            .find(|t| t.enabled && t.token_sha256 == digest)
-            .ok_or(DomainError::Unauthenticated)?;
-        let scopes = record
-            .scopes
-            .iter()
-            .map(|s| Scope::parse(s))
-            .collect::<DomainResult<Vec<_>>>()?;
-        Ok(Principal {
-            actor: format!("token:{}", record.id),
-            scopes,
-        })
+        self.registry.authenticate(token)
     }
-
-    fn authenticate_session(&self, cookie_value: &str) -> DomainResult<Principal> {
-        let claims: SessionClaims = verify_session_with_key(&self.session_key, cookie_value)?;
-        let record = self
-            .registry
-            .iter()
-            .find(|t| t.id == claims.tid && t.enabled)
-            .ok_or(DomainError::Unauthenticated)?;
-        let scopes = record
-            .scopes
-            .iter()
-            .map(|s| Scope::parse(s))
-            .collect::<DomainResult<Vec<_>>>()?;
-        Ok(Principal {
-            actor: format!("token:{}", record.id),
-            scopes,
-        })
+    fn authenticate_session(&self, cookie: &str) -> DomainResult<Principal> {
+        self.registry
+            .authenticate_session(&self.session_key, cookie)
     }
-
-    fn issue_session(&self, principal: &Principal) -> DomainResult<(String, String, String)> {
-        issue_session_with_key(&self.session_key, principal)
+    fn issue_session(&self, auth: &AuthSource) -> DomainResult<(String, String, String)> {
+        self.registry.issue_session(&self.session_key, auth)
     }
-
-    fn csrf_for(&self, cookie_value: &str) -> String {
+    fn csrf_for(&self, cookie: &str) -> String {
         base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(sign_with_key(
             &self.session_key,
-            format!("csrf:{cookie_value}").as_bytes(),
+            format!("csrf:{cookie}").as_bytes(),
         ))
+    }
+    fn rotate_token<'a>(
+        &'a self,
+        auth: &'a AuthSource,
+        current: &'a str,
+        replacement: &'a str,
+    ) -> BoxFuture<'a, DomainResult<()>> {
+        Box::pin(SendFuture::new(async move {
+            let mut next = self.registry.clone();
+            next.rotate_token(&self.session_key, auth, current, replacement)?;
+            self.save(&next).await
+        }))
+    }
+    fn revoke_sessions<'a>(
+        &'a self,
+        auth: &'a AuthSource,
+        all: bool,
+    ) -> BoxFuture<'a, DomainResult<()>> {
+        Box::pin(SendFuture::new(async move {
+            let mut next = self.registry.clone();
+            next.revoke_sessions(&self.session_key, auth, all)?;
+            self.save(&next).await
+        }))
     }
 }
 
 /// Decode a 64-hex-char secret var into a 32-byte key.
 pub fn hex_key(raw: &str, name: &str) -> DomainResult<[u8; 32]> {
-    let bytes = hex_decode(raw, name)?;
-    bytes.try_into().map_err(|_| {
-        DomainError::Internal(format!("{name} must be exactly 64 hex chars (32 bytes)"))
-    })
-}
-
-fn hex_decode(raw: &str, name: &str) -> DomainResult<Vec<u8>> {
-    hex::decode(raw).map_err(|e| DomainError::Internal(format!("{name}: {e}")))
+    hex::decode(raw)
+        .map_err(|_| DomainError::Internal(format!("{name} must be exactly 64 hex chars")))?
+        .try_into()
+        .map_err(|_| DomainError::Internal(format!("{name} must be exactly 64 hex chars")))
 }

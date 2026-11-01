@@ -67,6 +67,8 @@ Do not commit or place this private file under `web/dist`. No credentials are in
 
 ## Verify locally, then deploy
 
+D1 contains persistent security and resource settings as well as derived file indexes. Apply all bundled migrations before deploying, and back up D1 along with R2. Do not delete the database to rebuild its file index. Existing active credentials supersede bootstrap token values; consult the project security documentation before deliberate recovery.
+
 The dry run bundles local files without deploying. The next two commands modify your cloud database and Worker; run them only for the target you intend to deploy.
 
 ```bash

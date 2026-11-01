@@ -28,6 +28,7 @@ pub async fn configure(
     env: &Env,
     vault: &mut WorkerVault,
     store: R2ContentStore,
+    accounting: Arc<brains_adapter_d1::D1Accounting>,
 ) -> DomainResult<()> {
     let config: ServiceConfig = match env.var("BRAINS_CLOUD_CONFIG") {
         Ok(raw) => serde_json::from_str(&raw.to_string())
@@ -69,7 +70,6 @@ pub async fn configure(
         env.d1("BRAINS_INDEX")
             .map_err(|e| DomainError::IndexUnavailable(e.to_string()))
     };
-    let accounting = Arc::new(brains_adapter_d1::D1Accounting::default());
     let usage = Arc::new(D1UsageStore::new(database()?).with_accounting(accounting.clone()));
     let account = env
         .var("BRAINS_RESOURCE_ACCOUNT")

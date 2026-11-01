@@ -59,11 +59,18 @@ fn plain_error(status: u16, message: &str) -> FetchResponse {
         .into_response()
 }
 
-fn load_security(env: &Env) -> Result<Arc<dyn Security>, Box<FetchResponse>> {
+async fn load_security(
+    env: &Env,
+    accounting: Arc<brains_adapter_d1::D1Accounting>,
+) -> Result<Arc<dyn Security>, Box<FetchResponse>> {
     let key = security::hex_key(&str_var(env, "SESSION_SIGNING_KEY")?, "SESSION_SIGNING_KEY")
         .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
-    let security = EnvSecurity::from_registry_json(&str_var(env, "TOKEN_REGISTRY_JSON")?, key)
-        .map_err(|e| Box::new(plain_error(500, &e.to_string())))?;
+    let db = env
+        .d1("BRAINS_INDEX")
+        .map_err(|_| Box::new(plain_error(503, "security database binding unavailable")))?;
+    let security = EnvSecurity::load(&str_var(env, "TOKEN_REGISTRY_JSON")?, key, db, accounting)
+        .await
+        .map_err(|e| Box::new(plain_error(503, &e.to_string())))?;
     Ok(Arc::new(security))
 }
 
@@ -73,6 +80,7 @@ async fn build_state(
     env: &Env,
     security: Arc<dyn Security>,
     allowed_origins: Vec<String>,
+    accounting: Arc<brains_adapter_d1::D1Accounting>,
 ) -> StateResult {
     let vault_name = str_var(env, "VAULT_ID")?;
     let bucket = env
@@ -112,7 +120,7 @@ async fn build_state(
         limits.clone(),
         CursorSigner::new(cursor_key),
     );
-    if let Err(error) = services::configure(env, &mut vault, store).await {
+    if let Err(error) = services::configure(env, &mut vault, store, accounting).await {
         if let Some(budget) = &vault.resources
             && let Err(accounting) = budget.flush_accounting().await
         {
@@ -239,7 +247,8 @@ async fn serve(
                 .collect()
         })
         .unwrap_or_default();
-    let security = match load_security(&env) {
+    let accounting = Arc::new(brains_adapter_d1::D1Accounting::default());
+    let security = match load_security(&env, accounting.clone()).await {
         Ok(security) => security,
         Err(response) => return Ok(*response),
     };
@@ -253,6 +262,8 @@ async fn serve(
     ) {
         Ok(auth) => auth,
         Err(error) => {
+            // A bounded primary-key security lookup is necessary for revocation.
+            // Rejected requests do not enter the application ledger or providers.
             let id = brains_domain::HexId::generate().as_str().to_owned();
             return Ok(match error {
                 brains_domain::DomainError::Forbidden(message) => {
@@ -262,20 +273,22 @@ async fn serve(
             });
         }
     };
-    let state = match build_state(&env, security, allowed_origins).await {
+    let state = match build_state(&env, security, allowed_origins, accounting).await {
         Ok(state) => state,
         Err(response) => return Ok(*response),
     };
     // Administration stays available to repair exhausted budgets. Its requests
-    // are observed, while the API still requires admin authentication and CSRF.
-    let administration = auth.principal().allows(AccessLevel::Admin, "")
-        && matches!(
-            path.as_str(),
-            "/api/v1/resources"
-                | "/api/v1/resources/settings"
-                | "/api/v1/session"
-                | "/api/v1/capabilities"
-        );
+    // are observed; self-service security retains authentication and CSRF.
+    let security_action = matches!(
+        path.as_str(),
+        "/api/v1/session" | "/api/v1/session/revoke" | "/api/v1/token/rotate"
+    );
+    let administration = security_action
+        || (auth.principal().allows(AccessLevel::Admin, "")
+            && matches!(
+                path.as_str(),
+                "/api/v1/resources" | "/api/v1/resources/settings" | "/api/v1/capabilities"
+            ));
     if let Some(budget) = &state.vault.resources
         && let Err(error) = if administration {
             budget.observe_request().await
@@ -364,10 +377,11 @@ async fn scheduled(_event: worker::ScheduledEvent, env: Env, _ctx: worker::Sched
     {
         return;
     }
-    let Ok(security) = load_security(&env) else {
+    let accounting = Arc::new(brains_adapter_d1::D1Accounting::default());
+    let Ok(security) = load_security(&env, accounting.clone()).await else {
         return;
     };
-    if let Ok(state) = build_state(&env, security, Vec::new()).await {
+    if let Ok(state) = build_state(&env, security, Vec::new(), accounting).await {
         if let Some(semantic) = &state.vault.semantic {
             let _ = semantic.reconcile(semantic.background_work(), 1).await;
         }

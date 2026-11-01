@@ -739,6 +739,14 @@ import { xjson } from "xidl-typescript-codec";
 
         });
 
+        export const TokenRotationInputSchema = z.object({
+
+                current_token: z.coerce.string(),
+
+                replacement_token: z.coerce.string()
+
+        });
+
         export const PatchEditSchema = z.object({
 
                 old_text: z.coerce.string(),

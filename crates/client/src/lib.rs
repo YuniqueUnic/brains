@@ -3,6 +3,7 @@
 //! behind the user's back (design §12.1).
 
 pub mod archive;
+pub mod auth;
 pub mod check;
 pub mod convert;
 pub mod endpoint;
