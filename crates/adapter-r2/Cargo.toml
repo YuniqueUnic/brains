@@ -12,4 +12,4 @@ serde.workspace = true
 hex.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-worker = { version = "=0.8.7", features = ["d1"] }
+worker = { version = "=0.9.0", features = ["d1"] }
