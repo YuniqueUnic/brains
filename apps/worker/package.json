@@ -2,7 +2,7 @@
   "name": "brains-worker",
   "private": true,
   "devDependencies": {
-    "wrangler": "^4.164.0",
+    "wrangler": "^4.168.0",
     "typescript": "~6.0.3",
     "@types/node": "^22.0.0"
   },
